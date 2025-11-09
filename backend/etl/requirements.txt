@@ -1,0 +1,17 @@
+# TWIC Database Expansion Requirements
+# ====================================
+
+# Core chess library for PGN parsing and game analysis
+python-chess>=1.999
+
+# HTTP requests for downloading TWIC archives
+requests>=2.28.0
+
+# Weaviate Python client (v4) for database operations
+weaviate-client>=4.4.0
+
+# Additional dependencies that might be needed
+pathlib2>=2.3.7; python_version < "3.4"
+
+# Optional: Progress bar for better UX (if we want to add it later)
+# tqdm>=4.64.0 

@@ -1,0 +1,131 @@
+# ===========================
+# Environment & Secrets
+# ===========================
+# NEVER commit .env files!
+.env
+.env.local
+.env.*.local
+*.env
+
+# Keep .env.example for reference
+!.env.example
+
+# ===========================
+# Frontend (Next.js)
+# ===========================
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/dist/
+frontend/build/
+frontend/.turbo/
+frontend/.vite/
+
+# Testing
+frontend/coverage/
+frontend/.nyc_output/
+
+# Misc
+frontend/.DS_Store
+frontend/*.log
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# ===========================
+# Backend (Python/Flask)
+# ===========================
+backend/__pycache__/
+backend/*.py[cod]
+backend/*$py.class
+backend/*.so
+backend/.Python
+backend/venv/
+backend/env/
+backend/ENV/
+backend/.venv
+
+# Distribution / packaging
+backend/build/
+backend/develop-eggs/
+backend/dist/
+backend/downloads/
+backend/eggs/
+backend/.eggs/
+backend/lib/
+backend/lib64/
+backend/parts/
+backend/sdist/
+backend/var/
+backend/wheels/
+backend/*.egg-info/
+backend/.installed.cfg
+backend/*.egg
+
+# PyTest
+backend/.pytest_cache/
+backend/.coverage
+backend/htmlcov/
+
+# Logs
+backend/*.log
+backend/logs/
+
+# SQLite databases
+backend/*.db
+backend/*.sqlite
+backend/*.sqlite3
+
+# Model checkpoints and weights
+backend/**/*.h5
+backend/**/*.pt
+backend/**/*.pth
+backend/**/*.ckpt
+
+# ===========================
+# Docker
+# ===========================
+docker-compose.override.yml
+
+# ===========================
+# Data Files
+# ===========================
+# Large data files should not be committed
+backend/data/twic/*.pgn
+backend/data/lichess/*.pgn
+backend/data/chess_com/*.pgn
+backend/data/conversations.db
+
+# Keep directory structure but ignore contents
+!backend/data/.gitkeep
+!backend/data/twic/.gitkeep
+!backend/data/lichess/.gitkeep
+
+# ===========================
+# IDE & Editor
+# ===========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ===========================
+# OS Files
+# ===========================
+Thumbs.db
+.Spotlight-V100
+.Trashes
+
+# ===========================
+# Temporary Files
+# ===========================
+*.tmp
+*.temp
+.cache/
+
+# ===========================
+# OpenSpec (keep only specs and changes)
+# ===========================
+# Commit all OpenSpec files - they're documentation

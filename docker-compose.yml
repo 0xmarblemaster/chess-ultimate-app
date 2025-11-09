@@ -1,0 +1,98 @@
+version: '3.8'
+
+services:
+  # Redis - In-memory cache and message queue
+  redis:
+    image: redis:7-alpine
+    container_name: chess-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - chess-network
+
+  # Weaviate - Vector database for chess games and positions
+  weaviate:
+    image: cr.weaviate.io/semitechnologies/weaviate:1.28.0
+    container_name: chess-weaviate
+    ports:
+      - "8080:8080"
+      - "50051:50051"
+    environment:
+      # Query defaults
+      QUERY_DEFAULTS_LIMIT: 25
+
+      # Authentication (disabled for local development)
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+
+      # Persistence
+      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
+
+      # Enable modules
+      ENABLE_MODULES: 'text2vec-openai,text2vec-cohere,text2vec-huggingface,generative-openai'
+
+      # Vectorizer settings
+      DEFAULT_VECTORIZER_MODULE: 'text2vec-openai'
+
+      # Cluster settings
+      CLUSTER_HOSTNAME: 'node1'
+
+      # Resource limits
+      LIMIT_RESOURCES: 'true'
+      GOMEMLIMIT: '2GiB'
+
+      # Log level
+      LOG_LEVEL: 'info'
+    volumes:
+      - weaviate-data:/var/lib/weaviate
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/v1/.well-known/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    networks:
+      - chess-network
+
+  # PostgreSQL - Optional: For production user data and analytics
+  # Uncomment if needed for future phases
+  # postgres:
+  #   image: postgres:16-alpine
+  #   container_name: chess-postgres
+  #   ports:
+  #     - "5432:5432"
+  #   environment:
+  #     POSTGRES_USER: chess
+  #     POSTGRES_PASSWORD: chess123
+  #     POSTGRES_DB: chess_app
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U chess"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #   networks:
+  #     - chess-network
+
+volumes:
+  redis-data:
+    driver: local
+  weaviate-data:
+    driver: local
+  # postgres-data:
+  #   driver: local
+
+networks:
+  chess-network:
+    driver: bridge
