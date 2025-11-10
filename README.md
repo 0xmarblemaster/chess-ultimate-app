@@ -1,14 +1,14 @@
 # Ultimate Chess Learning Platform
 
-An AI-powered chess application that combines interactive learning, advanced position analysis, and access to 6M+ master games from TWIC, Lichess, and Chess.com archives.
+An AI-powered chess application that combines interactive learning, intelligent AI coaching, and access to 6M+ master games from TWIC, Lichess, and Chess.com archives.
 
 ## 🎯 Overview
 
 This project merges two existing chess codebases to create a comprehensive platform with three core features:
 
 1. **Learning Platform** - Built-in curriculum with skill assessment, personalized study plans, and AI tutoring
-2. **Analysis Board** - Interactive position analysis with Stockfish engine and AI coaching
-3. **Database Mode** - Search and explore 6M+ master games with semantic similarity
+2. **Analysis Board** - Interactive position analysis with Stockfish WASM engine, AI coaching, and persistent chat sessions
+3. **Database Mode** (Phase 2) - Search and explore 6M+ master games with semantic similarity
 
 ### Tech Stack
 
@@ -19,14 +19,17 @@ This project merges two existing chess codebases to create a comprehensive platf
 - chess.js + react-chessboard
 - Stockfish WASM (client-side engine)
 - Clerk Authentication
+- Mastra AI Framework (agent-based LLM interactions)
 
-**Backend:**
+**Backend (Phase 1):**
 - Flask 3.1.0 (Python 3.9+)
-- Weaviate (vector database)
-- Redis (conversation cache)
-- SQLite (conversation persistence)
-- Stockfish (native binary)
+- Supabase (PostgreSQL database)
+- LLM Orchestration (API key management, secure routing)
 - Anthropic Claude 3.5 Sonnet + OpenAI GPT-4o
+
+**Backend (Phase 2 - Planned):**
+- Weaviate (vector database for 6M+ games)
+- Redis (conversation cache and session management)
 
 ## 🚀 Quick Start
 
@@ -34,8 +37,10 @@ This project merges two existing chess codebases to create a comprehensive platf
 
 - **Node.js** 20.9.0 or higher
 - **Python** 3.9 or higher
-- **Docker** and **Docker Compose** (for services)
+- **Supabase Account** (free tier available)
+- **Clerk Account** (free tier available)
 - **Git**
+- **Docker** (optional, only needed for Phase 2 services)
 
 ### 1. Clone the Repository
 
@@ -43,23 +48,20 @@ This project merges two existing chess codebases to create a comprehensive platf
 cd /home/marblemaster/Desktop/Cursor/chess-ultimate-app
 ```
 
-### 2. Start Backend Services
+### 2. Set Up Supabase
 
-Start Redis and Weaviate using Docker Compose:
+1. Create a free account at [supabase.com](https://supabase.com)
+2. Create a new project
+3. Run the database schema from `IMPLEMENTATION_GUIDE.md` (SQL for courses, lessons, user_progress, chat_history)
+4. Copy your `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` (keep these secure)
 
-```bash
-docker-compose up -d
-```
+### 3. Set Up Clerk Authentication
 
-Verify services are running:
+1. Create a free account at [clerk.com](https://clerk.com)
+2. Create a new application
+3. Copy your `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`
 
-```bash
-docker-compose ps
-```
-
-You should see `chess-redis` and `chess-weaviate` with status "Up".
-
-### 3. Set Up Backend
+### 4. Set Up Backend
 
 ```bash
 cd backend
@@ -73,7 +75,11 @@ pip install -r requirements.txt
 
 # Copy environment file and configure
 cp .env.example .env
-# Edit .env and add your API keys (see SETUP.md for details)
+# Edit .env and add:
+#   - SUPABASE_URL=your_supabase_url
+#   - SUPABASE_SERVICE_KEY=your_service_key
+#   - CLERK_SECRET_KEY=your_clerk_secret
+#   - ANTHROPIC_API_KEY or OPENAI_API_KEY (for LLM)
 
 # Start Flask server
 python app.py
@@ -81,7 +87,7 @@ python app.py
 
 Backend will run at `http://localhost:5001`
 
-### 4. Set Up Frontend
+### 5. Set Up Frontend
 
 ```bash
 cd frontend
@@ -91,7 +97,11 @@ npm install
 
 # Copy environment file and configure
 cp .env.example .env.local
-# Edit .env.local and add API keys if needed
+# Edit .env.local and add:
+#   - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_key
+#   - CLERK_SECRET_KEY=your_clerk_secret
+#   - NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+#   - NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 
 # Start development server
 npm run dev
@@ -99,46 +109,63 @@ npm run dev
 
 Frontend will run at `http://localhost:3000`
 
-### 5. Access the Application
+### 6. Access the Application
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [http://localhost:3000](http://localhost:3000) in your browser and sign in with Clerk authentication.
+
+## ✨ Key Features
+
+### Multi-Session Chat Management
+- **Create Multiple Sessions**: Start new analysis sessions for different games or positions
+- **Persistent Storage**: All sessions saved to localStorage - never lose your analysis work
+- **Smart Switching**: Seamlessly switch between sessions - board position and chat history load automatically
+- **Auto-Generated Titles**: Sessions automatically titled based on chess openings (e.g., "Sicilian Defense", "Queen's Gambit")
+- **Session Management**: Rename, delete, and organize your analysis sessions
+- **Position Synchronization**: Board FEN and chat messages stay in sync with each session
+
+### Interactive Analysis
+- **Stockfish WASM Engine**: Client-side chess engine for real-time position analysis
+- **AI Chess Coach**: Get personalized insights and suggestions from Claude AI
+- **Opening Database**: Access to master game statistics and opening theory
+- **Move Annotations**: Automatic move quality assessment and tactical analysis
 
 ## 📖 Documentation
 
-- **[SETUP.md](./SETUP.md)** - Detailed setup instructions including API keys and Clerk authentication
-- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - System architecture and design decisions
+- **[IMPLEMENTATION_GUIDE.md](../../IMPLEMENTATION_GUIDE.md)** - Complete implementation guide for Phase 1
+- **[AI_TUTORING_DEEP_COMPARISON.md](../../AI_TUTORING_DEEP_COMPARISON.md)** - Technical comparison of AI approaches
+- **[BACKEND_VS_CHESSAGINE_COMPARISON.md](../../BACKEND_VS_CHESSAGINE_COMPARISON.md)** - Architecture comparison
 
-## 🧪 Features
+## 🧪 Implementation Phases
 
-### Phase 1: Foundation (Current)
+### Phase 1: Core Stack (Current Focus)
 - ✅ Merged project structure
-- ✅ Docker Compose for services
-- ✅ Environment configuration
-- ✅ Basic documentation
+- ✅ Frontend with Mastra AI framework
+- ✅ Stockfish WASM integration (client-side)
+- ✅ Persistent chat sessions with localStorage
+- ✅ Multi-session management with board position sync
+- 🔄 Clerk authentication activation
+- 🔄 Supabase database setup
+- 🔄 Flask backend for LLM orchestration
+- 🔄 Learning platform with progress tracking
+- 🔄 AI chat assistant with conversation history
 
-### Phase 2: Authentication (Planned)
-- Enable Clerk authentication
-- User session management
-- Clerk JWT verification in backend
-- Protected routes and API endpoints
+**Phase 1 Deliverables:**
+- User authentication and session management
+- Learning course system (courses, modules, lessons)
+- Progress tracking and lesson unlocking
+- AI chat assistant with context retention
+- **NEW:** Persistent chat sessions - Create, switch, rename, and delete multiple analysis sessions
+- **NEW:** Automatic session title generation based on chess openings and positions
+- **NEW:** Board position and chat history saved per session
+- Cached LLM responses (24hr TTL)
 
-### Phase 3: Conversation Memory (Planned)
-- Integrate Redis conversation cache
-- SQLite persistence for chat history
-- Multi-turn context retention
-- User-specific conversation threads
-
-### Phase 4: Database Mode (Planned)
-- TWIC database download and ingestion (6M+ games)
-- Weaviate vector search implementation
-- Position-based game search
-- Player/tournament/ECO filtering
-
-### Phase 5: Learning Platform (Planned)
-- Skill assessment system
-- Personalized study plans
-- Interactive lessons with diagrams
-- Progress tracking and analytics
+### Phase 2: Enhanced Features (Planned)
+- Redis conversation cache and session management
+- Weaviate vector database setup
+- TWIC database ingestion (6M+ games)
+- Semantic game search by position
+- Advanced filtering (player, tournament, ECO)
+- Real-time analysis caching
 
 ## 🔧 Development
 
@@ -189,17 +216,15 @@ vercel --prod
 
 ## 🔐 Authentication
 
-**Current Status:** Disabled (local development mode)
+**Phase 1 Status:** Active (Clerk authentication required)
 
-This project has Clerk authentication fully integrated but commented out for easier initial setup.
+This project uses Clerk for authentication:
+- User sign-up/sign-in with email or social providers
+- JWT-based session management
+- Protected API routes in Flask backend
+- User-specific data isolation in Supabase
 
-To enable authentication:
-1. Create a Clerk account at [clerk.com](https://clerk.com)
-2. Add Clerk API keys to `.env` files (see [SETUP.md](./SETUP.md))
-3. Uncomment Clerk code in `frontend/src/app/layout.tsx`
-4. Restart frontend development server
-
-Authentication will be enabled in Phase 2 of the project.
+See [IMPLEMENTATION_GUIDE.md](../../IMPLEMENTATION_GUIDE.md) for complete Clerk setup instructions.
 
 ## 📊 Project Structure
 
@@ -210,25 +235,29 @@ chess-ultimate-app/
 │   │   ├── app/           # Next.js App Router pages
 │   │   ├── components/    # React components
 │   │   ├── hooks/         # Custom hooks (useChesster, useEngine)
+│   │   ├── server/
+│   │   │   └── mastra/    # Mastra AI agents and tools
 │   │   ├── stockfish/     # Stockfish WASM integration
 │   │   └── theme/         # Material UI theme
 │   ├── package.json
 │   └── .env.example
-├── backend/               # Flask backend (MVP1)
+├── backend/               # Flask backend (LLM orchestration)
 │   ├── api/               # API endpoints
-│   ├── etl/               # ETL pipeline and agents
-│   │   └── agents/        # RAG agents (router, retriever, answer, game search)
-│   ├── services/          # Core services (Stockfish, Whisper, ElevenLabs, Vector DB)
-│   ├── utils/             # Utilities
+│   │   ├── chat.py        # Chat assistant endpoints
+│   │   ├── progress.py    # Learning progress tracking
+│   │   └── lessons.py     # Lesson content delivery
+│   ├── services/          # Core services
+│   │   └── supabase_client.py  # Supabase integration
+│   ├── utils/             # Utilities (JWT verification, etc.)
 │   ├── app.py             # Flask application entry point
 │   ├── requirements.txt
 │   └── .env.example
-├── data/                  # Data storage
-│   ├── twic/              # TWIC chess games
+├── data/                  # Data storage (Phase 2)
+│   ├── twic/              # TWIC chess games (6M+)
 │   ├── lichess/           # Lichess database
 │   └── chess_com/         # Chess.com games
 ├── logs/                  # Application logs
-├── docker-compose.yml     # Docker services (Redis, Weaviate)
+├── docker-compose.yml     # Docker services (Redis, Weaviate - Phase 2)
 ├── .gitignore
 └── README.md
 ```
@@ -251,19 +280,21 @@ See [LICENSE](./frontend/LICENSE) for details.
 
 ## 🔗 Resources
 
-- **Stockfish:** https://stockfishchess.org
-- **Weaviate:** https://weaviate.io
-- **Next.js:** https://nextjs.org
+- **Supabase:** https://supabase.com
 - **Clerk:** https://clerk.com
+- **Mastra AI:** https://mastra.ai
+- **Next.js:** https://nextjs.org
+- **Stockfish WASM:** https://github.com/lichess-org/stockfish.wasm
 - **Anthropic:** https://anthropic.com
-- **TWIC:** https://theweekinchess.com/twic
+- **Weaviate:** https://weaviate.io (Phase 2)
+- **TWIC:** https://theweekinchess.com/twic (Phase 2)
 
 ## 📧 Support
 
 For issues or questions:
 - Create an issue in the repository
-- Refer to [SETUP.md](./SETUP.md) for troubleshooting
+- Refer to [IMPLEMENTATION_GUIDE.md](../../IMPLEMENTATION_GUIDE.md) for detailed instructions
 
 ---
 
-**Status:** Phase 1 Foundation ✅ Complete | Phase 2 Authentication 🔜 Next
+**Status:** Phase 1 Core Stack 🔄 In Progress | Phase 2 Enhanced Features 🔜 Planned

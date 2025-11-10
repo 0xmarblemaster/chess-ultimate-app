@@ -11,8 +11,9 @@ import {
   FormControlLabel,
   Switch,
   Tooltip,
+  IconButton,
 } from "@mui/material";
-import { Refresh as RefreshIcon, Save as SaveIcon, Speed as SpeedIcon } from "@mui/icons-material";
+import { Refresh as RefreshIcon, Save as SaveIcon, Speed as SpeedIcon, Menu as MenuIcon } from "@mui/icons-material";
 import { Chess } from "chess.js";
 import useChesster from "@/hooks/useChesster";
 import AiChessboardPanel from "@/componets/analysis/AiChessboard";
@@ -28,6 +29,7 @@ import { extractMovesWithComments, extractGameInfo } from "@/libs/game/helper";
 import { purpleTheme } from "@/theme/theme";
 import { useGameTheme } from "@/hooks/useGameTheme";
 import Loader from "@/componets/loading/Loader";
+import LoadingScreen from "@/components/LoadingScreen";
 import Warning from "@/componets/loading/SignUpWarning";
 import SaveGameReviewDialog, {
   SavedGameReview,
@@ -39,6 +41,8 @@ import LoadLichessGameUrl, {
 } from "@/componets/game/LoadLichessGameUrl";
 import LoadPGNGame from "@/componets/game/LoadPGNGame";
 import ChessterAnalysisView from "@/componets/analysis/ChessterAnalysisView";
+import ChatSidebar from "@/componets/ChatSidebar";
+import { useChatSessions } from "@/hooks/useChatSessions";
 
 export default function PGNUploaderPage() {
   // const session = useSession();
@@ -67,6 +71,23 @@ export default function PGNUploaderPage() {
   // Game review history state
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+
+  // Chat sidebar state
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+
+  // Chat session management
+  const {
+    sessions,
+    currentSessionId,
+    currentSession,
+    createNewSession,
+    addMessageToSession,
+    switchToSession,
+    deleteSession,
+    renameSession,
+    updateSessionFen,
+    updateSessionPgn,
+  } = useChatSessions();
 
   const {
     setLlmAnalysisResult,
@@ -482,8 +503,74 @@ export default function PGNUploaderPage() {
     setStockfishAnalysisResult(null);
   };
 
+  // Chat session handlers
+  const handleNewChat = () => {
+    // Reset to starting position
+    const startingFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    const resetGame = new Chess();
+    setGame(resetGame);
+    setFen(startingFen);
+    setMoves([]);
+    setPgnText("");
+    setCurrentMoveIndex(0);
+    setComment("");
+    setLlmAnalysisResult(null);
+    setGameReview([]);
+
+    // Create new session with starting position
+    createNewSession(startingFen);
+  };
+
+  const handleSelectSession = (sessionId: string) => {
+    switchToSession(sessionId);
+    // Session FEN will be loaded via useEffect
+  };
+
+  // Sync board FEN with current session
+  useEffect(() => {
+    if (currentSession && currentSession.currentFen && currentSession.currentFen !== fen) {
+      try {
+        const sessionGame = new Chess();
+
+        // If PGN exists, load it to preserve move history
+        if (currentSession.currentPgn) {
+          try {
+            sessionGame.loadPgn(currentSession.currentPgn);
+          } catch (pgnError) {
+            console.warn('Failed to load PGN, falling back to FEN only:', pgnError);
+            sessionGame.load(currentSession.currentFen);
+          }
+        } else {
+          sessionGame.load(currentSession.currentFen);
+        }
+
+        setGame(sessionGame);
+        setFen(sessionGame.fen());
+        setMoves(sessionGame.history());
+      } catch (error) {
+        console.error('Invalid FEN in session, using default:', error);
+        const defaultGame = new Chess();
+        setGame(defaultGame);
+        setFen(defaultGame.fen());
+        updateSessionFen(defaultGame.fen());
+      }
+    }
+  }, [currentSessionId, currentSession]);
+
+  // Update session FEN when board changes
+  useEffect(() => {
+    if (currentSessionId && fen) {
+      const timeoutId = setTimeout(() => {
+        updateSessionFen(fen);
+        updateSessionPgn(game.pgn());
+      }, 300);
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [fen, currentSessionId, updateSessionFen, updateSessionPgn, game]);
+
   if (!session.isLoaded) {
-    return <Loader />;
+    return <LoadingScreen isVisible={true} />;
   }
 
   if (!session.isSignedIn) {
@@ -493,12 +580,64 @@ export default function PGNUploaderPage() {
   return (
     <Box
       sx={{
-        p: 4,
+        display: "flex",
         backgroundColor: purpleTheme.background.main,
         minHeight: "100vh",
+        position: "relative",
       }}
     >
-      {inputsVisible && (
+      {/* Chat Sidebar */}
+      {!inputsVisible && (
+        <Box
+          sx={{
+            flexShrink: 0,
+            transition: "all 0.3s ease",
+          }}
+        >
+          <ChatSidebar
+            sessions={sessions}
+            currentSessionId={currentSessionId}
+            onNewChat={handleNewChat}
+            onSelectSession={handleSelectSession}
+            onDeleteSession={deleteSession}
+            onRenameSession={renameSession}
+            isCollapsed={isSidebarCollapsed}
+            currentBoardFen={fen}
+          />
+        </Box>
+      )}
+
+      {/* Sidebar Toggle Button */}
+      {!inputsVisible && (
+        <IconButton
+          onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          sx={{
+            position: "fixed",
+            top: 16,
+            left: isSidebarCollapsed ? 72 : 336,
+            zIndex: 1300,
+            backgroundColor: purpleTheme.accent,
+            color: "#fff",
+            "&:hover": {
+              backgroundColor: `${purpleTheme.accent}dd`,
+            },
+            transition: "left 0.3s ease",
+            boxShadow: "0 4px 12px rgba(138, 43, 226, 0.3)",
+            display: { xs: "none", md: "flex" },
+          }}
+        >
+          <MenuIcon />
+        </IconButton>
+      )}
+
+      {/* Main Content Area */}
+      <Box
+        sx={{
+          flex: 1,
+          p: 4,
+        }}
+      >
+        {inputsVisible && (
         <Card
           sx={{
             mb: 4,
@@ -817,17 +956,18 @@ export default function PGNUploaderPage() {
         )}
       </Stack>
 
-      <SaveGameReviewDialog
-        saveDialogOpen={saveDialogOpen}
-        setSaveDialogOpen={setSaveDialogOpen}
-        historyDialogOpen={historyDialogOpen}
-        setHistoryDialogOpen={setHistoryDialogOpen}
-        gameInfo={gameInfo}
-        gameReview={gameReview}
-        moves={moves}
-        pgnText={pgnText}
-        loadFromHistory={loadFromHistory}
-      />
+        <SaveGameReviewDialog
+          saveDialogOpen={saveDialogOpen}
+          setSaveDialogOpen={setSaveDialogOpen}
+          historyDialogOpen={historyDialogOpen}
+          setHistoryDialogOpen={setHistoryDialogOpen}
+          gameInfo={gameInfo}
+          gameReview={gameReview}
+          moves={moves}
+          pgnText={pgnText}
+          loadFromHistory={loadFromHistory}
+        />
+      </Box>
     </Box>
   );
 }
