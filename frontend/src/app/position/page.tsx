@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Box, Stack, IconButton } from "@mui/material";
-import { Menu as MenuIcon } from "@mui/icons-material";
+import { Box, Stack } from "@mui/material";
 import { Chess } from "chess.js";
 import AiChessboardPanel from "@/componets/analysis/AiChessboard";
 import useChesster from "@/hooks/useChesster";
@@ -198,31 +197,11 @@ export default function PositionPage() {
           onSelectSession={handleSelectSession}
           onDeleteSession={deleteSession}
           onRenameSession={renameSession}
+          onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
           isCollapsed={isSidebarCollapsed}
           currentBoardFen={fen}
         />
       </Box>
-
-      {/* Sidebar Toggle Button */}
-      <IconButton
-        onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-        sx={{
-          position: "fixed",
-          top: 16,
-          left: isSidebarCollapsed ? 72 : 336,
-          zIndex: 1300,
-          backgroundColor: purpleTheme.accent,
-          color: "#fff",
-          "&:hover": {
-            backgroundColor: `${purpleTheme.accent}dd`,
-          },
-          transition: "left 0.3s ease",
-          boxShadow: "0 4px 12px rgba(138, 43, 226, 0.3)",
-          display: { xs: "none", md: "flex" },
-        }}
-      >
-        <MenuIcon />
-      </IconButton>
 
       {/* Main Content Area */}
       <Box

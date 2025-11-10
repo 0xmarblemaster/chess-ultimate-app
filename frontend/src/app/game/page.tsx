@@ -11,9 +11,8 @@ import {
   FormControlLabel,
   Switch,
   Tooltip,
-  IconButton,
 } from "@mui/material";
-import { Refresh as RefreshIcon, Save as SaveIcon, Speed as SpeedIcon, Menu as MenuIcon } from "@mui/icons-material";
+import { Refresh as RefreshIcon, Save as SaveIcon, Speed as SpeedIcon } from "@mui/icons-material";
 import { Chess } from "chess.js";
 import useChesster from "@/hooks/useChesster";
 import AiChessboardPanel from "@/componets/analysis/AiChessboard";
@@ -601,33 +600,11 @@ export default function PGNUploaderPage() {
             onSelectSession={handleSelectSession}
             onDeleteSession={deleteSession}
             onRenameSession={renameSession}
+            onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
             isCollapsed={isSidebarCollapsed}
             currentBoardFen={fen}
           />
         </Box>
-      )}
-
-      {/* Sidebar Toggle Button */}
-      {!inputsVisible && (
-        <IconButton
-          onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          sx={{
-            position: "fixed",
-            top: 16,
-            left: isSidebarCollapsed ? 72 : 336,
-            zIndex: 1300,
-            backgroundColor: purpleTheme.accent,
-            color: "#fff",
-            "&:hover": {
-              backgroundColor: `${purpleTheme.accent}dd`,
-            },
-            transition: "left 0.3s ease",
-            boxShadow: "0 4px 12px rgba(138, 43, 226, 0.3)",
-            display: { xs: "none", md: "flex" },
-          }}
-        >
-          <MenuIcon />
-        </IconButton>
       )}
 
       {/* Main Content Area */}

@@ -10,6 +10,7 @@ interface ChatSidebarProps {
   onSelectSession: (sessionId: string) => void;
   onDeleteSession: (sessionId: string) => void;
   onRenameSession: (sessionId: string, newTitle: string) => void;
+  onToggleCollapse: () => void;
   isCollapsed?: boolean;
   currentBoardFen?: string;
 }
@@ -21,6 +22,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
   onSelectSession,
   onDeleteSession,
   onRenameSession,
+  onToggleCollapse,
   isCollapsed = false,
 }) => {
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
@@ -49,9 +51,9 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
       <div className="w-16 bg-gradient-to-b from-purple-950/40 to-slate-900/40 backdrop-blur-xl border-r border-purple-500/20 flex flex-col shadow-2xl shadow-purple-900/50 hidden md:flex">
         <div className="p-3">
           <button
-            onClick={onNewChat}
+            onClick={onToggleCollapse}
             className="w-full aspect-square flex items-center justify-center rounded-lg bg-gradient-to-br from-purple-600 to-purple-800 hover:from-purple-500 hover:to-purple-700 text-white transition-all duration-300 shadow-lg shadow-purple-900/50 hover:shadow-purple-600/50 hover:scale-105"
-            title="New Chat"
+            title="Expand Session Panel"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -64,8 +66,8 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
 
   return (
     <div className="w-80 md:w-80 bg-gradient-to-b from-purple-950/40 to-slate-900/40 backdrop-blur-xl border-r border-purple-500/20 flex flex-col h-full shadow-2xl shadow-purple-900/50 hidden md:flex">
-      {/* Header with New Chat button */}
-      <div className="p-4 border-b border-purple-500/20">
+      {/* Header with New Chat and Collapse buttons */}
+      <div className="p-4 border-b border-purple-500/20 space-y-2">
         <button
           onClick={onNewChat}
           className="w-full flex items-center justify-center space-x-2 px-4 py-3 rounded-lg bg-gradient-to-r from-purple-600 to-purple-800 hover:from-purple-500 hover:to-purple-700 text-white font-medium transition-all duration-300 shadow-lg shadow-purple-900/50 hover:shadow-purple-600/50 hover:scale-[1.02]"
@@ -74,6 +76,16 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
           <span>New Chess Chat</span>
+        </button>
+        <button
+          onClick={onToggleCollapse}
+          className="w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-lg bg-slate-800/30 hover:bg-slate-700/40 text-slate-300 text-sm font-medium transition-all duration-300 border border-purple-500/20 hover:border-purple-500/40"
+          title="Collapse Panel"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+          </svg>
+          <span>Collapse</span>
         </button>
       </div>
 
