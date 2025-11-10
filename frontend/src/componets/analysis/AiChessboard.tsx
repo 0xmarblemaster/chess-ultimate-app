@@ -118,6 +118,9 @@ export default function AiChessboardPanel({
   gameInfo,
   engineThinking = false,
 }: AiChessboardPanelProps) {
+  // Fix hydration mismatch by ensuring client-only rendering
+  const [mounted, setMounted] = useState(false);
+
   const [customFen, setCustomFen] = useState("");
   const [isFlipped, setIsFlipped] = useLocalStorage<boolean>(
     "board_ui_flipped",
@@ -295,6 +298,11 @@ export default function AiChessboardPanel({
 
     return history;
   }, [moves]);
+
+  // Fix hydration mismatch - only render after client-side mount
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Effect to update game state when moves change
   useEffect(() => {
@@ -772,6 +780,11 @@ export default function AiChessboardPanel({
 
     return customPieces;
   };
+
+  // Prevent hydration mismatch - don't render until mounted
+  if (!mounted) {
+    return null;
+  }
 
   return (
     <Box

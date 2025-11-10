@@ -5,19 +5,38 @@ import logging
 logger = logging.getLogger(__name__)
 
 class AnthropicLLM:
-    def __init__(self, api_key: str = None, model_name: str = "claude-3-5-sonnet-20241022", max_tokens: int = 2000, temperature: float = 0.7):
-        self.api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
-        if not self.api_key:
-            logger.error("Anthropic API key not provided or found in environment variables.")
-            raise ValueError("Anthropic API key not provided or found in environment variables.")
-        
-        try:
-            self.client = anthropic.Anthropic(api_key=self.api_key)
-            logger.info(f"AnthropicLLM initialized with model: {model_name}")
-        except Exception as e:
-            logger.error(f"Failed to initialize Anthropic client: {e}", exc_info=True)
-            raise
-            
+    def __init__(self, api_key: str = None, model_name: str = "anthropic/claude-3.5-sonnet", max_tokens: int = 2000, temperature: float = 0.7):
+        # Try OpenRouter first, fallback to direct Anthropic
+        self.use_openrouter = False
+        openrouter_key = os.getenv("OPENROUTER_API_KEY")
+        anthropic_key = api_key or os.getenv("ANTHROPIC_API_KEY")
+
+        if openrouter_key:
+            # Use OpenRouter
+            self.api_key = openrouter_key
+            self.use_openrouter = True
+            try:
+                self.client = anthropic.Anthropic(
+                    api_key=self.api_key,
+                    base_url="https://openrouter.ai/api/v1"
+                )
+                logger.info(f"AnthropicLLM initialized with OpenRouter, model: {model_name}")
+            except Exception as e:
+                logger.error(f"Failed to initialize OpenRouter client: {e}", exc_info=True)
+                raise
+        elif anthropic_key:
+            # Use direct Anthropic API
+            self.api_key = anthropic_key
+            try:
+                self.client = anthropic.Anthropic(api_key=self.api_key)
+                logger.info(f"AnthropicLLM initialized with direct Anthropic API, model: {model_name}")
+            except Exception as e:
+                logger.error(f"Failed to initialize Anthropic client: {e}", exc_info=True)
+                raise
+        else:
+            logger.error("No API key found (neither OPENROUTER_API_KEY nor ANTHROPIC_API_KEY)")
+            raise ValueError("No API key found (neither OPENROUTER_API_KEY nor ANTHROPIC_API_KEY)")
+
         self.model_name = model_name
         self.max_tokens = max_tokens
         self.temperature = temperature
@@ -72,7 +91,7 @@ if __name__ == '__main__':
         print("Please set the ANTHROPIC_API_KEY environment variable to run this test.")
     else:
         try:
-            llm = AnthropicLLM(model_name="claude-3-5-sonnet-20241022", max_tokens=50)
+            llm = AnthropicLLM(model_name="claude-3-5-sonnet-20240620", max_tokens=50)
             print(f"AnthropicLLM instance created with model: {llm.model_name}")
             
             test_prompt = "Explain the concept of a language model in one sentence."

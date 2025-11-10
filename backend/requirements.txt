@@ -1,39 +1,30 @@
-blinker==1.9.0
-click==8.1.8
+# Flask core
 Flask==3.1.0
 flask-cors==5.0.1
-flask-socketio==5.3.7
-itsdangerous==2.2.0
-Jinja2==3.1.6
-MarkupSafe==3.0.2
+python-dotenv
 Werkzeug==3.1.3
-python-chess
+
+# Phase 1: LLM Orchestration & Learning Platform
 openai
 anthropic
-python-dotenv
-numpy
-opencv-python
+supabase
+pyjwt  # For Clerk JWT verification
+
+# ETL pipeline dependencies (Phase 2)
+# weaviate-client
+# langgraph
+# langchain
+# sentence-transformers
+
+# Redis (Phase 2)
+# redis
+
+# Development & Testing
 pytest
 pytest-mock
+rich  # For better logging
 
-# ETL pipeline dependencies
-python-docx
-PyMuPDF
-Pillow
-weaviate-client
-langgraph
-langchain
-sentence-transformers
-
-# Speech and audio
-whisper
-elevenlabs
-sounddevice
-
-# Monitoring and logging
-rich
-
-uvicorn
-sentence-transformers>=2.2.2
-torch>=2.0.0
-transformers>=4.30.0
+# Note: python-chess, Stockfish, whisper, and elevenlabs removed
+# - Stockfish analysis now handled by frontend WASM
+# - Voice features deferred to future phase
+# - python-chess may be re-added if needed for game notation parsing

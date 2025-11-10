@@ -81,11 +81,16 @@ cp .env.example .env
 #   - CLERK_SECRET_KEY=your_clerk_secret
 #   - ANTHROPIC_API_KEY or OPENAI_API_KEY (for LLM)
 
+# Seed the database with initial course content
+python seed_courses.py
+
 # Start Flask server
 python app.py
 ```
 
 Backend will run at `http://localhost:5001`
+
+**Note:** The seed script creates 2 courses with 7 lessons covering chess fundamentals and tactics. You only need to run it once.
 
 ### 5. Set Up Frontend
 
@@ -216,13 +221,36 @@ vercel --prod
 
 ## 🔐 Authentication
 
-**Phase 1 Status:** Active (Clerk authentication required)
+**Phase 1 Status:** Active with optional toggle for local development
 
 This project uses Clerk for authentication:
 - User sign-up/sign-in with email or social providers
 - JWT-based session management
 - Protected API routes in Flask backend
 - User-specific data isolation in Supabase
+
+### Development Mode (Auth Disabled)
+
+For local development without Clerk setup, authentication is **already disabled** on the Position and Game analysis pages:
+
+```typescript
+// In frontend/src/app/position/page.tsx and game/page.tsx
+// const session = useSession();  // ← Real Clerk auth (commented out)
+const session = { isLoaded: true, isSignedIn: true };  // ← Simulated session
+```
+
+This allows you to:
+- Test the analysis board without authentication
+- Develop locally without Clerk credentials
+- Use localStorage-based session management
+
+### Production Mode (Auth Enabled)
+
+The **Learning Platform** (courses/lessons pages) uses real Clerk authentication and requires valid credentials.
+
+To enable authentication on Position/Game pages, uncomment the real `useSession()` import in:
+- [frontend/src/app/position/page.tsx:19-21](frontend/src/app/position/page.tsx#L19-L21)
+- [frontend/src/app/game/page.tsx:20-22](frontend/src/app/game/page.tsx#L20-L22)
 
 See [IMPLEMENTATION_GUIDE.md](../../IMPLEMENTATION_GUIDE.md) for complete Clerk setup instructions.
 

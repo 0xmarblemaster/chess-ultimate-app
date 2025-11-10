@@ -24,3 +24,164 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ========================================
+   LOADING SCREEN ANIMATION
+   ======================================== */
+
+.loading-screen-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  animation: fadeIn 0.3s ease-out;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Add a subtle board pattern background */
+.loading-screen-overlay::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image:
+    linear-gradient(45deg, rgba(255,255,255,0.02) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(255,255,255,0.02) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(255,255,255,0.02) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.02) 75%);
+  background-size: 60px 60px;
+  background-position: 0 0, 0 30px, 30px -30px, -30px 0px;
+  z-index: -1;
+  opacity: 0.1;
+}
+
+#loadingWave {
+  display: flex;
+  gap: 20px;
+  perspective: 100px;
+  transform-style: preserve-3d;
+  position: relative;
+}
+
+.chess-piece {
+  width: 48px;
+  height: 48px;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 36px;
+  animation: chessWave 2.4s ease infinite;
+  transform-origin: 50% 50%;
+  transform-style: preserve-3d;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.chess-piece:hover {
+  transform: scale(1.1);
+}
+
+.chess-piece:nth-child(1) { animation-delay: 0s; }
+.chess-piece:nth-child(2) { animation-delay: 0.1s; }
+.chess-piece:nth-child(3) { animation-delay: 0.2s; }
+.chess-piece:nth-child(4) { animation-delay: 0.3s; }
+.chess-piece:nth-child(5) { animation-delay: 0.4s; }
+.chess-piece:nth-child(6) { animation-delay: 0.5s; }
+
+@keyframes chessWave {
+  0% {
+    transform: translate3D(0,0,0) scale(1) rotateY(0deg);
+    color: #ff0080;
+    text-shadow: 0 0 15px rgba(255, 0, 128, 0.5), 0 0 30px rgba(255, 0, 128, 0.3);
+  }
+  12% {
+    transform: translate3D(6px,-12px,8px) scale(1.4) rotateY(20deg);
+    color: #ff4080;
+    text-shadow: 0 0 25px rgba(255, 64, 128, 0.9), 0 0 50px rgba(255, 64, 128, 0.6);
+  }
+  15% {
+    color: #ff8040;
+    text-shadow: 0 0 30px rgba(255, 128, 64, 1), 0 0 60px rgba(255, 128, 64, 0.7);
+  }
+  24% {
+    transform: translate3D(0,0,0) scale(1) rotateY(0deg);
+    color: #ffff00;
+    text-shadow: 0 0 25px rgba(255, 255, 0, 0.8), 0 0 50px rgba(255, 255, 0, 0.5);
+  }
+  36% {
+    color: #80ff40;
+    text-shadow: 0 0 20px rgba(128, 255, 64, 0.7), 0 0 40px rgba(128, 255, 64, 0.4);
+  }
+  48% {
+    color: #40ff80;
+    text-shadow: 0 0 18px rgba(64, 255, 128, 0.6), 0 0 35px rgba(64, 255, 128, 0.3);
+  }
+  60% {
+    color: #00ffff;
+    text-shadow: 0 0 15px rgba(0, 255, 255, 0.5), 0 0 30px rgba(0, 255, 255, 0.3);
+  }
+  72% {
+    color: #4080ff;
+    text-shadow: 0 0 15px rgba(64, 128, 255, 0.5), 0 0 30px rgba(64, 128, 255, 0.3);
+  }
+  84% {
+    color: #8040ff;
+    text-shadow: 0 0 20px rgba(128, 64, 255, 0.7), 0 0 40px rgba(128, 64, 255, 0.4);
+  }
+  96% {
+    color: #ff00ff;
+    text-shadow: 0 0 25px rgba(255, 0, 255, 0.8), 0 0 50px rgba(255, 0, 255, 0.5);
+  }
+  100% {
+    transform: translate3D(0,0,0) scale(1) rotateY(0deg);
+    color: #ff0080;
+    text-shadow: 0 0 15px rgba(255, 0, 128, 0.5), 0 0 30px rgba(255, 0, 128, 0.3);
+  }
+}
+
+.loading-text {
+  position: absolute;
+  bottom: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #666;
+  font-size: 14px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Mobile responsive adjustments for loading screen */
+@media (max-width: 768px) {
+  .chess-piece {
+    width: 36px;
+    height: 36px;
+    font-size: 28px;
+  }
+  .king { font-size: 32px; }
+  .queen { font-size: 30px; }
+  .rook, .bishop, .knight { font-size: 28px; }
+  .pawn { font-size: 24px; }
+  #loadingWave {
+    gap: 15px;
+  }
+}

@@ -1,9 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-// ClerkProvider disabled for local development without authentication
-// import {
-//   ClerkProvider,
-// } from '@clerk/nextjs'
+import { ClerkProvider } from '@clerk/nextjs'
 import "./globals.css";
 import NavBar from "@/componets/Navbar";
 
@@ -90,11 +87,13 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`} suppressHydrationWarning>
-        <NavBar/>
-        {children}
-      </body>
-    </html>
+    <ClerkProvider>
+      <html lang="en" suppressHydrationWarning>
+        <body className={`${geistSans.variable} ${geistMono.variable} antialiased`} suppressHydrationWarning>
+          <NavBar/>
+          {children}
+        </body>
+      </html>
+    </ClerkProvider>
   )
 }

@@ -8,8 +8,8 @@ import {
   getLichessOpeningStats,
 } from "@/libs/openingdatabase/helper";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-// Clerk authentication disabled for local development
-// import { useSession } from "@clerk/nextjs";
+// Clerk authentication for server-managed LLM
+import { useAuth } from "@clerk/nextjs";
 import { Chess } from "chess.js";
 import { CandidateMove, getChessDBSpeech, useChessDB } from "../componets/tabs/Chessdb";
 import { useLocalStorage } from "usehooks-ts";
@@ -27,6 +27,7 @@ export interface ChatMessage {
   model?: string,
   content: string;
   timestamp: Date;
+  response_time_ms?: number;
 }
 
 export interface AgentMessage {
@@ -34,6 +35,7 @@ export interface AgentMessage {
   maxTokens: number,
   provider: string,
   model: string,
+  response_time_ms?: number,
 }
 
 interface ChessterState {
@@ -85,7 +87,8 @@ const createChatMessage = (
   maxTokens?: number,
   provider?: string,
   model?: string,
-  id?: string
+  id?: string,
+  response_time_ms?: number
 ): ChatMessage => ({
   id: id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
   role,
@@ -95,6 +98,7 @@ const createChatMessage = (
   model,
   content,
   timestamp: new Date(),
+  response_time_ms,
 });
 
 export default function useChesster(fen: string) {
@@ -132,9 +136,9 @@ export default function useChesster(fen: string) {
   )
 
   // Hooks
-  // const { session } = useSession();
-  // Simulated session for no-auth mode
-  const session = { getToken: async () => null };
+  // Enable Clerk authentication for server-managed LLM
+  const { getToken } = useAuth();
+  const session = { getToken };
   const engine = useEngine(true, enginePicked);
   const { data: chessdbdata, loading, error, queueing, refetch, requestAnalysis } = useChessDB(fen);
   const {
@@ -149,6 +153,8 @@ export default function useChesster(fen: string) {
   // Refs
   const currentFenRef = useRef(fen);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const conversationIdRef = useRef<string | null>(null); // Track conversation for context
+  const hasLoadedHistoryRef = useRef(false); // Track if we've loaded history on mount
 
   // Update ref when fen changes
   useEffect(() => {
@@ -227,6 +233,54 @@ export default function useChesster(fen: string) {
   }, [state.chatMessages, updateState]);
 
   // ==================== API FUNCTIONS ====================
+
+  // Load conversation history from backend
+  const loadConversationHistory = useCallback(async (conversationId: string): Promise<void> => {
+    try {
+      const token = await session?.getToken();
+      if (!token) {
+        console.warn('No auth token, skipping conversation history load');
+        return;
+      }
+
+      const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
+      const response = await fetch(`${BACKEND_URL}/api/chat/history/${conversationId}`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        console.warn(`Failed to load conversation history: ${response.status}`);
+        return;
+      }
+
+      const data = await response.json();
+
+      // Convert backend messages to ChatMessage format
+      const loadedMessages: ChatMessage[] = data.messages.map((msg: any) => ({
+        id: msg.id || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        role: msg.role as "user" | "assistant",
+        content: msg.content,
+        fen: msg.fen || "",
+        timestamp: new Date(msg.timestamp),
+        maxTokens: msg.tokens_used,
+        model: msg.model,
+        provider: msg.model?.includes('claude') ? 'anthropic' : 'openai',
+        response_time_ms: msg.response_time_ms
+      }));
+
+      // Update state with loaded messages
+      updateState({ chatMessages: loadedMessages });
+      conversationIdRef.current = conversationId;
+
+      console.log(`Loaded ${loadedMessages.length} messages from conversation ${conversationId.substring(0, 8)}...`);
+    } catch (error) {
+      console.error('Error loading conversation history:', error);
+    }
+  }, [session, updateState]);
+
   const makeApiRequest = useCallback(
   async (fen: string, query: string, mode: string): Promise<AgentMessage> => {
     if (abortControllerRef.current) {
@@ -234,44 +288,83 @@ export default function useChesster(fen: string) {
     }
     const controller = new AbortController();
     abortControllerRef.current = controller;
-    
+
     try {
       const token = await session?.getToken();
-      
-      const apiSettings = JSON.parse(localStorage.getItem('api-settings') || '{}') as ApiSettings;
-      
-      if(!apiSettings.ollamaBaseUrl && apiSettings.provider == "ollama"){
-        throw new Error("Please configure your Ollama Ngrok local LLM endpoint in the settins page before using Chess Empire. If you are not sure you can read the docs in the docs tab, and join the Discord for more help from the developer.")
+
+      // Check if user is authenticated
+      if (!token) {
+        throw new Error('Please sign in to use AI chat features');
       }
-      
-      if (!apiSettings.apiKey && apiSettings.provider != "ollama") {
-        throw new Error('Please configure your API Key in the Settings page before using Chess Empire. If you are not sure you can read the docs in the docs tab, and join the Discord for more help from the developer.');
-      }
-      
-      const response = await fetch(`/api/agent`, {
+
+      // Backend URL - uses environment variable or defaults to localhost
+      const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5001';
+
+      // Determine context type based on mode
+      const contextType = mode === 'position' ? 'position' :
+                          mode === 'game' ? 'game' :
+                          mode === 'puzzle' ? 'puzzle' : 'general';
+
+      const response = await fetch(`${BACKEND_URL}/api/chat/analysis`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ 
-          fen, 
-          query, 
-          mode,
-          apiSettings: {
-            provider: apiSettings.provider,
-            model: apiSettings.model,
-            apiKey: apiSettings.apiKey,
-            language: apiSettings.language,
-            isRouted: apiSettings.isRouted,
-            ollamaBaseUrl: `${apiSettings.ollamaBaseUrl}/api`          
-          }
+        body: JSON.stringify({
+          fen,
+          query,
+          conversation_id: conversationIdRef.current, // Maintain conversation context
+          context_type: contextType
         }),
         signal: controller.signal,
       });
-      
-      const data = await response.json() as AgentMessage;
-      return data;
+
+      if (!response.ok) {
+        let errorMessage = 'Failed to get AI response';
+        try {
+          const error = await response.json();
+          // Truncate long error messages to prevent UI issues
+          errorMessage = error.error || errorMessage;
+          if (errorMessage.length > 500) {
+            errorMessage = errorMessage.substring(0, 500) + '...';
+          }
+        } catch (e) {
+          // If JSON parsing fails, use default error message
+          errorMessage = `Request failed with status ${response.status}`;
+        }
+
+        // Provide user-friendly error messages for common issues
+        if (response.status === 401) {
+          errorMessage = 'Please sign in to use AI chat features';
+        } else if (response.status === 429) {
+          errorMessage = 'Rate limit exceeded. Please try again in a few minutes.';
+        }
+
+        throw new Error(errorMessage);
+      }
+
+      const data = await response.json();
+
+      // Save conversation ID for follow-up messages
+      if (data.conversation_id) {
+        conversationIdRef.current = data.conversation_id;
+        // Persist to localStorage so it survives page refreshes
+        try {
+          localStorage.setItem('current_conversation_id', data.conversation_id);
+        } catch (e) {
+          console.warn('Failed to save conversation ID to localStorage:', e);
+        }
+      }
+
+      // Return in AgentMessage format for compatibility with existing code
+      return {
+        message: data.response,
+        maxTokens: data.tokens_used || 0,
+        provider: 'anthropic',
+        model: 'claude-3-5-sonnet-20241022',
+        response_time_ms: data.response_time_ms
+      };
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
         throw new Error("Request cancelled");
@@ -604,20 +697,7 @@ ${candidateMoves}
       });
       const currentFen = currentFenRef.current;
       try {
-        const chessInstance = new Chess(currentFen);
-        const sideToMove = chessInstance.turn() === "w" ? "White" : "Black";
-       
-        const query = buildChatQuery(
-          currentInput,
-          currentFen,
-          sideToMove,
-          gameInfo,
-          currentMove,
-          puzzleMode,
-          puzzleQuery,
-          playMode
-        );
-
+        // Determine the context type for the new server-managed API
         let mode = "position";
 
         if(questionMode){
@@ -627,9 +707,10 @@ ${candidateMoves}
           ? "puzzle"
           : "position";
         }
-         
-        const result = await makeApiRequest(currentFen, query, mode);
-        const assistantMessage = createChatMessage("assistant", fen,result.message, result.maxTokens, result.provider, result.model, (Date.now() + 1).toString());
+
+        // Send only the raw user input - backend will construct the full prompt with context
+        const result = await makeApiRequest(currentFen, currentInput, mode);
+        const assistantMessage = createChatMessage("assistant", fen,result.message, result.maxTokens, result.provider, result.model, (Date.now() + 1).toString(), result.response_time_ms);
         updateState({
           chatMessages: [...state.chatMessages, userMessage, assistantMessage],
           chatLoading: false
@@ -669,6 +750,14 @@ ${candidateMoves}
 
   const clearChatHistory = useCallback((): void => {
     updateState({ chatMessages: [] });
+    // Clear conversation ID to start a new conversation
+    conversationIdRef.current = null;
+    try {
+      localStorage.removeItem('current_conversation_id');
+      console.log('Cleared conversation history and started new conversation');
+    } catch (e) {
+      console.warn('Failed to clear conversation ID from localStorage:', e);
+    }
   }, [updateState]);
 
   // ==================== CLICK HANDLERS ====================
@@ -988,7 +1077,7 @@ ${customQuery}
 
         const userMessage = createChatMessage("user", fen, messageContent);
         const result = await makeApiRequest(currentFen, query, analysisType === "annotation" ? "annotation" : "position");
-        const assistantMessage = createChatMessage("assistant", fen, result.message, result.maxTokens, result.provider, result.model, (Date.now() + 1).toString());
+        const assistantMessage = createChatMessage("assistant", fen, result.message, result.maxTokens, result.provider, result.model, (Date.now() + 1).toString(), result.response_time_ms);
 
 
         if(analysisType === "moveCoach"){
@@ -1118,7 +1207,7 @@ Be concise but thorough, and use clear chess language.`;
 
         const userMessage = createChatMessage("user", fen, `Analyze move: ${move}`);
         const result = await makeApiRequest(futureFen, query, "position");
-        const assistantMessage = createChatMessage("assistant", fen, result.message, result.maxTokens, result.provider, result.model, (Date.now() + 1).toString());
+        const assistantMessage = createChatMessage("assistant", fen, result.message, result.maxTokens, result.provider, result.model, (Date.now() + 1).toString(), result.response_time_ms);
 
 
         updateState({ 
@@ -1229,6 +1318,31 @@ Be concise but thorough, and use clear chess language.`;
     },
     [state.chatLoading, state.chatMessages, handleMoveCoachClick, updateState]
   );
+
+  // ==================== LOAD CONVERSATION ON MOUNT ====================
+  useEffect(() => {
+    // Only run on client side (not during SSR)
+    if (typeof window === 'undefined') return;
+
+    // Only load conversation history once on mount
+    if (hasLoadedHistoryRef.current) return;
+    hasLoadedHistoryRef.current = true;
+
+    const loadHistory = async () => {
+      try {
+        // Check if we have a saved conversation ID
+        const savedConversationId = localStorage.getItem('current_conversation_id');
+        if (savedConversationId) {
+          console.log(`Restoring conversation ${savedConversationId.substring(0, 8)}... from localStorage`);
+          await loadConversationHistory(savedConversationId);
+        }
+      } catch (error) {
+        console.error('Error loading conversation on mount:', error);
+      }
+    };
+
+    loadHistory();
+  }, [loadConversationHistory]);
 
   // ==================== AUTO ANALYSIS EFFECT ====================
   useEffect(() => {

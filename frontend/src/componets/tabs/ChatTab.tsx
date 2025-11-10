@@ -36,7 +36,8 @@ import {
   FormControl,
   InputLabel,
 } from "@mui/material";
-import ModelSetting from "./ModelSetting";
+// ModelSetting removed - using server-managed LLM
+// import ModelSetting from "./ModelSetting";
 import { ChatMessage } from "../../hooks/useChesster";
 import { calculateChatPrice } from "@/libs/docs/helper";
 import { useLocalStorage } from "usehooks-ts";
@@ -1784,8 +1785,16 @@ export const ChatTab: React.FC<ChatTabProps> = ({
               </>
             )}
 
-            <ModelSetting/>
-            
+            {/* Server-managed LLM - No API key configuration needed */}
+            <Box sx={{ p: 2, bgcolor: "rgba(156, 39, 176, 0.1)", borderRadius: 1 }}>
+              <Typography variant="body2" sx={{ color: "grey.300", mb: 1, fontWeight: 500 }}>
+                🤖 AI Model: Claude 3.5 Sonnet
+              </Typography>
+              <Typography variant="caption" sx={{ color: "grey.400" }}>
+                Powered by server-managed Anthropic API. No configuration required!
+              </Typography>
+            </Box>
+
             <Divider sx={{ borderColor: "rgba(255,255,255,0.1)" }} />
             
             <Box>

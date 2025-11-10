@@ -1,439 +1,502 @@
-from flask import Blueprint, request, jsonify, current_app
-import logging
-import chess
-import time
-import traceback
+"""
+Chat API - Server-managed LLM chat endpoints for analysis tools
 
-# Create blueprint with URL prefix
-chat_api_blueprint = Blueprint('chat_api', __name__, url_prefix='/api/chat')
+Provides endpoints for:
+- Position analysis chat
+- Game analysis chat
+- Puzzle chat
+- Conversation management
+
+All endpoints require Clerk authentication and enforce rate limits.
+"""
+
+import asyncio
+import logging
+from flask import Blueprint, request, jsonify, g
+from functools import wraps
+
+from utils.auth import verify_clerk_token, get_current_user_id
+from services.llm_session_manager import get_session_manager, LLMRequest
+from services.conversation_manager import get_conversation_manager
+from services.rate_limiter import get_rate_limiter
+
 logger = logging.getLogger(__name__)
 
-# System message for the chat
-SYSTEM_MESSAGE_CHAT_INTERACTIVE = (
-    f"You are an AI Chess Tutor. Your primary goal is to help users understand chess concepts, positions, and game play. "
-    f"You have access to a function 'get_stockfish_analysis(fen_string)' to get Stockfish engine analysis for a given FEN position."
-    f"You also have access to a function 'check_move_legality(fen_string, move_san)' which returns if a move is legal."
-    f"When a user asks for the best move, or for analysis that would benefit from engine calculation, you MUST use 'get_stockfish_analysis' for the relevant FEN and incorporate its findings."
-    f"If the user provides a FEN or describes a position, use that FEN for analysis. If the context implies a current board state, use that."
-    f"When discussing specific moves:"
-    f"1.  **Move Legality is Paramount:** Always verify move legality using 'check_move_legality' before suggesting moves. Never suggest illegal moves.\\n" +
-    f"2.  **Clarity:** Explain your reasoning clearly and concisely, especially when it's based on Stockfish analysis (e.g., 'Stockfish suggests ... because ... and evaluates the position as ...').\\n" +
-    f"3.  **Interactive Assistance:** If the user makes a move, acknowledge it. If they ask for hints or ideas, provide them based on sound chess principles and engine analysis if appropriate.\\n" +
-    f"4.  **Board State:** If you refer to a specific position that should be shown on a visual board, end your response with [SET_FEN: <fen_string>]. Use the FEN relevant to your explanation.\\n" +
-    f"5.  **Opening Recognition:** If the current FEN or sequence of moves corresponds to a known chess opening, identify it (e.g., 'This position is reached after the main line of the Ruy Lopez'). You may have access to opening data.\\n"
-    f"User messages may include their current FEN state as `Current FEN: <fen_string>` or their last move as `User's last move: <move_san>`.\\n" + # Note: these backticks are for Markdown, not function calls
-    f"If asked about an opening from a FEN, try to identify it. If provided with opening moves, identify the opening.\\n"
-)
+# Create Blueprint
+chat_bp = Blueprint('chat', __name__)
 
-def detect_language(text):
-    """Auto-detect language from text content.
-    
-    Args:
-        text (str): The input text
-        
-    Returns:
-        str: Language code ('ru' for Russian, 'en' for English, etc.)
+# Get service instances
+session_manager = get_session_manager()
+conversation_manager = get_conversation_manager()
+rate_limiter = get_rate_limiter()
+
+
+def async_route(f):
+    """Decorator to run async route handlers"""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        return asyncio.run(f(*args, **kwargs))
+    return wrapper
+
+
+@chat_bp.route('/api/chat/analysis', methods=['POST'])
+@verify_clerk_token
+@async_route
+async def chat_analysis():
     """
-    if not text:
-        return 'en'
-    
-    # Check for Cyrillic characters (Russian)
-    cyrillic_count = sum(1 for char in text if '\u0400' <= char <= '\u04FF')
-    total_letters = sum(1 for char in text if char.isalpha())
-    
-    # If more than 30% of alphabetic characters are Cyrillic, consider it Russian
-    if total_letters > 0 and (cyrillic_count / total_letters) > 0.3:
-        return 'ru'
-    
-    # Add more language detection logic here if needed
-    # For now, default to English
-    return 'en'
+    Chat endpoint for position/game analysis.
 
-@chat_api_blueprint.route('', methods=['POST'])
-def chat():
-    """Handle chat requests from the user."""
-    # Import llm_client and active_games from main app (local import)
-    from app import llm_client, active_games
-    
-    if not llm_client:
-        return jsonify({"error": "LLM client not configured. Please set API key."}), 503
+    Request body:
+    {
+        "fen": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+        "query": "What is the best move here?",
+        "conversation_id": "optional-uuid",  // Reuse existing conversation
+        "context_type": "position" | "game" | "general"  // Default: "analysis"
+    }
 
-    data = request.get_json()
-    messages = data.get('messages')
-    session_id = data.get('session_id')
-    received_fen = data.get('fen') or data.get('current_fen') or data.get('current_board_fen')  # Check all parameter names
-    language = data.get('language', 'en')  # Get language preference, default to English
-
-    # Validate required parameters
-    if not session_id:
-        return jsonify({"error": "session_id is required"}), 400
-    if not received_fen:
-        return jsonify({"error": "fen is required"}), 400
-    
-    user_input = messages[-1]['content'] if messages else ""
-
-    logger.info(f"Chat Request - Session ID: {session_id}, Received FEN: {received_fen}")
-    logger.info(f"User Input: {user_input}")
-
-    # Retrieve/Initialize/Synchronize Game State from Memory
-    if session_id not in active_games:
-        logger.info(f"Initializing new game state for session {session_id} with FEN: {received_fen}")
-        try:
-            # Initialize board with FEN from the first request of the session
-            initial_board = chess.Board(received_fen)
-            active_games[session_id] = {'board': initial_board}
-        except ValueError:
-            logger.error(f"Invalid initial FEN received from frontend: {received_fen}")
-            return jsonify({"error": f"Invalid initial FEN provided: {received_fen}"}), 400
-    
-    session_state = active_games[session_id]
-    board = session_state['board']
-
-    # Synchronize backend board with frontend FEN if they differ
-    if received_fen != board.fen():
-        logger.info(f"FEN mismatch! Frontend FEN: {received_fen}, Backend FEN: {board.fen()}. Updating backend state.")
-        try:
-            board = chess.Board(received_fen)
-            active_games[session_id]['board'] = board
-        except ValueError:
-            logger.error(f"Invalid FEN received from frontend during sync: {received_fen}")
-            return jsonify({"error": f"Invalid FEN received: {received_fen}"}), 400
-
-    try:
-        # Import enhanced answer agent from etl.agents (local import)
-        from etl.agents import answer_agent_instance as etl_answer_agent
-        
-        if not etl_answer_agent:
-            logger.error("AnswerAgent not available from etl.agents")
-            return jsonify({"error": "Chat AI not initialized. Please check server configuration."}), 503
-
-        # Use the enhanced answer agent that includes conversation memory
-        if language == 'ru':
-            query_text = f"Please respond in Russian language. User query: {user_input}"
-        elif language == 'kz':
-            query_text = f"Please respond in Kazakh language. User query: {user_input}"
-        else:
-            query_text = user_input
-            
-        enhanced_response = etl_answer_agent.generate_answer(
-            query=query_text,
-            retrieved_documents=None,  # Let the agent handle retrieval if needed
-            query_type="chat",
-            current_fen=board.fen(),
-            session_id=session_id
-        )
-        
-        answer = enhanced_response.get("answer", "Sorry, I couldn't generate a response.")
-        
-        # Generate PGN for response
-        try:
-            game_pgn = chess.pgn.Game()
-            temp_board_pgn = board.copy()
-            moves_to_add = []
-            while temp_board_pgn.move_stack:
-                moves_to_add.append(temp_board_pgn.pop())
-            moves_to_add.reverse()
-            node = game_pgn
-            for move in moves_to_add:
-                node = node.add_variation(move)
-            pgn_exporter = chess.pgn.StringExporter(headers=False, variations=False, comments=False)
-            final_pgn = game_pgn.accept(pgn_exporter)
-        except Exception as pgn_error:
-            logger.error(f"Error generating PGN: {pgn_error}")
-            final_pgn = "[PGN generation error]"
-
-        # Get Stockfish analysis for response
-        from stockfish_analyzer import analyze_fen_with_stockfish
-        analysis_lines = analyze_fen_with_stockfish(fen_string=board.fen(), time_limit=None, depth_limit=24, multipv=3)
-        if not analysis_lines:
-            analysis_lines = []
-
-        game_ended = board.is_game_over(claim_draw=board.can_claim_draw())
-        outcome_obj = board.outcome(claim_draw=board.can_claim_draw()) if game_ended else None
-        
-        response_data = {
-            "reply": answer,
-            "fen": board.fen(),
-            "pgn": final_pgn,
-            "is_game_over": game_ended,
-            "outcome": outcome_obj.result() if outcome_obj else None,
-            "analysis_lines": analysis_lines,
-            "conversation_memory_used": enhanced_response.get("conversation_history_used", False),
-            "quality_metrics": enhanced_response.get("quality_metrics"),
-            "query_id": enhanced_response.get("query_id"),
-            "answer_id": enhanced_response.get("answer_id")
+    Response:
+    {
+        "success": true,
+        "response": "The best move is...",
+        "conversation_id": "uuid",
+        "tokens_used": 150,
+        "usage": {
+            "hourly_remaining": 45,
+            "daily_remaining": 195
         }
-        
-        logger.info(f"Enhanced chat response generated with conversation memory for session {session_id}")
-        logger.info(f"Conversation history used: {enhanced_response.get('conversation_history_used', False)}")
-        
-        return jsonify(response_data)
-        
-    except Exception as e:
-        stack_trace = traceback.format_exc()
-        logger.error(f"Error in chat endpoint: {e}\n{stack_trace}")
-        return jsonify({"error": f"An error occurred processing the chat: {str(e)}"}), 500
-
-@chat_api_blueprint.route('/progress/<session_id>', methods=['GET'])
-def get_progress(session_id):
-    """Get progress information for a specific session"""
-    from etl.agents.progress_tracker import progress_manager
-    
+    }
+    """
     try:
-        progress_info = progress_manager.get_progress(session_id)
-        
-        if progress_info is None:
+        user_id = get_current_user_id()
+        data = request.get_json()
+
+        # Validate required fields
+        if not data or 'fen' not in data or 'query' not in data:
             return jsonify({
-                "session_id": session_id,
-                "error": "No active progress tracking for this session"
-            }), 404
-        
-        return jsonify(progress_info), 200
-        
-    except Exception as e:
-        logger.error(f"Error getting progress for session {session_id}: {e}")
-        return jsonify({
-            "session_id": session_id,
-            "error": f"Failed to get progress: {str(e)}"
-        }), 500
+                'success': False,
+                'error': 'Missing required fields: fen, query'
+            }), 400
 
-@chat_api_blueprint.route('/rag', methods=['POST'])
-def rag_query():
-    """RAG query endpoint using the orchestrator."""
-    # Import tracking and analytics modules (local imports)
-    from etl.agents.query_analytics import query_analytics
-    from etl.agents.progress_tracker import progress_manager
-    
-    # Import app-level components and agents (local imports)
-    from app import active_games, user_sessions
-    # Always import fresh to avoid getting stale fallback instances
-    from etl.agents import answer_agent_instance as etl_answer_agent
-    from etl.agents.orchestrator import run_pipeline
-    from etl.agents import router_agent_instance, retriever_agent_instance
-    from stockfish_analyzer import analyze_fen_with_stockfish, analyze_fen_with_stockfish_service
-    
-    # Start timing for analytics
-    start_time = time.time()
-    
-    data = request.get_json()
-    if not data:
-        return jsonify({"error": "Invalid JSON data or missing Content-Type header"}), 400
-    
-    query = data.get('query') or data.get('message')  # Support both 'query' and 'message' fields
-    session_id = data.get('session_id')
-    received_fen = data.get('fen') or data.get('current_fen') or data.get('current_board_fen')  # Check all parameter names
-    query_type = data.get('query_type')  # Get query_type from request (None if not provided)
-    language = data.get('language')  # Get language preference from request (don't default yet)
+        fen = data['fen']
+        query = data['query'].strip()
+        conversation_id = data.get('conversation_id')
+        context_type = data.get('context_type', 'analysis')
 
-    # Validate required parameters first
-    if not query:
-        return jsonify({"error": "query or message is required"}), 400
-    if not session_id:
-        return jsonify({"error": "session_id is required"}), 400
+        # Validate inputs
+        if not query:
+            return jsonify({
+                'success': False,
+                'error': 'Query cannot be empty'
+            }), 400
 
-    # Auto-detect language if not provided (now that we know query is not None)
-    if not language:
-        language = detect_language(query)
-        logger.info(f"Auto-detected language: {language} for query: {query[:50]}...")
-    else:
-        logger.info(f"Using provided language: {language}")
+        if len(query) > 2000:
+            return jsonify({
+                'success': False,
+                'error': 'Query too long (max 2000 characters)'
+            }), 400
 
-    # Create progress tracker for this session
-    progress_tracker = progress_manager.create_tracker(session_id)
-    
-    if not etl_answer_agent:
-        logger.error("Answer agent not initialized. RAG functionality unavailable.")
-        progress_tracker.fail_step("query_validation", "RAG system not initialized")
-        return jsonify({
-            "error": "RAG system not initialized (no answer agent). Check API keys."
-        }), 503
+        # Check rate limits
+        allowed, reason = rate_limiter.check_rate_limit(user_id)
+        if not allowed:
+            logger.warning(f"Rate limit exceeded for user {user_id[:8]}...: {reason}")
+            return jsonify({
+                'success': False,
+                'error': reason,
+                'rate_limited': True
+            }), 429
 
-    # Start query validation step
-    progress_tracker.start_step("query_validation", "Validating query parameters")
+        # Get or create conversation
+        if conversation_id:
+            # Verify user owns this conversation
+            conversations = conversation_manager.get_user_conversations(
+                user_id,
+                limit=100
+            )
+            if not any(c['id'] == conversation_id for c in conversations):
+                return jsonify({
+                    'success': False,
+                    'error': 'Conversation not found or access denied'
+                }), 404
 
-    # Determine current board FEN from active games or user sessions
-    current_board_fen_for_rag = None
-    current_pgn_for_rag = None
-
-    # If frontend sent a FEN directly with this request, prioritize it
-    if received_fen:
-        current_board_fen_for_rag = received_fen
-        logger.info(f"Using FEN directly from request: {current_board_fen_for_rag}")
-        
-        # Update user_sessions for this session_id
-        user_sessions[session_id] = user_sessions.get(session_id, {})
-        user_sessions[session_id]['current_fen'] = current_board_fen_for_rag
-        
-        # Also update active_games if needed
-        if session_id in active_games and 'board' in active_games[session_id]:
-            try:
-                import chess
-                active_games[session_id]['board'] = chess.Board(received_fen)
-                logger.info(f"Updated active_games board with received FEN: {received_fen}")
-            except Exception as e:
-                logger.error(f"Error updating active_games with received FEN: {e}")
-    # Otherwise try to get from active_games first (where chess.Board objects are stored)
-    elif session_id in active_games and 'board' in active_games[session_id]:
-        board = active_games[session_id]['board']
-        current_board_fen_for_rag = board.fen()
-        
-        # Generate PGN from move stack if available
-        if board.move_stack:
-            current_pgn_for_rag = " ".join([board.san(m) for m in board.move_stack])
+            context = conversation_manager.get_context(conversation_id)
         else:
-            current_pgn_for_rag = "[No moves yet]"
-            
-        logger.info(f"Using board FEN from active_games for RAG: {current_board_fen_for_rag}")
-        
-        # Ensure user_sessions is also updated with this FEN
-        user_sessions[session_id] = user_sessions.get(session_id, {})
-        user_sessions[session_id]['current_fen'] = current_board_fen_for_rag
-    # Otherwise, try to get from user_sessions (RAG tracking)
-    elif session_id in user_sessions and 'current_fen' in user_sessions[session_id]:
-        current_board_fen_for_rag = user_sessions[session_id]['current_fen']
-        logger.info(f"Using FEN from user_sessions for RAG: {current_board_fen_for_rag}")
-    else:
-        logger.warning(f"No FEN found for session {session_id} in RAG query. Context will be limited.")
+            # Create new conversation
+            conversation_id = conversation_manager.create_conversation(
+                user_id=user_id,
+                conversation_type=context_type,
+                context={'fen': fen}
+            )
+            context = []
 
-    # Complete query validation
-    progress_tracker.complete_step("query_validation", {"query_length": len(query)})
-
-    # Add language instruction to query if Russian or Kazakh is selected
-    if language == 'ru':
-        query_with_language = f"Please respond in Russian language. User query: {query}"
-        logger.info(f"Modified query for Russian language: {query_with_language}")
-    elif language == 'kz':
-        query_with_language = f"Please respond in Kazakh language. User query: {query}"
-        logger.info(f"Modified query for Kazakh language: {query_with_language}")
-    else:
-        query_with_language = query
-
-    try:
-        # Call the orchestrator's run_pipeline function
-        pipeline_state = run_pipeline(
-            initial_query=query_with_language,  # Use language-modified query
-            router_agent_instance=router_agent_instance,
-            retriever_agent_instance=retriever_agent_instance,
-            answer_agent_instance=etl_answer_agent,
-            current_board_fen=current_board_fen_for_rag,
-            session_pgn=current_pgn_for_rag,
-            session_id=session_id  # Pass session_id for conversation memory
+        # Save user message
+        conversation_manager.save_message(
+            conversation_id=conversation_id,
+            user_id=user_id,
+            role='user',
+            content=query,
+            fen=fen
         )
-        
-        # Start Stockfish analysis step
-        progress_tracker.start_step("stockfish_analysis", "Running chess engine analysis")
-        
-        # Determine the FEN for which to run analysis for the UI
-        final_fen_for_ui_analysis = pipeline_state.get("fen_for_analysis", 
-                                  pipeline_state.get("current_board_fen", 
-                                                     current_board_fen_for_rag))
 
-        # When running analysis for UI, use the new service with a timeout
-        analysis_lines_for_ui = []
-        if final_fen_for_ui_analysis:
-            try:
-                # Use short analysis (depth 10-12) for better UI responsiveness
-                analysis_lines_for_ui = analyze_fen_with_stockfish_service(
-                    fen_string=final_fen_for_ui_analysis,
-                    multipv=3,  # Top 3 lines for UI display
-                    depth_limit=12,  # Moderate depth for speed
-                    time_limit=3.0  # Reasonable timeout for UI
-                )
-                logger.info(f"Generated UI analysis for FEN: {final_fen_for_ui_analysis}")
-                progress_tracker.complete_step("stockfish_analysis", {
-                    "lines_generated": len(analysis_lines_for_ui) if analysis_lines_for_ui else 0
-                })
-            except Exception as analysis_error:
-                logger.error(f"Error generating UI Stockfish analysis: {analysis_error}")
-                try:
-                    # Fallback to primary analysis function with shorter timeout
-                    analysis_lines_for_ui = analyze_fen_with_stockfish(
-                        fen_string=final_fen_for_ui_analysis,
-                        multipv=3,
-                        depth_limit=10,
-                        time_limit=2.0
-                    )
-                    logger.info(f"Used fallback analysis for UI with FEN: {final_fen_for_ui_analysis}")
-                    progress_tracker.complete_step("stockfish_analysis", {
-                        "lines_generated": len(analysis_lines_for_ui) if analysis_lines_for_ui else 0,
-                        "used_fallback": True
-                    })
-                except Exception as e:
-                    logger.error(f"All Stockfish analysis attempts for UI failed: {e}")
-                    analysis_lines_for_ui = None
-                    progress_tracker.fail_step("stockfish_analysis", str(e))
-            
-            # Ensure it's an empty list if analysis fails, not None
-            if analysis_lines_for_ui is None:
-                analysis_lines_for_ui = []
-                logger.warning(f"All Stockfish analysis attempts for UI returned None for FEN: {final_fen_for_ui_analysis}")
-        else:
-            logger.warning("No FEN determined for UI Stockfish analysis in RAG query response.")
-            progress_tracker.skip_step("stockfish_analysis", "No FEN available for analysis")
-
-        # Start response formatting step
-        progress_tracker.start_step("response_formatting", "Finalizing response")
-
-        # Update the RAG session tracking
-        user_sessions[session_id] = {
-            'current_fen': final_fen_for_ui_analysis or current_board_fen_for_rag,
-            'last_query': query,
-            'last_response': pipeline_state.get("final_answer", ""),
-            'last_query_time': time.time()
-        }
-
-        # Calculate response time for analytics
-        response_time = time.time() - start_time
-        
-        # Track query analytics
-        query_analytics.track_query(
-            session_id=session_id,
+        # Create LLM request
+        llm_request = LLMRequest(
+            user_id=user_id,
+            fen=fen,
             query=query,
-            classification=pipeline_state.get("query_type", "unknown"),
-            success=bool(pipeline_state.get("final_answer")),
-            response_time=response_time,
-            error_message=pipeline_state.get("error_message"),
-            retrieved_count=len(pipeline_state.get("retrieved_chunks", [])),
-            current_fen=current_board_fen_for_rag
+            conversation_id=conversation_id,
+            context=context
         )
 
-        # Complete response formatting and finish tracking
-        progress_tracker.complete_step("response_formatting", {
-            "response_length": len(pipeline_state.get("final_answer", "")),
-            "sources_count": len(pipeline_state.get("retrieved_chunks", []))
-        })
-        progress_tracker.finish(success=True)
+        # Execute LLM request
+        logger.info(f"Executing chat request: user={user_id[:8]}..., conv={conversation_id[:8]}...")
+        response = await session_manager.execute_request(llm_request)
+
+        # Set g variables for performance monitoring middleware
+        g.tokens_used = response.tokens_used
+        g.model_used = response.model
+        g.conversation_id = conversation_id
+
+        if not response.success:
+            # Set error message for monitoring
+            g.error_message = response.error
+            logger.error(f"LLM request failed: {response.error}")
+            return jsonify({
+                'success': False,
+                'error': 'Failed to generate AI response. Please try again.',
+                'details': response.error
+            }), 500
+
+        # Save assistant message
+        conversation_manager.save_message(
+            conversation_id=conversation_id,
+            user_id=user_id,
+            role='assistant',
+            content=response.content,
+            fen=fen,
+            tokens_used=response.tokens_used,
+            model=response.model
+        )
+
+        # Track usage for rate limiting
+        rate_limiter.track_request(user_id, response.tokens_used)
+
+        # Get updated usage stats
+        usage_stats = rate_limiter.get_user_usage(user_id)
+
+        logger.info(
+            f"Chat request completed: user={user_id[:8]}..., "
+            f"tokens={response.tokens_used}, time={response.response_time_ms:.0f}ms"
+        )
 
         return jsonify({
-            "answer": pipeline_state.get("final_answer", ""),
-            "sources": pipeline_state.get("retrieved_chunks", []),
-            "metadata": pipeline_state.get("router_metadata", {}),
-            "query_type": pipeline_state.get("query_type", "unknown"),
-            "fen": final_fen_for_ui_analysis,  # Return FEN as 'fen' for consistency
-            "analysis_lines": analysis_lines_for_ui,
-            "opening_detection": pipeline_state.get("opening_details", {}),
-            "response_time": response_time,  # Include response time in response
-            "progress_session_id": session_id  # Include session ID for progress tracking
+            'success': True,
+            'response': response.content,
+            'conversation_id': conversation_id,
+            'tokens_used': response.tokens_used,
+            'response_time_ms': response.response_time_ms,
+            'usage': {
+                'hourly_remaining': usage_stats.get('hourly', {}).get('requests_remaining', 0),
+                'daily_remaining': usage_stats.get('daily', {}).get('requests_remaining', 0),
+                'tier': usage_stats.get('tier', 'free')
+            }
         }), 200
 
     except Exception as e:
-        # Calculate response time even for errors
-        response_time = time.time() - start_time
-        
-        # Track failed query
-        query_analytics.track_query(
-            session_id=session_id,
-            query=query,
-            classification="error",
-            success=False,
-            response_time=response_time,
-            error_message=str(e),
-            current_fen=current_board_fen_for_rag
+        logger.error(f"Error in chat_analysis: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error'
+        }), 500
+
+
+@chat_bp.route('/api/chat/history/<conversation_id>', methods=['GET'])
+@verify_clerk_token
+def get_chat_history(conversation_id):
+    """
+    Get conversation history.
+
+    Response:
+    {
+        "success": true,
+        "conversation": {
+            "id": "uuid",
+            "type": "position",
+            "created_at": "2025-01-10T...",
+            "updated_at": "2025-01-10T..."
+        },
+        "messages": [
+            {
+                "role": "user",
+                "content": "What is the best move?",
+                "timestamp": "2025-01-10T..."
+            },
+            ...
+        ]
+    }
+    """
+    try:
+        user_id = get_current_user_id()
+
+        # Verify user owns this conversation
+        conversations = conversation_manager.get_user_conversations(user_id, limit=100)
+        conversation = next((c for c in conversations if c['id'] == conversation_id), None)
+
+        if not conversation:
+            return jsonify({
+                'success': False,
+                'error': 'Conversation not found or access denied'
+            }), 404
+
+        # Get messages
+        messages = conversation_manager.get_conversation_history(conversation_id)
+
+        return jsonify({
+            'success': True,
+            'conversation': conversation,
+            'messages': messages
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error getting chat history: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'Failed to retrieve conversation history'
+        }), 500
+
+
+@chat_bp.route('/api/chat/conversations', methods=['GET'])
+@verify_clerk_token
+def get_user_conversations():
+    """
+    Get all conversations for current user.
+
+    Query params:
+    - type: Filter by conversation type (optional)
+    - limit: Max conversations to return (default: 10)
+
+    Response:
+    {
+        "success": true,
+        "conversations": [
+            {
+                "id": "uuid",
+                "type": "position",
+                "created_at": "...",
+                "updated_at": "...",
+                "message_count": 5
+            },
+            ...
+        ]
+    }
+    """
+    try:
+        user_id = get_current_user_id()
+        conversation_type = request.args.get('type')
+        limit = int(request.args.get('limit', 10))
+
+        conversations = conversation_manager.get_user_conversations(
+            user_id=user_id,
+            conversation_type=conversation_type,
+            limit=limit
         )
-        
-        # Mark progress as failed
-        progress_tracker.finish(success=False)
-        
-        stack_trace = traceback.format_exc()
-        logger.error(f"Error in RAG query: {e}\n{stack_trace}")
-        return jsonify({"error": f"An error occurred during the RAG query: {str(e)}"}), 500 
+
+        return jsonify({
+            'success': True,
+            'conversations': conversations
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error getting user conversations: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'Failed to retrieve conversations'
+        }), 500
+
+
+@chat_bp.route('/api/chat/conversation/<conversation_id>', methods=['DELETE'])
+@verify_clerk_token
+def delete_conversation(conversation_id):
+    """
+    Delete a conversation and all its messages.
+
+    Response:
+    {
+        "success": true,
+        "message": "Conversation deleted"
+    }
+    """
+    try:
+        user_id = get_current_user_id()
+
+        # Verify user owns this conversation
+        conversations = conversation_manager.get_user_conversations(user_id, limit=100)
+        if not any(c['id'] == conversation_id for c in conversations):
+            return jsonify({
+                'success': False,
+                'error': 'Conversation not found or access denied'
+            }), 404
+
+        # Delete conversation
+        success = conversation_manager.delete_conversation(conversation_id)
+
+        if success:
+            return jsonify({
+                'success': True,
+                'message': 'Conversation deleted'
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to delete conversation'
+            }), 500
+
+    except Exception as e:
+        logger.error(f"Error deleting conversation: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'Failed to delete conversation'
+        }), 500
+
+
+@chat_bp.route('/api/chat/usage', methods=['GET'])
+@verify_clerk_token
+def get_usage_stats():
+    """
+    Get current user's usage statistics.
+
+    Response:
+    {
+        "success": true,
+        "usage": {
+            "tier": "free",
+            "hourly": {
+                "requests": 5,
+                "requests_limit": 50,
+                "requests_remaining": 45,
+                "tokens": 1250,
+                "tokens_limit": 25000,
+                "tokens_remaining": 23750
+            },
+            "daily": {
+                "requests": 12,
+                "requests_limit": 200,
+                "requests_remaining": 188,
+                "tokens": 3000,
+                "tokens_limit": 100000,
+                "tokens_remaining": 97000
+            }
+        }
+    }
+    """
+    try:
+        user_id = get_current_user_id()
+        usage = rate_limiter.get_user_usage(user_id)
+
+        return jsonify({
+            'success': True,
+            'usage': usage
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error getting usage stats: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'Failed to retrieve usage statistics'
+        }), 500
+
+
+@chat_bp.route('/api/chat/health', methods=['GET'])
+def health_check():
+    """
+    Health check endpoint for monitoring.
+
+    Response:
+    {
+        "status": "healthy",
+        "stats": {
+            "active_requests": 2,
+            "total_processed": 1523,
+            "total_errors": 5,
+            "active_users": 15
+        }
+    }
+    """
+    try:
+        stats = session_manager.get_stats()
+        rate_stats = rate_limiter.get_stats()
+
+        return jsonify({
+            'status': 'healthy',
+            'llm_stats': stats,
+            'rate_limiter_stats': rate_stats
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Health check failed: {e}", exc_info=True)
+        return jsonify({
+            'status': 'unhealthy',
+            'error': str(e)
+        }), 500
+
+
+@chat_bp.route('/api/chat/metrics', methods=['GET'])
+def get_metrics():
+    """
+    Get performance metrics for API endpoints.
+
+    Query params:
+    - time_range: '1h', '24h', '7d', or '30d' (default: '1h')
+    - source: 'memory' or 'database' (default: 'database')
+
+    Response:
+    {
+        "success": true,
+        "time_range": "1h",
+        "metrics": {
+            "total_requests": 150,
+            "total_errors": 3,
+            "avg_response_time": 245.5,
+            "error_rate": 0.02,
+            "endpoints": {
+                "/api/chat/analysis": {
+                    "count": 120,
+                    "errors": 2,
+                    "avg_time": 250.3,
+                    "min_time": 100.5,
+                    "max_time": 500.2,
+                    "error_rate": 0.016
+                }
+            }
+        }
+    }
+    """
+    try:
+        from middleware.performance_monitor import get_monitor
+
+        monitor = get_monitor()
+        if not monitor:
+            return jsonify({
+                'success': False,
+                'error': 'Performance monitoring not enabled'
+            }), 503
+
+        time_range = request.args.get('time_range', '1h')
+        source = request.args.get('source', 'database')
+
+        if source == 'memory':
+            metrics = monitor.get_stats()
+        else:
+            # Get from database
+            metrics = monitor.get_database_stats(time_range)
+
+        return jsonify({
+            'success': True,
+            'source': source,
+            'metrics': metrics
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error getting metrics: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'Failed to retrieve metrics'
+        }), 500
