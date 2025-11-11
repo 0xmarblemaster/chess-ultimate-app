@@ -127,6 +127,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser and sign in 
 - **Auto-Generated Titles**: Sessions automatically titled based on chess openings (e.g., "Sicilian Defense", "Queen's Gambit")
 - **Session Management**: Rename, delete, and organize your analysis sessions
 - **Position Synchronization**: Board FEN and chat messages stay in sync with each session
+- **Integrated Sidebar Controls**: Collapsible session panel with one-click expand/collapse - no floating buttons
 
 ### Interactive Analysis
 - **Stockfish WASM Engine**: Client-side chess engine for real-time position analysis
@@ -148,21 +149,26 @@ Open [http://localhost:3000](http://localhost:3000) in your browser and sign in 
 - ✅ Stockfish WASM integration (client-side)
 - ✅ Persistent chat sessions with localStorage
 - ✅ Multi-session management with board position sync
+- ✅ Integrated sidebar UI (removed floating burger menu)
+- ✅ Flask backend scaffolding with seed script
+- ✅ Database schema design (Supabase)
 - 🔄 Clerk authentication activation
-- 🔄 Supabase database setup
-- 🔄 Flask backend for LLM orchestration
+- 🔄 Supabase database deployment
+- 🔄 Flask backend API implementation
 - 🔄 Learning platform with progress tracking
 - 🔄 AI chat assistant with conversation history
 
 **Phase 1 Deliverables:**
-- User authentication and session management
-- Learning course system (courses, modules, lessons)
-- Progress tracking and lesson unlocking
-- AI chat assistant with context retention
-- **NEW:** Persistent chat sessions - Create, switch, rename, and delete multiple analysis sessions
-- **NEW:** Automatic session title generation based on chess openings and positions
-- **NEW:** Board position and chat history saved per session
-- Cached LLM responses (24hr TTL)
+- ✅ **Multi-session chat management** - Create, switch, rename, and delete analysis sessions
+- ✅ **Automatic session titles** - Based on chess openings and positions
+- ✅ **Board position sync** - FEN and chat history saved per session
+- ✅ **Integrated UI controls** - Self-contained sidebar with collapse functionality
+- ✅ **Database seed script** - 2 courses, 7 lessons covering fundamentals and tactics
+- 🔄 User authentication and session management
+- 🔄 Learning course system (courses, modules, lessons)
+- 🔄 Progress tracking and lesson unlocking
+- 🔄 AI chat assistant with context retention
+- 🔄 Cached LLM responses (24hr TTL)
 
 ### Phase 2: Enhanced Features (Planned)
 - Redis conversation cache and session management
