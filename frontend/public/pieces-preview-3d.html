@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chess Pieces Preview - 3D Style</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+      padding: 20px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .container {
+      background: linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%);
+      border-radius: 24px;
+      padding: 40px;
+      box-shadow:
+        0 30px 80px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.8);
+      max-width: 900px;
+      width: 100%;
+    }
+
+    h1 {
+      text-align: center;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 10px;
+      font-size: 2.5rem;
+      font-weight: 900;
+      text-shadow: 0 2px 10px rgba(102, 126, 234, 0.3);
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 1.1rem;
+      font-weight: 500;
+    }
+
+    .theme-badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 10px 24px;
+      border-radius: 25px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 25px;
+      box-shadow:
+        0 6px 20px rgba(102, 126, 234, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .chessboard {
+      width: 100%;
+      max-width: 650px;
+      aspect-ratio: 1;
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      grid-template-rows: repeat(8, 1fr);
+      border: 5px solid #2c3e50;
+      border-radius: 12px;
+      overflow: hidden;
+      margin: 0 auto 50px;
+      box-shadow:
+        0 20px 50px rgba(0, 0, 0, 0.4),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+      transform-style: preserve-3d;
+      perspective: 1000px;
+    }
+
+    .square {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .square.light {
+      background: linear-gradient(135deg, #f0d9b5 0%, #e8c9a5 100%);
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .square.dark {
+      background: linear-gradient(135deg, #b58863 0%, #9d7653 100%);
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.15);
+    }
+
+    /* 3D PIECE EFFECTS */
+    .square img {
+      width: 75%;
+      height: 75%;
+      object-fit: contain;
+      transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+      /* Multi-layer drop shadow for 3D effect */
+      filter:
+        drop-shadow(0 2px 1px rgba(0, 0, 0, 0.2))
+        drop-shadow(0 4px 3px rgba(0, 0, 0, 0.15))
+        drop-shadow(0 8px 8px rgba(0, 0, 0, 0.1))
+        drop-shadow(0 12px 15px rgba(0, 0, 0, 0.05))
+        brightness(1.05)
+        contrast(1.1);
+    }
+
+    .square:hover img {
+      transform: translateY(-8px) scale(1.1);
+      filter:
+        drop-shadow(0 4px 2px rgba(0, 0, 0, 0.25))
+        drop-shadow(0 8px 6px rgba(0, 0, 0, 0.2))
+        drop-shadow(0 16px 16px rgba(0, 0, 0, 0.15))
+        drop-shadow(0 24px 30px rgba(0, 0, 0, 0.1))
+        brightness(1.1)
+        contrast(1.15);
+    }
+
+    .pieces-gallery {
+      margin-bottom: 50px;
+    }
+
+    .pieces-row {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 15px;
+      margin-bottom: 30px;
+      padding: 35px 25px;
+      border-radius: 16px;
+      position: relative;
+    }
+
+    .pieces-row.white {
+      background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+      box-shadow:
+        0 8px 30px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    }
+
+    .pieces-row.black {
+      background: linear-gradient(135deg, #34495e 0%, #2c3e50 100%);
+      box-shadow:
+        0 8px 30px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+
+    .pieces-row h3 {
+      width: 100%;
+      text-align: center;
+      margin-bottom: 20px;
+      font-size: 1.5rem;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+    }
+
+    .pieces-row.white h3 {
+      color: #2c3e50;
+      text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
+    }
+
+    .pieces-row.black h3 {
+      color: #ecf0f1;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    .piece-container {
+      width: 100px;
+      height: 100px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+      border-radius: 16px;
+      padding: 12px;
+      transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+      box-shadow:
+        0 4px 15px rgba(0, 0, 0, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9);
+      border: 2px solid rgba(255, 255, 255, 0.5);
+      position: relative;
+    }
+
+    .piece-container::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.5) 0%, transparent 100%);
+      border-radius: 14px;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .piece-container:hover::before {
+      opacity: 1;
+    }
+
+    .piece-container:hover {
+      transform: translateY(-12px) scale(1.15) rotateX(5deg);
+      box-shadow:
+        0 12px 35px rgba(0, 0, 0, 0.25),
+        0 8px 20px rgba(102, 126, 234, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 1);
+      border-color: #667eea;
+    }
+
+    .piece-container img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      filter:
+        drop-shadow(0 3px 2px rgba(0, 0, 0, 0.25))
+        drop-shadow(0 6px 8px rgba(0, 0, 0, 0.15))
+        drop-shadow(0 12px 20px rgba(0, 0, 0, 0.1))
+        brightness(1.08)
+        contrast(1.12);
+      transition: filter 0.3s;
+    }
+
+    .piece-container:hover img {
+      filter:
+        drop-shadow(0 6px 4px rgba(0, 0, 0, 0.3))
+        drop-shadow(0 12px 16px rgba(0, 0, 0, 0.2))
+        drop-shadow(0 24px 40px rgba(0, 0, 0, 0.15))
+        brightness(1.12)
+        contrast(1.18);
+    }
+
+    .piece-label {
+      text-align: center;
+      font-size: 0.9rem;
+      margin-top: 10px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+
+    .pieces-row.white .piece-label {
+      color: #34495e;
+      text-shadow: 0 1px 1px rgba(255, 255, 255, 0.5);
+    }
+
+    .pieces-row.black .piece-label {
+      color: #ecf0f1;
+      text-shadow: 0 2px 3px rgba(0, 0, 0, 0.3);
+    }
+
+    .piece-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .stats {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      padding: 30px;
+      border-radius: 16px;
+      text-align: center;
+      box-shadow:
+        0 10px 40px rgba(102, 126, 234, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    }
+
+    .stats h3 {
+      margin-bottom: 25px;
+      color: white;
+      font-size: 1.5rem;
+      font-weight: 800;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+
+    .stat-item {
+      padding: 20px;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 12px;
+      box-shadow:
+        0 4px 15px rgba(0, 0, 0, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 1);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+    }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 900;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .stat-label {
+      font-size: 0.95rem;
+      color: #5a6c7d;
+      margin-top: 8px;
+      font-weight: 600;
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        padding: 25px;
+      }
+
+      h1 {
+        font-size: 2rem;
+      }
+
+      .piece-container {
+        width: 70px;
+        height: 70px;
+      }
+
+      .stat-grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>♟️ Chess Pieces Preview</h1>
+    <div style="text-align: center;">
+      <span class="theme-badge">3D Style with Depth & Shadows</span>
+    </div>
+    <p class="subtitle">Multi-layer shadows & realistic lighting</p>
+
+    <!-- Full Chessboard -->
+    <h2 style="text-align: center; margin-bottom: 25px; color: #2c3e50; font-weight: 800;">Starting Position</h2>
+    <div class="chessboard" id="chessboard"></div>
+
+    <!-- Pieces Gallery -->
+    <div class="pieces-gallery">
+      <div class="pieces-row white">
+        <h3>White Pieces</h3>
+      </div>
+      <div class="pieces-row white" id="white-pieces"></div>
+
+      <div class="pieces-row black">
+        <h3>Black Pieces</h3>
+      </div>
+      <div class="pieces-row black" id="black-pieces"></div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats">
+      <h3>3D Enhancement Features</h3>
+      <div class="stat-grid">
+        <div class="stat-item">
+          <div class="stat-value">Multi-Layer</div>
+          <div class="stat-label">Drop Shadows</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">Depth</div>
+          <div class="stat-label">Perspective Effects</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value">Realistic</div>
+          <div class="stat-label">Lighting & Highlights</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Chess board setup (FEN starting position)
+    const board = [
+      ['bR', 'bN', 'bB', 'bQ', 'bK', 'bB', 'bN', 'bR'],
+      ['bP', 'bP', 'bP', 'bP', 'bP', 'bP', 'bP', 'bP'],
+      [null, null, null, null, null, null, null, null],
+      [null, null, null, null, null, null, null, null],
+      [null, null, null, null, null, null, null, null],
+      [null, null, null, null, null, null, null, null],
+      ['wP', 'wP', 'wP', 'wP', 'wP', 'wP', 'wP', 'wP'],
+      ['wR', 'wN', 'wB', 'wQ', 'wK', 'wB', 'wN', 'wR']
+    ];
+
+    // Render chessboard with 3D pieces
+    const chessboardEl = document.getElementById('chessboard');
+    board.forEach((row, rowIndex) => {
+      row.forEach((piece, colIndex) => {
+        const square = document.createElement('div');
+        square.className = `square ${(rowIndex + colIndex) % 2 === 0 ? 'light' : 'dark'}`;
+
+        if (piece) {
+          const img = document.createElement('img');
+          img.src = `pieces/alpha-traditional/${piece}.svg`;
+          img.alt = piece;
+          img.onerror = function() {
+            // Fallback to alpha pieces
+            this.src = `pieces/alpha/${piece}.svg`;
+          };
+          square.appendChild(img);
+        }
+
+        chessboardEl.appendChild(square);
+      });
+    });
+
+    // Piece labels
+    const pieceLabels = {
+      K: 'King',
+      Q: 'Queen',
+      R: 'Rook',
+      B: 'Bishop',
+      N: 'Knight',
+      P: 'Pawn'
+    };
+
+    // Render white pieces gallery
+    const whitePiecesEl = document.getElementById('white-pieces');
+    ['wK', 'wQ', 'wR', 'wB', 'wN', 'wP'].forEach(piece => {
+      const item = document.createElement('div');
+      item.className = 'piece-item';
+
+      const container = document.createElement('div');
+      container.className = 'piece-container';
+
+      const img = document.createElement('img');
+      img.src = `pieces/alpha-traditional/${piece}.svg`;
+      img.alt = piece;
+      img.onerror = function() {
+        this.src = `pieces/alpha/${piece}.svg`;
+      };
+
+      const label = document.createElement('div');
+      label.className = 'piece-label';
+      label.textContent = pieceLabels[piece[1]];
+
+      container.appendChild(img);
+      item.appendChild(container);
+      item.appendChild(label);
+      whitePiecesEl.appendChild(item);
+    });
+
+    // Render black pieces gallery
+    const blackPiecesEl = document.getElementById('black-pieces');
+    ['bK', 'bQ', 'bR', 'bB', 'bN', 'bP'].forEach(piece => {
+      const item = document.createElement('div');
+      item.className = 'piece-item';
+
+      const container = document.createElement('div');
+      container.className = 'piece-container';
+
+      const img = document.createElement('img');
+      img.src = `pieces/alpha-traditional/${piece}.svg`;
+      img.alt = piece;
+      img.onerror = function() {
+        this.src = `pieces/alpha/${piece}.svg`;
+      };
+
+      const label = document.createElement('div');
+      label.className = 'piece-label';
+      label.textContent = pieceLabels[piece[1]];
+
+      container.appendChild(img);
+      item.appendChild(container);
+      item.appendChild(label);
+      blackPiecesEl.appendChild(item);
+    });
+  </script>
+</body>
+</html>

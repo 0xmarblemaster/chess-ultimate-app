@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ivory & Ebony Chess Pieces - Preview</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #8B7355 0%, #D2B48C 50%, #8B7355 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 248, 231, 0.95);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(43, 24, 16, 0.3);
+        }
+
+        h1 {
+            text-align: center;
+            color: #2B1810;
+            font-size: 2.5rem;
+            margin-bottom: 15px;
+            font-weight: 700;
+            text-shadow: 2px 2px 4px rgba(212, 196, 168, 0.3);
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #5D4E37;
+            font-size: 1.2rem;
+            margin-bottom: 40px;
+            font-style: italic;
+        }
+
+        .color-palette {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+            padding: 25px;
+            background: linear-gradient(135deg, #FFF8E7 0%, #F5E6D3 100%);
+            border-radius: 15px;
+            border: 3px solid #D4C4A8;
+        }
+
+        .color-sample {
+            text-align: center;
+            padding: 20px;
+            border-radius: 12px;
+            background: white;
+            box-shadow: 0 4px 12px rgba(43, 24, 16, 0.1);
+        }
+
+        .color-box {
+            width: 100%;
+            height: 80px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            border: 2px solid rgba(43, 24, 16, 0.2);
+        }
+
+        .color-info {
+            font-size: 0.9rem;
+            color: #2B1810;
+        }
+
+        .color-name {
+            font-weight: 700;
+            font-size: 1.1rem;
+            margin-bottom: 5px;
+            color: #5D4E37;
+        }
+
+        .chessboard {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 0;
+            max-width: 600px;
+            margin: 40px auto;
+            border: 8px solid #5D4E37;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 15px 40px rgba(43, 24, 16, 0.3);
+        }
+
+        .square {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .square:hover {
+            transform: scale(1.05);
+            z-index: 10;
+        }
+
+        .square.light {
+            background: linear-gradient(135deg, #F5DEB3 0%, #DEB887 100%);
+        }
+
+        .square.dark {
+            background: linear-gradient(135deg, #8B7355 0%, #654321 100%);
+        }
+
+        .square img {
+            width: 85%;
+            height: 85%;
+            object-fit: contain;
+            filter:
+                drop-shadow(0 2px 1px rgba(43, 24, 16, 0.2))
+                drop-shadow(0 4px 3px rgba(43, 24, 16, 0.15))
+                drop-shadow(0 8px 8px rgba(43, 24, 16, 0.1));
+            transition: all 0.3s ease;
+        }
+
+        .square:hover img {
+            filter:
+                drop-shadow(0 4px 2px rgba(43, 24, 16, 0.25))
+                drop-shadow(0 8px 6px rgba(43, 24, 16, 0.2))
+                drop-shadow(0 16px 16px rgba(43, 24, 16, 0.15))
+                brightness(1.1);
+            transform: translateY(-3px);
+        }
+
+        .pieces-gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 25px;
+            margin: 40px 0;
+            padding: 30px;
+            background: linear-gradient(135deg, #D2B48C 0%, #C8AD7F 100%);
+            border-radius: 15px;
+        }
+
+        .piece-display {
+            text-align: center;
+            padding: 20px;
+            background: rgba(255, 248, 231, 0.9);
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            border: 2px solid #8B7355;
+        }
+
+        .piece-display:hover {
+            transform: translateY(-8px) scale(1.05);
+            box-shadow: 0 12px 30px rgba(43, 24, 16, 0.25);
+            border-color: #5D4E37;
+        }
+
+        .piece-display img {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 12px;
+            filter:
+                drop-shadow(0 2px 4px rgba(43, 24, 16, 0.2))
+                drop-shadow(0 4px 8px rgba(43, 24, 16, 0.1));
+        }
+
+        .piece-label {
+            font-weight: 600;
+            color: #2B1810;
+            font-size: 0.95rem;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 40px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #FFF8E7 0%, #F5E6D3 100%);
+            padding: 25px;
+            border-radius: 12px;
+            text-align: center;
+            border: 2px solid #D4C4A8;
+            box-shadow: 0 6px 20px rgba(43, 24, 16, 0.1);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #2B1810;
+            margin-bottom: 8px;
+        }
+
+        .stat-label {
+            color: #5D4E37;
+            font-size: 0.95rem;
+        }
+
+        .section-title {
+            font-size: 1.8rem;
+            color: #2B1810;
+            margin: 40px 0 25px;
+            text-align: center;
+            font-weight: 600;
+            position: relative;
+            padding-bottom: 15px;
+        }
+
+        .section-title::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, #5D4E37, transparent);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 1.8rem;
+            }
+
+            .chessboard {
+                max-width: 100%;
+            }
+
+            .pieces-gallery {
+                grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+                gap: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>♔ Ivory & Ebony Chess Pieces ♚</h1>
+        <p class="subtitle">Warm Cream Tones & Rich Dark Brown • Classic Elegance</p>
+
+        <div class="color-palette">
+            <div class="color-sample">
+                <div class="color-box" style="background: #FFF8E7;"></div>
+                <div class="color-name">Warm Ivory</div>
+                <div class="color-info">#FFF8E7</div>
+            </div>
+            <div class="color-sample">
+                <div class="color-box" style="background: #F5E6D3;"></div>
+                <div class="color-name">Darker Cream</div>
+                <div class="color-info">#F5E6D3</div>
+            </div>
+            <div class="color-sample">
+                <div class="color-box" style="background: #D4C4A8;"></div>
+                <div class="color-name">Tan Outline</div>
+                <div class="color-info">#D4C4A8</div>
+            </div>
+            <div class="color-sample">
+                <div class="color-box" style="background: #2B1810;"></div>
+                <div class="color-name">Rich Ebony</div>
+                <div class="color-info">#2B1810</div>
+            </div>
+            <div class="color-sample">
+                <div class="color-box" style="background: #3D2817;"></div>
+                <div class="color-name">Lighter Ebony</div>
+                <div class="color-info">#3D2817</div>
+            </div>
+            <div class="color-sample">
+                <div class="color-box" style="background: #4A3728;"></div>
+                <div class="color-name">Brown Outline</div>
+                <div class="color-info">#4A3728</div>
+            </div>
+        </div>
+
+        <h2 class="section-title">Full Board Preview</h2>
+        <div class="chessboard" id="chessboard"></div>
+
+        <h2 class="section-title">Individual Pieces Gallery</h2>
+        <div class="pieces-gallery">
+            <div class="piece-display">
+                <img src="pieces/alpha-ivory/wK.svg" alt="White King">
+                <div class="piece-label">Ivory King</div>
+            </div>
+            <div class="piece-display">
+                <img src="pieces/alpha-ivory/wQ.svg" alt="White Queen">
+                <div class="piece-label">Ivory Queen</div>
+            </div>
+            <div class="piece-display">
+                <img src="pieces/alpha-ivory/wR.svg" alt="White Rook">
+                <div class="piece-label">Ivory Rook</div>
+            </div>
+            <div class="piece-display">
+                <img src="pieces/alpha-ivory/wB.svg" alt="White Bishop">
+                <div class="piece-label">Ivory Bishop</div>
+            </div>
+            <div class="piece-display">
+                <img src="pieces/alpha-ivory/wN.svg" alt="White Knight">
+                <div class="piece-label">Ivory Knight</div>
+            </div>
+            <div class="piece-display">
+                <img src="pieces/alpha-ivory/wP.svg" alt="White Pawn">
+                <div class="piece-label">Ivory Pawn</div>
+            </div>
+            <div class="piece-display">
+                <img src="pieces/alpha-ivory/bK.svg" alt="Black King">
+                <div class="piece-label">Ebony King</div>
+            </div>
+            <div class="piece-display">
+                <img src="pieces/alpha-ivory/bQ.svg" alt="Black Queen">
+                <div class="piece-label">Ebony Queen</div>
+            </div>
+            <div class="piece-display">
+                <img src="pieces/alpha-ivory/bR.svg" alt="Black Rook">
+                <div class="piece-label">Ebony Rook</div>
+            </div>
+            <div class="piece-display">
+                <img src="pieces/alpha-ivory/bB.svg" alt="Black Bishop">
+                <div class="piece-label">Ebony Bishop</div>
+            </div>
+            <div class="piece-display">
+                <img src="pieces/alpha-ivory/bN.svg" alt="Black Knight">
+                <div class="piece-label">Ebony Knight</div>
+            </div>
+            <div class="piece-display">
+                <img src="pieces/alpha-ivory/bP.svg" alt="Black Pawn">
+                <div class="piece-label">Ebony Pawn</div>
+            </div>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-value">12</div>
+                <div class="stat-label">Total Pieces</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">~52KB</div>
+                <div class="stat-label">Total File Size</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">~4.3KB</div>
+                <div class="stat-label">Avg. Per Piece</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">SVG</div>
+                <div class="stat-label">Format (Scalable)</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Chess board setup
+        const board = [
+            ['bR', 'bN', 'bB', 'bQ', 'bK', 'bB', 'bN', 'bR'],
+            ['bP', 'bP', 'bP', 'bP', 'bP', 'bP', 'bP', 'bP'],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['wP', 'wP', 'wP', 'wP', 'wP', 'wP', 'wP', 'wP'],
+            ['wR', 'wN', 'wB', 'wQ', 'wK', 'wB', 'wN', 'wR']
+        ];
+
+        const chessboard = document.getElementById('chessboard');
+
+        board.forEach((row, rowIndex) => {
+            row.forEach((piece, colIndex) => {
+                const square = document.createElement('div');
+                const isLight = (rowIndex + colIndex) % 2 === 0;
+                square.className = `square ${isLight ? 'light' : 'dark'}`;
+
+                if (piece) {
+                    const img = document.createElement('img');
+                    img.src = `pieces/alpha-ivory/${piece}.svg`;
+                    img.alt = piece;
+                    square.appendChild(img);
+                }
+
+                chessboard.appendChild(square);
+            });
+        });
+    </script>
+</body>
+</html>

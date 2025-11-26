@@ -1,0 +1,133 @@
+services:
+  # ==========================================
+  # Chess Ultimate App - Backend (Flask)
+  # ==========================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: chess-ultimate-backend
+    ports:
+      - "5002:5001"
+    env_file:
+      - ./backend/.env
+    environment:
+      - FLASK_ENV=production
+      - HOST=0.0.0.0
+      - PORT=5001
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - WEAVIATE_URL=http://weaviate:8080
+    volumes:
+      - ./backend/logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+      weaviate:
+        condition: service_healthy
+    networks:
+      - chess-ultimate-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ==========================================
+  # Chess Ultimate App - Frontend (Next.js)
+  # ==========================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=http://167.99.133.140:5002
+        - NEXT_PUBLIC_BACKEND_URL=http://167.99.133.140:5002
+        - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_c3R1bm5pbmctYXJhY2huaWQtODQuY2xlcmsuYWNjb3VudHMuZGV2JA
+        - NEXT_PUBLIC_SUPABASE_URL=https://qtzujwiqzbgyhdgulvcd.supabase.co
+        - NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF0enVqd2lxemJneWhkZ3VsdmNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI3MDk2NDIsImV4cCI6MjA3ODI4NTY0Mn0.KVSFN0hmhH6vOuk1kfzfzxekrmIwwzcJn895H3giHD4
+    container_name: chess-ultimate-frontend
+    ports:
+      - "3003:3000"
+    environment:
+      - NODE_ENV=production
+      - CLERK_SECRET_KEY=sk_test_N3kQYH4SOJgbXXek2KUDL3J9HkTKpjrSz12a8OOXGL
+      - NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_c3R1bm5pbmctYXJhY2huaWQtODQuY2xlcmsuYWNjb3VudHMuZGV2JA
+      - NEXT_PUBLIC_SUPABASE_URL=https://qtzujwiqzbgyhdgulvcd.supabase.co
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF0enVqd2lxemJneWhkZ3VsdmNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI3MDk2NDIsImV4cCI6MjA3ODI4NTY0Mn0.KVSFN0hmhH6vOuk1kfzfzxekrmIwwzcJn895H3giHD4
+      - NEXT_PUBLIC_API_URL=http://167.99.133.140:5002
+      - NEXT_PUBLIC_BACKEND_URL=http://167.99.133.140:5002
+    depends_on:
+      - backend
+    networks:
+      - chess-ultimate-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ==========================================
+  # Redis - Session Cache
+  # ==========================================
+  redis:
+    image: redis:7-alpine
+    container_name: chess-ultimate-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - chess-ultimate-redis-data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - chess-ultimate-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # ==========================================
+  # Weaviate - Vector Database
+  # ==========================================
+  weaviate:
+    image: cr.weaviate.io/semitechnologies/weaviate:1.28.0
+    container_name: chess-ultimate-weaviate
+    ports:
+      - "8081:8080"
+      - "50052:50051"
+    environment:
+      QUERY_DEFAULTS_LIMIT: 25
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: 'true'
+      PERSISTENCE_DATA_PATH: '/var/lib/weaviate'
+      ENABLE_MODULES: 'text2vec-openai,generative-openai'
+      DEFAULT_VECTORIZER_MODULE: 'text2vec-openai'
+      CLUSTER_HOSTNAME: 'node1'
+      LIMIT_RESOURCES: 'true'
+      GOMEMLIMIT: '1GiB'
+      LOG_LEVEL: 'info'
+    volumes:
+      - chess-ultimate-weaviate-data:/var/lib/weaviate
+    networks:
+      - chess-ultimate-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/v1/.well-known/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  chess-ultimate-redis-data:
+    driver: local
+  chess-ultimate-weaviate-data:
+    driver: local
+
+networks:
+  chess-ultimate-network:
+    driver: bridge

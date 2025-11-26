@@ -1,0 +1,30 @@
+# Flask core
+Flask==3.1.0
+flask-cors==5.0.1
+python-dotenv
+Werkzeug==3.1.3
+
+# Phase 1: LLM Orchestration & Learning Platform
+openai
+anthropic
+supabase
+pyjwt  # For Clerk JWT verification
+
+# ETL pipeline dependencies (Phase 2)
+# weaviate-client
+# langgraph
+# langchain
+# sentence-transformers
+
+# Redis (Phase 2)
+# redis
+
+# Development & Testing
+pytest
+pytest-mock
+rich  # For better logging
+
+# Note: python-chess, Stockfish, whisper, and elevenlabs removed
+# - Stockfish analysis now handled by frontend WASM
+# - Voice features deferred to future phase
+# - python-chess may be re-added if needed for game notation parsing

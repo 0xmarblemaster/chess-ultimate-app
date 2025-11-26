@@ -1,0 +1,41 @@
+# Dependencies
+node_modules
+venv
+__pycache__
+*.pyc
+
+# Build outputs
+.next
+dist
+build
+
+# Git
+.git
+.gitignore
+
+# Environment files (will be mounted separately)
+.env.local
+.env
+
+# Logs and databases
+*.log
+*.db
+logs/
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation (not needed in container)
+*.md
+!README.md
+
+# Test files
+*.test.js
+*.test.ts
+*.spec.js
+*.spec.ts

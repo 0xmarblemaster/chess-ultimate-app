@@ -1,0 +1,498 @@
+/**
+ * Chess Board Animations
+ *
+ * Animation philosophy:
+ * - Celebrate success (make correct moves feel rewarding)
+ * - Gentle failure (make mistakes feel safe and recoverable)
+ * - Guide learning (use animations to teach, not just decorate)
+ * - Smooth performance (60fps on mobile devices)
+ * - Accessibility (support reduced motion preferences)
+ */
+
+/* ============================================
+   1. PIECE MOVEMENT ANIMATIONS
+   ============================================ */
+
+/**
+ * Arc Trajectory Movement
+ * Duration: 400ms
+ * Easing: cubic-bezier(0.4, 0, 0.2, 1) - ease-in-out
+ * Description: Pieces hop in a gentle arc when moved
+ */
+@keyframes piece-move-arc {
+  0% {
+    transform: translate(0, 0);
+    opacity: 1;
+  }
+  50% {
+    /* Arc peak - 20px upward */
+    transform: translate(
+      calc(var(--move-x) * 0.5),
+      calc(var(--move-y) * 0.5 - 20px)
+    );
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--move-x), var(--move-y));
+    opacity: 1;
+  }
+}
+
+.piece-move-arc {
+  animation: piece-move-arc 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/**
+ * Capture Animation
+ * Duration: 300ms
+ * Easing: ease-out
+ * Description: Captured piece shrinks and fades with a poof effect
+ */
+@keyframes piece-capture-poof {
+  0% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.2) rotate(5deg);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(0) rotate(15deg);
+    opacity: 0;
+  }
+}
+
+.piece-capture-poof {
+  animation: piece-capture-poof 0.3s ease-out forwards;
+}
+
+/**
+ * Capture Particle Effect
+ * Duration: 500ms
+ * Description: Particle burst overlay when a piece is captured
+ */
+@keyframes capture-particles {
+  0% {
+    transform: scale(0);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+.capture-particles {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(
+    circle,
+    rgba(234, 179, 8, 0.6) 0%,
+    rgba(234, 179, 8, 0) 70%
+  );
+  animation: capture-particles 0.5s ease-out forwards;
+  pointer-events: none;
+}
+
+/* ============================================
+   2. FEEDBACK ANIMATIONS
+   ============================================ */
+
+/**
+ * Correct Move - Success Glow
+ * Duration: 600ms
+ * Easing: ease-in-out
+ * Description: Green glow pulses around the piece
+ */
+@keyframes piece-correct-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 0 transparent);
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 20px rgba(34, 197, 94, 0.8))
+      drop-shadow(0 0 10px rgba(34, 197, 94, 0.6));
+    transform: scale(1.05);
+  }
+}
+
+.piece-correct-glow {
+  animation: piece-correct-glow 0.6s ease-in-out;
+}
+
+/**
+ * Square Flash - Correct Move
+ * Duration: 600ms
+ * Description: Square flashes green underneath correct piece
+ */
+@keyframes square-correct-flash {
+  0%,
+  100% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+  50% {
+    background-color: rgba(34, 197, 94, 0.4);
+    box-shadow: 0 0 20px rgba(34, 197, 94, 0.5);
+  }
+}
+
+.square-correct-flash {
+  animation: square-correct-flash 0.6s ease-in-out;
+}
+
+/**
+ * Incorrect Move - Gentle Shake
+ * Duration: 400ms
+ * Easing: ease-in-out
+ * Description: Piece shakes side-to-side (not aggressive)
+ * Note: Gentle shake to avoid frustration - this is a learning tool, not a punishment
+ */
+@keyframes piece-incorrect-shake {
+  0%,
+  100% {
+    transform: translateX(0) rotate(0deg);
+  }
+  25% {
+    transform: translateX(-6px) rotate(-2deg);
+  }
+  75% {
+    transform: translateX(6px) rotate(2deg);
+  }
+}
+
+.piece-incorrect-shake {
+  animation: piece-incorrect-shake 0.4s ease-in-out;
+}
+
+/**
+ * Square Flash - Incorrect Move
+ * Duration: 400ms
+ * Description: Square flashes red for incorrect move
+ */
+@keyframes square-incorrect-flash {
+  0%,
+  100% {
+    background-color: transparent;
+  }
+  50% {
+    background-color: rgba(239, 68, 68, 0.3);
+  }
+}
+
+.square-incorrect-flash {
+  animation: square-incorrect-flash 0.4s ease-in-out;
+}
+
+/* ============================================
+   3. HINT SYSTEM ANIMATIONS
+   ============================================ */
+
+/**
+ * Hint Square Pulse
+ * Duration: 1000ms (infinite loop)
+ * Easing: ease-in-out
+ * Description: Solution square pulses with yellow glow
+ */
+@keyframes square-hint-pulse {
+  0%,
+  100% {
+    background-color: rgba(234, 179, 8, 0.2);
+    box-shadow: 0 0 0 rgba(234, 179, 8, 0);
+    transform: scale(1);
+  }
+  50% {
+    background-color: rgba(234, 179, 8, 0.5);
+    box-shadow: 0 0 20px rgba(234, 179, 8, 0.6);
+    transform: scale(1.03);
+  }
+}
+
+.square-hint-pulse {
+  animation: square-hint-pulse 1s ease-in-out infinite;
+}
+
+/**
+ * Hint Arrow Bounce
+ * Duration: 800ms (infinite loop)
+ * Description: Arrow pointing to destination square
+ */
+@keyframes hint-arrow-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.8;
+  }
+  50% {
+    transform: translateY(-8px);
+    opacity: 1;
+  }
+}
+
+.hint-arrow {
+  position: absolute;
+  top: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 24px;
+  color: #eab308;
+  animation: hint-arrow-bounce 0.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ============================================
+   4. BOARD CELEBRATION ANIMATIONS
+   ============================================ */
+
+/**
+ * Success Celebration (Correct Move)
+ * Duration: 1200ms
+ * Easing: cubic-bezier(0.68, -0.55, 0.265, 1.55) - bounce
+ * Description: Board bounces with confetti effect
+ */
+@keyframes board-success-celebration {
+  0% {
+    transform: scale(1) rotate(0deg);
+  }
+  25% {
+    transform: scale(1.03) rotate(-1deg);
+  }
+  50% {
+    transform: scale(0.98) rotate(1deg);
+  }
+  75% {
+    transform: scale(1.02) rotate(-0.5deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.board-success-celebration {
+  animation: board-success-celebration 1.2s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+/**
+ * Confetti Particles
+ * Duration: 1500ms
+ * Description: Falling confetti particles for celebration
+ */
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(-50px) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(200px) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+.confetti-particle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: var(--confetti-color);
+  animation: confetti-fall 1.5s ease-in forwards;
+  animation-delay: var(--confetti-delay);
+  pointer-events: none;
+}
+
+/**
+ * Error Feedback (Wrong Move)
+ * Duration: 500ms
+ * Easing: ease-in-out
+ * Description: Gentle board shake (horizontal)
+ */
+@keyframes board-error-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-8px);
+  }
+  75% {
+    transform: translateX(8px);
+  }
+}
+
+.board-error-shake {
+  animation: board-error-shake 0.5s ease-in-out;
+}
+
+/* ============================================
+   5. UI ELEMENT ANIMATIONS
+   ============================================ */
+
+/**
+ * Feedback Banner Slide In
+ * Duration: 300ms
+ * Easing: ease-out
+ * Description: Success/error banner slides down from top
+ */
+@keyframes banner-slide-in {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.banner-slide-in {
+  animation: banner-slide-in 0.3s ease-out forwards;
+}
+
+/**
+ * Button Press Effect
+ * Duration: 150ms
+ * Easing: ease-in-out
+ * Description: Button scales down on press
+ */
+@keyframes button-press {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.95);
+  }
+}
+
+.button-press {
+  animation: button-press 0.15s ease-in-out;
+}
+
+/* ============================================
+   6. LOADING STATES
+   ============================================ */
+
+/**
+ * Board Loading Shimmer
+ * Duration: 1500ms (infinite loop)
+ * Easing: linear
+ * Description: Shimmer effect while board loads
+ */
+@keyframes board-loading-shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.board-loading {
+  background: linear-gradient(
+    90deg,
+    #f0d9b5 0%,
+    #e8d5ad 20%,
+    #f0d9b5 40%,
+    #f0d9b5 100%
+  );
+  background-size: 1000px 100%;
+  animation: board-loading-shimmer 1.5s linear infinite;
+}
+
+/* ============================================
+   7. PERFORMANCE OPTIMIZATIONS
+   ============================================ */
+
+/**
+ * GPU Acceleration Hints
+ * Only animate transform, opacity, and filter (sparingly)
+ */
+.piece {
+  will-change: transform, opacity;
+}
+
+.square {
+  will-change: background-color, box-shadow;
+}
+
+/* Remove will-change after animation completes */
+.piece.animation-complete,
+.square.animation-complete {
+  will-change: auto;
+}
+
+/* ============================================
+   8. ACCESSIBILITY - REDUCED MOTION
+   ============================================ */
+
+/**
+ * Respect prefers-reduced-motion media query
+ * Disable or significantly reduce animations for users who prefer less motion
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  /* Still show feedback, just without animation */
+  .piece-correct-glow {
+    filter: drop-shadow(0 0 10px rgba(34, 197, 94, 0.6));
+  }
+
+  .square-hint-pulse {
+    background-color: rgba(234, 179, 8, 0.4);
+    animation: none;
+  }
+
+  .confetti-particle {
+    display: none;
+  }
+
+  .board-success-celebration,
+  .board-error-shake {
+    animation: none;
+  }
+}
+
+/* ============================================
+   9. MOBILE OPTIMIZATIONS
+   ============================================ */
+
+/**
+ * Touch Feedback
+ * Immediate visual feedback on touch
+ */
+.piece:active {
+  transform: scale(0.95);
+  transition: transform 0.1s ease-out;
+}
+
+/* Reset after touch */
+.piece:not(:active) {
+  transform: scale(1);
+  transition: transform 0.2s ease-out;
+}
+
+/**
+ * Reduce particle count on smaller screens
+ */
+@media (max-width: 768px) {
+  .confetti-particle:nth-child(n + 9) {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .confetti-particle:nth-child(n + 5) {
+    display: none;
+  }
+}
