@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ClerkProvider } from '@clerk/nextjs'
+import { NextIntlClientProvider } from 'next-intl';
+import { getLocale, getMessages } from 'next-intl/server';
 import "./globals.css";
 import "../styles/chess-animations.css";
 import NavBar from "@/componets/Navbar";
@@ -82,17 +84,32 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+// Custom localization for Clerk components
+const clerkLocalization = {
+  formFieldInputPlaceholder__firstName: 'Name (optional)',
+  formFieldInputPlaceholder__emailAddress: 'Email',
+  formFieldInputPlaceholder__password: 'Password',
+  formFieldLabel__firstName: 'Name',
+  formFieldLabel__emailAddress: 'Email',
+  formFieldLabel__password: 'Password',
+};
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const locale = await getLocale();
+  const messages = await getMessages();
+
   return (
-    <ClerkProvider>
-      <html lang="en" suppressHydrationWarning>
+    <ClerkProvider localization={clerkLocalization}>
+      <html lang={locale} suppressHydrationWarning>
         <body className={`${geistSans.variable} ${geistMono.variable} antialiased`} suppressHydrationWarning>
-          <NavBar/>
-          {children}
+          <NextIntlClientProvider messages={messages}>
+            <NavBar/>
+            {children}
+          </NextIntlClientProvider>
         </body>
       </html>
     </ClerkProvider>

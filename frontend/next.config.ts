@@ -1,14 +1,10 @@
+import createNextIntlPlugin from 'next-intl/plugin';
+
+const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-    output: 'standalone',
-    typescript: {
-        // Allow production builds to successfully complete even if your project has type errors
-        ignoreBuildErrors: true,
-    },
-    eslint: {
-        // Allow production builds to successfully complete even if your project has ESLint errors
-        ignoreDuringBuilds: true,
-    },
+    output: 'standalone' as const,
     productionBrowserSourceMaps: process.env.ENABLE_SOURCE_MAPS === 'true',
     headers() {
         const headers = [
@@ -40,4 +36,6 @@ const ENGINE_HEADERS = [
     },
 ];
 
-export default nextConfig;
+
+
+export default withNextIntl(nextConfig);

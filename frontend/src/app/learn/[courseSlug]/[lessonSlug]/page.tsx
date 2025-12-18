@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useAuth, SignInButton } from '@clerk/nextjs'
 import { useParams, useRouter } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
-import { AnimatedChessBoard } from '@/components/chess'
+import { AnimatedChessBoard, PuzzleSequence } from '@/components/chess'
 import LoadingScreen from '@/components/LoadingScreen'
 import Link from 'next/link'
+import { ChevronDown, ChevronUp, MessageCircle } from 'lucide-react'
 
 interface ArrowData {
   from: string
@@ -34,6 +35,8 @@ interface Lesson {
   hint_text: string | null
   success_message: string | null
   exercise_solution: ExerciseSolution | null
+  has_multiple_puzzles: boolean | null
+  puzzle_count: number | null
 }
 
 interface Message {
@@ -42,7 +45,9 @@ interface Message {
 }
 
 export default function LessonPage() {
-  const { courseSlug, lessonSlug } = useParams() as { courseSlug: string; lessonSlug: string }
+  const params = useParams()
+  const courseSlug = params?.courseSlug as string
+  const lessonSlug = params?.lessonSlug as string
   const router = useRouter()
   const { getToken, isLoaded, isSignedIn } = useAuth()
   const [lesson, setLesson] = useState<Lesson | null>(null)
@@ -52,6 +57,8 @@ export default function LessonPage() {
   const [completingLesson, setCompletingLesson] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isChatExpanded, setIsChatExpanded] = useState(true)
+  const chatContentRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     async function fetchLesson() {
@@ -256,7 +263,23 @@ export default function LessonPage() {
             <ReactMarkdown>{lesson.content}</ReactMarkdown>
           </div>
 
-          {lesson.exercise_fen && (lesson.solution_move || lesson.exercise_solution?.targets) && (
+          {/* Multi-puzzle lesson - show PuzzleSequence */}
+          {lesson.has_multiple_puzzles && lesson.puzzle_count && lesson.puzzle_count > 0 && (
+            <div className="mb-6">
+              <h3 className="font-semibold mb-4">
+                Practice Puzzles ({lesson.puzzle_count} puzzles)
+              </h3>
+              <PuzzleSequence
+                courseSlug={courseSlug}
+                lessonSlug={lessonSlug}
+                getToken={getToken}
+                onAllPuzzlesComplete={markLessonComplete}
+              />
+            </div>
+          )}
+
+          {/* Single puzzle lesson - show AnimatedChessBoard directly */}
+          {!lesson.has_multiple_puzzles && lesson.exercise_fen && (lesson.solution_move || lesson.exercise_solution?.targets) && (
             <div className="mb-6">
               <h3 className="font-semibold mb-4">Interactive Exercise:</h3>
               <AnimatedChessBoard
@@ -272,6 +295,8 @@ export default function LessonPage() {
                 arrowFromSquare={lesson.exercise_solution?.arrow?.from}
                 arrowPath={lesson.exercise_solution?.arrow?.path}
                 showArrowsOverlay={!lesson.exercise_solution?.targets}
+                showStar={false}
+                strictValidation={lesson.exercise_type === 'one_move_puzzle'}
               />
               {lesson.hint_text && (
                 <p className="text-sm text-gray-600 dark:text-gray-400 mt-4">
@@ -291,48 +316,79 @@ export default function LessonPage() {
         </div>
 
         {/* AI Chat */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 flex flex-col h-[600px]">
-          <h2 className="text-xl font-bold mb-4">AI Tutor</h2>
-
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto space-y-4 mb-4">
-            {messages.length === 0 && (
-              <p className="text-gray-500 text-center mt-8">
-                Ask your AI tutor any questions about this lesson!
-              </p>
-            )}
-
-            {messages.map((msg, idx) => (
-              <div
-                key={idx}
-                className={`p-3 rounded-lg ${
-                  msg.role === 'user'
-                    ? 'bg-blue-100 dark:bg-blue-900 ml-8'
-                    : 'bg-gray-100 dark:bg-gray-700 mr-8'
-                }`}
-              >
-                <div className="font-semibold text-sm mb-1">
-                  {msg.role === 'user' ? 'You' : 'AI Tutor'}
-                </div>
-                <div className="text-sm">{msg.content}</div>
-              </div>
-            ))}
-
-            {sendingMessage && (
-              <div className="bg-gray-100 dark:bg-gray-700 mr-8 p-3 rounded-lg">
-                <div className="font-semibold text-sm mb-1">AI Tutor</div>
-                <div className="text-sm">Thinking...</div>
-              </div>
-            )}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden self-start">
+          {/* Header with collapse toggle */}
+          <div
+            className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors"
+            onClick={() => setIsChatExpanded(!isChatExpanded)}
+          >
+            <div className="flex items-center gap-2">
+              <MessageCircle className="w-5 h-5 text-blue-600" />
+              <h2 className="text-xl font-bold">AI Tutor</h2>
+              {!isChatExpanded && messages.length > 0 && (
+                <span className="bg-blue-100 text-blue-600 text-xs font-medium px-2 py-0.5 rounded-full">
+                  {messages.length}
+                </span>
+              )}
+            </div>
+            <button
+              className="p-1.5 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+              aria-label={isChatExpanded ? 'Collapse chat' : 'Expand chat'}
+            >
+              {isChatExpanded ? (
+                <ChevronUp className="w-5 h-5 text-gray-500" />
+              ) : (
+                <ChevronDown className="w-5 h-5 text-gray-500" />
+              )}
+            </button>
           </div>
 
-          {/* Input */}
-          <div className="flex space-x-2">
+          {/* Collapsible content - Messages area */}
+          {isChatExpanded && (
+            <div className="border-t border-gray-100 dark:border-gray-700">
+              <div
+                ref={chatContentRef}
+                className="h-[400px] overflow-y-auto space-y-4 p-4"
+              >
+                {messages.length === 0 && (
+                  <p className="text-gray-500 text-center mt-8">
+                    Ask your AI tutor any questions about this lesson!
+                  </p>
+                )}
+
+                {messages.map((msg, idx) => (
+                  <div
+                    key={idx}
+                    className={`p-3 rounded-lg ${
+                      msg.role === 'user'
+                        ? 'bg-blue-100 dark:bg-blue-900 ml-8'
+                        : 'bg-gray-100 dark:bg-gray-700 mr-8'
+                    }`}
+                  >
+                    <div className="font-semibold text-sm mb-1">
+                      {msg.role === 'user' ? 'You' : 'AI Tutor'}
+                    </div>
+                    <div className="text-sm">{msg.content}</div>
+                  </div>
+                ))}
+
+                {sendingMessage && (
+                  <div className="bg-gray-100 dark:bg-gray-700 mr-8 p-3 rounded-lg">
+                    <div className="font-semibold text-sm mb-1">AI Tutor</div>
+                    <div className="text-sm">Thinking...</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Input - always visible */}
+          <div className="flex space-x-2 p-4 border-t border-gray-100 dark:border-gray-700">
             <input
               type="text"
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+              onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
               placeholder="Ask a question..."
               className="flex-1 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600"
               disabled={sendingMessage}

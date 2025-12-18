@@ -1181,7 +1181,7 @@ export const ChatTab: React.FC<ChatTabProps> = ({
                       {message.fen && (
                         <Tooltip title="View position on board" arrow>
                           <IconButton
-                            onClick={() => openChessboardModal(message.fen)}
+                            onClick={() => openChessboardModal(message.fen!)}
                             sx={{
                               color: "rgba(255, 255, 255, 0.7)",
                               backgroundColor: "rgba(0, 0, 0, 0.2)",

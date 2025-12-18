@@ -28,3 +28,4 @@ rich  # For better logging
 # - Stockfish analysis now handled by frontend WASM
 # - Voice features deferred to future phase
 # - python-chess may be re-added if needed for game notation parsing
+requests

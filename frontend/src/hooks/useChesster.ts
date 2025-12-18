@@ -23,7 +23,7 @@ export interface ChatMessage {
   role: "user" | "assistant";
   maxTokens?: number,
   provider?: string,
-  fen: string,
+  fen?: string,
   model?: string,
   content: string;
   timestamp: Date;

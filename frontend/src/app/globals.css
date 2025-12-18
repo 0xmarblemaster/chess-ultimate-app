@@ -1,5 +1,30 @@
 @import "tailwindcss";
 
+/* ========================================
+   CHESSGROUND BOARD STYLING
+   Critical: cg-wrap must fill its container
+   ======================================== */
+
+.chessground-wrapper {
+  width: 100%;
+  height: 100%;
+}
+
+.chessground-wrapper cg-container {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.chessground-wrapper cg-board {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.cg-wrap {
+  width: 100% !important;
+  height: 100% !important;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

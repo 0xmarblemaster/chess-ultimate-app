@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useAuth, useUser, SignInButton } from '@clerk/nextjs'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import useSWR from 'swr'
 import LoadingScreen from '@/components/LoadingScreen'
 
 interface Course {
@@ -36,6 +37,13 @@ interface Progress {
   completed_at: string | null
 }
 
+interface CourseData {
+  course: Course | null
+  modules: Module[]
+  lessons: Record<string, Lesson[]>
+  progress: Record<string, Progress>
+}
+
 // Generate slug from title if not available
 function generateSlug(title: string): string {
   return title
@@ -47,102 +55,76 @@ function generateSlug(title: string): string {
 }
 
 export default function CoursePage() {
-  const { courseSlug } = useParams() as { courseSlug: string }
+  const params = useParams()
+  const courseSlug = params?.courseSlug as string
   const { getToken, isLoaded, isSignedIn } = useAuth()
   const { user } = useUser()
-  const [course, setCourse] = useState<Course | null>(null)
-  const [modules, setModules] = useState<Module[]>([])
-  const [lessons, setLessons] = useState<Record<string, Lesson[]>>({})
-  const [progress, setProgress] = useState<Record<string, Progress>>({})
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [authError, setAuthError] = useState<string | null>(null)
 
+  // SWR fetcher with auth
+  const fetcher = useCallback(async (url: string): Promise<CourseData> => {
+    const token = await getToken()
+    if (!token) {
+      throw new Error('No auth token')
+    }
+
+    const response = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+
+    if (response.status === 401) {
+      throw new Error('Session expired')
+    }
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch course data')
+    }
+
+    return response.json()
+  }, [getToken])
+
+  // Use SWR for caching - data persists across navigations
+  const { data, error, isLoading, mutate } = useSWR<CourseData>(
+    // Only fetch when we have a courseSlug and auth is ready
+    courseSlug && isLoaded && isSignedIn
+      ? `${process.env.NEXT_PUBLIC_API_URL}/api/learn/${courseSlug}`
+      : null,
+    fetcher,
+    {
+      revalidateOnFocus: false,      // Don't refetch when window regains focus
+      revalidateOnReconnect: false,  // Don't refetch on reconnect
+      dedupingInterval: 60000,       // Dedupe requests within 1 minute
+      errorRetryCount: 2,            // Retry failed requests twice
+      keepPreviousData: true,        // Keep showing old data while revalidating
+    }
+  )
+
+  // Handle auth state changes
   useEffect(() => {
-    let isMounted = true
-
-    async function fetchCourseData() {
-      try {
-        // Wait for auth to be loaded and user to be signed in
-        if (!isLoaded) return
-
-        if (!isSignedIn) {
-          setError('Please sign in to access this course')
-          setLoading(false)
-          return
-        }
-
-        const token = await getToken()
-
-        if (!token) {
-          setError('Unable to authenticate. Please try signing in again.')
-          setLoading(false)
-          return
-        }
-
-        const headers = { 'Authorization': `Bearer ${token}` }
-
-        // Fetch course data using slug-based API
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/learn/${courseSlug}`,
-          { headers }
-        )
-
-        if (response.status === 401) {
-          setError('Session expired. Please sign in again.')
-          setLoading(false)
-          return
-        }
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch course data')
-        }
-
-        const data = await response.json()
-
-        if (!isMounted) return
-
-        setCourse(data.course || null)
-        setModules(data.modules || [])
-        setLessons(data.lessons || {})
-        setProgress(data.progress || {})
-        setError(null)
-      } catch (err) {
-        console.error('Failed to fetch course data:', err)
-        if (isMounted) {
-          setError('Failed to load course. Please try again.')
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false)
-        }
-      }
+    if (isLoaded && !isSignedIn) {
+      setAuthError('Please sign in to access this course')
+    } else {
+      setAuthError(null)
     }
-
-    if (courseSlug && isLoaded) {
-      fetchCourseData()
-    }
-
-    return () => {
-      isMounted = false
-    }
-  }, [courseSlug, getToken, isLoaded, isSignedIn])
+  }, [isLoaded, isSignedIn])
 
   const isLessonUnlocked = (lesson: Lesson): boolean => {
     if (!lesson.requires_lesson_id) return true
-    const requiredProgress = progress[lesson.requires_lesson_id]
+    const requiredProgress = data?.progress[lesson.requires_lesson_id]
     return requiredProgress?.status === 'completed'
   }
 
-  if (loading || !isLoaded) {
+  // Show loading only on initial load (SWR shows stale data while revalidating)
+  if (!isLoaded || (isLoading && !data)) {
     return <LoadingScreen isVisible={true} />
   }
 
-  if (error || !isSignedIn) {
+  if (authError || !isSignedIn) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="text-xl text-red-500 mb-4">
-            {error || 'Please sign in to access this course'}
+            {authError || 'Please sign in to access this course'}
           </div>
           <SignInButton mode="modal">
             <button className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded transition-colors">
@@ -159,7 +141,30 @@ export default function CoursePage() {
     )
   }
 
-  if (!course) {
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="text-xl text-red-500 mb-4">
+            {error.message === 'Session expired'
+              ? 'Session expired. Please sign in again.'
+              : 'Failed to load course. Please try again.'}
+          </div>
+          <button
+            onClick={() => mutate()}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded transition-colors mr-4"
+          >
+            Retry
+          </button>
+          <Link href="/dashboard" className="text-blue-600 hover:underline">
+            ← Back to Dashboard
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  if (!data?.course) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -171,6 +176,8 @@ export default function CoursePage() {
       </div>
     )
   }
+
+  const { course, modules, lessons, progress } = data
 
   return (
     <div className="container mx-auto px-4 py-8">

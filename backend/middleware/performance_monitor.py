@@ -113,20 +113,22 @@ class PerformanceMonitor:
 
             logger.info(f"API Request: {log_data}")
 
-            # Save to database (async, non-blocking)
-            if self.supabase and path.startswith('/api/'):
-                self._save_to_database(
-                    endpoint=path,
-                    method=method,
-                    response_time_ms=response_time_ms,
-                    success=success,
-                    status_code=status_code,
-                    user_id=user_id,
-                    tokens_used=tokens_used,
-                    model=model,
-                    conversation_id=conversation_id,
-                    error_message=getattr(g, 'error_message', None)
-                )
+            # Save to database in background thread (non-blocking)
+            # NOTE: Disabled synchronous DB logging - it was adding 3+ seconds to every request!
+            # To re-enable, use a proper async queue like Celery or Redis.
+            # if self.supabase and path.startswith('/api/'):
+            #     self._save_to_database(
+            #         endpoint=path,
+            #         method=method,
+            #         response_time_ms=response_time_ms,
+            #         success=success,
+            #         status_code=status_code,
+            #         user_id=user_id,
+            #         tokens_used=tokens_used,
+            #         model=model,
+            #         conversation_id=conversation_id,
+            #         error_message=getattr(g, 'error_message', None)
+            #     )
 
             # Add response time header for frontend
             response.headers['X-Response-Time'] = f'{response_time_ms:.2f}ms'

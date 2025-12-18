@@ -19,13 +19,13 @@ import {
   showErrorFeedback,
   pulseHintSquare,
   removeHintPulse,
-  spawnConfetti,
   ANIMATION_DURATIONS,
 } from '@/lib/chess/animations';
 import FeedbackDisplay, { FeedbackType } from './FeedbackDisplay';
 import BoardControls from './BoardControls';
 import TargetStar from './TargetStar';
 import ArrowOverlay from './ArrowOverlay';
+import LottieCelebration from './LottieCelebration';
 
 // Import chessground CSS
 import 'chessground/assets/chessground.base.css';
@@ -57,6 +57,14 @@ interface AnimatedChessBoardProps {
   arrowPath?: string[];
   /** Whether to show arrows */
   showArrowsOverlay?: boolean;
+  /** Whether to show target star on solution square (default: true) */
+  showStar?: boolean;
+  /**
+   * When true, only the exact solution move is accepted (for one_move_puzzle).
+   * When false, intermediate moves toward the target are allowed.
+   * Default: false (allowing intermediate moves for multi-step exercises)
+   */
+  strictValidation?: boolean;
 }
 
 interface BoardState {
@@ -76,6 +84,8 @@ interface BoardState {
   pathStep: number;
   /** Set of captured star squares (for multi-star mode) */
   capturedStars: Set<string>;
+  /** Whether to show Lottie celebration animation */
+  showCelebration: boolean;
 }
 
 /**
@@ -94,11 +104,15 @@ export default function AnimatedChessBoard({
   arrowFromSquare,
   arrowPath = [],
   showArrowsOverlay = true,
+  showStar = true,
+  strictValidation = false,
 }: AnimatedChessBoardProps) {
   const boardRef = useRef<HTMLDivElement>(null);
   const groundRef = useRef<Api | null>(null);
   const validatorRef = useRef<MoveValidator>(new MoveValidator(fen));
   const hintSquareRef = useRef<HTMLElement | null>(null);
+  // Ref to hold the latest handleMove function - used to avoid stale closures in board init
+  const handleMoveRef = useRef<(orig: Key, dest: Key) => void>(() => {});
 
   const [state, setState] = useState<BoardState>({
     currentFen: fen,
@@ -109,30 +123,121 @@ export default function AnimatedChessBoard({
     showArrows: true,
     pathStep: 0,
     capturedStars: new Set<string>(),
+    showCelebration: false,
   });
 
   /**
    * Initialize chessground instance
+   * Note: Chessground requires the container to have dimensions before initialization.
+   * We poll until the container has real dimensions (width/height > 0).
    */
   useEffect(() => {
-    if (!boardRef.current || groundRef.current) return;
+    if (!boardRef.current) return;
 
-    const ground = Chessground(boardRef.current, {
-      ...getChessgroundConfig({
-        fen,
-        onMove: (orig, dest) => {}, // Placeholder, will be set later
-        orientation,
-        movable: true,
-        premovable: false,
-      }),
-    });
+    // Destroy existing instance before creating new one
+    if (groundRef.current) {
+      groundRef.current.destroy();
+      groundRef.current = null;
+    }
 
-    groundRef.current = ground;
+    let timeoutId: NodeJS.Timeout;
+    let animationFrameId: number;
+
+    // Poll until container has real dimensions
+    const initializeBoard = () => {
+      if (!boardRef.current) return;
+
+      const rect = boardRef.current.getBoundingClientRect();
+
+      // Check if container has real dimensions (width and height > 0)
+      if (rect.width > 0 && rect.height > 0) {
+        const ground = Chessground(boardRef.current, {
+          ...getChessgroundConfig({
+            fen,
+            onMove: (orig, dest) => {
+              // This will be immediately overwritten, but needed for initial config
+            },
+            orientation,
+            movable: true,
+            premovable: false,
+          }),
+        });
+
+        groundRef.current = ground;
+
+        // CRITICAL: Attach a wrapper that delegates to handleMoveRef.current
+        // This ensures the handler always uses the latest handleMove function,
+        // even if the board is created before handleMove is fully initialized
+        ground.set({
+          movable: {
+            events: {
+              after: (orig: Key, dest: Key) => {
+                handleMoveRef.current(orig, dest);
+              },
+            },
+          },
+        });
+      } else {
+        // Container not ready yet, retry on next frame
+        animationFrameId = requestAnimationFrame(initializeBoard);
+      }
+    };
+
+    // Start initialization after a short delay to allow CSS to compute
+    timeoutId = setTimeout(() => {
+      animationFrameId = requestAnimationFrame(initializeBoard);
+    }, 10);
 
     return () => {
-      ground.destroy();
-      groundRef.current = null;
+      clearTimeout(timeoutId);
+      cancelAnimationFrame(animationFrameId);
+      if (groundRef.current) {
+        groundRef.current.destroy();
+        groundRef.current = null;
+      }
     };
+  }, [fen, orientation]);
+
+  /**
+   * Reset state when FEN changes (e.g., switching between puzzles)
+   * This ensures each puzzle starts fresh with hints available and no solved state
+   */
+  useEffect(() => {
+    // Reset validator with new FEN
+    validatorRef.current.reset(fen);
+
+    // Remove any existing hint overlay
+    if (hintSquareRef.current) {
+      hintSquareRef.current.remove();
+      hintSquareRef.current = null;
+    }
+
+    // Reset board state for new puzzle
+    setState({
+      currentFen: fen,
+      feedback: 'idle',
+      hintShown: false,
+      isValidating: false,
+      isSolved: false,
+      showArrows: true,
+      pathStep: 0,
+      capturedStars: new Set<string>(),
+      showCelebration: false,
+    });
+
+    // Update chessground with new position
+    if (groundRef.current) {
+      groundRef.current.set({
+        fen,
+        turnColor: orientation,
+        lastMove: undefined,
+        check: undefined,
+        movable: {
+          free: true,
+          color: orientation,
+        },
+      });
+    }
   }, [fen, orientation]);
 
   /**
@@ -196,8 +301,22 @@ export default function AnimatedChessBoard({
 
       // Single-star mode (original behavior)
       if (solutionMove) {
+        const solutionOrigin = solutionMove.slice(0, 2);
         const targetSquare = solutionMove.slice(2, 4);
 
+        // Strict validation mode (for one_move_puzzle like mate-in-1):
+        // Only the exact solution move is accepted
+        if (strictValidation) {
+          if (orig === solutionOrigin && dest === targetSquare) {
+            handleCorrectMove(orig, dest);
+          } else {
+            // Any move that is not the exact solution is incorrect
+            handleIncorrectMove(moveUci, orig, dest);
+          }
+          return;
+        }
+
+        // Non-strict mode: allow intermediate moves toward target
         // Check if this move reaches the target (puzzle solved!)
         if (dest === targetSquare) {
           handleCorrectMove(orig, dest);
@@ -214,8 +333,12 @@ export default function AnimatedChessBoard({
         }
       }
     },
-    [state.isSolved, state.isValidating, state.currentFen, state.capturedStars, solutionMove, targetSquares, isMovingTowardTarget]
+    [state.isSolved, state.isValidating, state.currentFen, state.capturedStars, solutionMove, targetSquares, isMovingTowardTarget, strictValidation]
   );
+
+  // Keep handleMoveRef in sync with handleMove - update synchronously during render
+  // This ensures the board init effect always has access to the latest handler
+  handleMoveRef.current = handleMove;
 
   /**
    * Update move handler when handleMove changes
@@ -244,13 +367,14 @@ export default function AnimatedChessBoard({
       return;
     }
 
-    // Update board state
+    // Update board state and show Lottie celebration
     setState((prev) => ({
       ...prev,
       currentFen: newFen,
       feedback: 'correct',
       isSolved: true,
       hintShown: false,
+      showCelebration: enableAnimations,
     }));
 
     // Remove hint if shown
@@ -259,13 +383,9 @@ export default function AnimatedChessBoard({
       hintSquareRef.current = null;
     }
 
-    // Play animations if enabled
+    // Play success celebration animation (board glow)
     if (enableAnimations && boardRef.current) {
-      // Success celebration
       await showSuccessCelebration(boardRef.current);
-
-      // Spawn confetti
-      spawnConfetti(boardRef.current, 30);
     }
 
     // Call success callback
@@ -304,6 +424,7 @@ export default function AnimatedChessBoard({
         isSolved: true,
         capturedStars: newCapturedStars,
         hintShown: false,
+        showCelebration: enableAnimations,
       }));
 
       // Remove hint if shown
@@ -312,10 +433,9 @@ export default function AnimatedChessBoard({
         hintSquareRef.current = null;
       }
 
-      // Play animations if enabled
+      // Play success celebration animation (board glow)
       if (enableAnimations && boardRef.current) {
         await showSuccessCelebration(boardRef.current);
-        spawnConfetti(boardRef.current, 30);
       }
 
       // Call success callback
@@ -460,7 +580,7 @@ export default function AnimatedChessBoard({
    * Show hint for solution move
    */
   const handleShowHint = useCallback(() => {
-    if (state.isSolved || state.hintShown || !showHints || !boardRef.current) {
+    if (state.isSolved || state.hintShown || !showHints || !boardRef.current || !solutionMove) {
       return;
     }
 
@@ -549,6 +669,7 @@ export default function AnimatedChessBoard({
       showArrows: true,
       pathStep: 0,
       capturedStars: new Set<string>(),
+      showCelebration: false,
     });
   }, [fen, orientation, handleMove]);
 
@@ -581,8 +702,8 @@ export default function AnimatedChessBoard({
             visible={!state.capturedStars.has(square)}
           />
         ))}
-        {/* Single-star mode: render single star */}
-        {solutionMove && !targetSquares && (
+        {/* Single-star mode: render single star (if showStar is true) */}
+        {showStar && solutionMove && !targetSquares && (
           <TargetStar
             square={solutionMove.slice(2, 4)}
             orientation={orientation}
@@ -599,6 +720,11 @@ export default function AnimatedChessBoard({
             intermediateSquares={arrowPath}
           />
         )}
+        {/* Lottie celebration animation */}
+        <LottieCelebration
+          visible={state.showCelebration}
+          onComplete={() => setState((prev) => ({ ...prev, showCelebration: false }))}
+        />
       </div>
 
       {/* Board controls */}

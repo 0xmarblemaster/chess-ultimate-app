@@ -191,15 +191,55 @@ export default function PGNUploaderPage() {
     }
   };
 
+  // Function to remove nested parenthetical variations
+  const removeNestedVariations = (text: string): string => {
+    let result = '';
+    let depth = 0;
+
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      if (char === '(') {
+        depth++;
+      } else if (char === ')') {
+        depth--;
+      } else if (depth === 0) {
+        result += char;
+      }
+    }
+
+    return result;
+  };
+
+  // Function to remove nested curly brace annotations (handles nested braces)
+  const removeNestedBraces = (text: string): string => {
+    let result = '';
+    let depth = 0;
+
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      if (char === '{') {
+        depth++;
+      } else if (char === '}') {
+        depth--;
+      } else if (depth === 0) {
+        result += char;
+      }
+    }
+
+    return result;
+  };
+
   // Function to clean PGN by removing advanced annotations
   const cleanPGN = (pgnText: string) => {
     let cleaned = pgnText;
 
-    // Remove all content within curly braces (annotations like {[%clk 1:00:00]})
-    cleaned = cleaned.replace(/\{[^}]*\}/g, "");
+    // Remove all content within curly braces (annotations like {[%clk 1:00:00]}, {[%csl Gf4][%cal Gc1f4]})
+    // Use character-by-character parsing to handle nested braces properly
+    cleaned = removeNestedBraces(cleaned);
 
     // Remove parenthetical variations (nested moves in parentheses)
-    cleaned = cleaned.replace(/\([^)]*\)/g, "");
+    // Use character-by-character parsing to handle nested parentheses like (1. c4 e5 (1... d5))
+    cleaned = removeNestedVariations(cleaned);
 
     // Remove NAG (Numeric Annotation Glyphs) like $1, $2, etc.
     cleaned = cleaned.replace(/\$\d+/g, "");
@@ -252,29 +292,71 @@ export default function PGNUploaderPage() {
     return result.trim();
   };
 
-  const loadPGN = () => {
+  const loadPGN = (pgnInput?: string) => {
     try {
-      if (!pgnText.trim()) {
+      const pgn = pgnInput ?? pgnText;
+      if (!pgn.trim()) {
         alert("Please enter or paste PGN content");
         return;
       }
 
       // Extract only first game if multi-game file
-      const firstGame = extractFirstGame(pgnText);
+      const firstGame = extractFirstGame(pgn);
 
-      const tempGame = new Chess();
+      // Extract FEN from PGN headers if present (for puzzles/studies with custom positions)
+      const fenMatch = firstGame.match(/\[FEN\s+"([^"]+)"\]/);
+      const startingFen = fenMatch ? fenMatch[1] : undefined;
+
+      // Create game from the correct starting position
+      const tempGame = startingFen ? new Chess(startingFen) : new Chess();
       const cleanedPGN = cleanPGN(firstGame);
-      tempGame.loadPgn(cleanedPGN);
+
+      // For PGN with custom FEN, we need to load moves differently
+      // chess.js loadPgn should handle FEN headers, but let's be explicit
+      if (startingFen) {
+        // Extract just the moves part (after headers)
+        // Using [\s\S] instead of /s flag for ES2015 compatibility
+        const movesMatch = cleanedPGN.match(/\n\n([\s\S]+)$/) || cleanedPGN.match(/\]\s*\n([\s\S]+)$/);
+        if (movesMatch) {
+          const movesText = movesMatch[1].trim();
+          // Parse moves manually from the moves text
+          const moveTokens = movesText
+            .replace(/\d+\.\s*/g, ' ') // Remove move numbers like "1."
+            .replace(/\s+/g, ' ')
+            .trim()
+            .split(' ')
+            .filter(token => token && !token.match(/^(\*|1-0|0-1|1\/2-1\/2)$/));
+
+          for (const move of moveTokens) {
+            try {
+              tempGame.move(move);
+            } catch (moveErr) {
+              console.warn(`Skipping invalid move: ${move}`, moveErr);
+              break;
+            }
+          }
+        }
+      } else {
+        tempGame.loadPgn(cleanedPGN);
+      }
+
       const moveList = tempGame.history();
       const parsed = extractMovesWithComments(firstGame);
       const info = extractGameInfo(firstGame);
+
+      // Add FEN to game info if present
+      if (startingFen) {
+        info.FEN = startingFen;
+      }
 
       setMoves(moveList);
       setParsedMovesWithComments(parsed);
       setGameInfo(info);
       setCurrentMoveIndex(0);
+      setPgnText(pgn); // Update pgnText state with the loaded PGN
 
-      const resetGame = new Chess();
+      // Reset to the starting position (either custom FEN or standard)
+      const resetGame = startingFen ? new Chess(startingFen) : new Chess();
       setGame(resetGame);
       setFen(resetGame.fen());
       setLlmAnalysisResult(null);
@@ -284,7 +366,7 @@ export default function PGNUploaderPage() {
       analyzeGameTheme(cleanedPGN);
 
       // Notify user if multiple games detected
-      const gameMatches = pgnText.match(/\[Event /g);
+      const gameMatches = pgn.match(/\[Event /g);
       if (gameMatches && gameMatches.length > 1) {
         setTimeout(() => {
           alert(`Note: Found ${gameMatches.length} games. Loaded first game only.\n\nTo analyze other games, please paste them individually.`);
@@ -491,9 +573,16 @@ export default function PGNUploaderPage() {
   };
 
   const goToMove = (index: number) => {
-    const tempGame = new Chess();
+    // Use custom starting FEN if available (for puzzles/studies)
+    const startingFen = gameInfo.FEN;
+    const tempGame = startingFen ? new Chess(startingFen) : new Chess();
     for (let i = 0; i < index; i++) {
-      tempGame.move(moves[i]);
+      try {
+        tempGame.move(moves[i]);
+      } catch (err) {
+        console.warn(`Error playing move ${moves[i]}:`, err);
+        break;
+      }
     }
     setGame(tempGame);
     setFen(tempGame.fen());
@@ -612,26 +701,29 @@ export default function PGNUploaderPage() {
       <Box
         sx={{
           flex: 1,
-          p: 4,
+          p: { xs: 1, sm: 2, md: 3, lg: 4 },
+          minWidth: 0,
+          overflow: "hidden",
         }}
       >
         {inputsVisible && (
         <Card
           sx={{
-            mb: 4,
+            mb: { xs: 2, sm: 3, md: 4 },
             backgroundColor: purpleTheme.background.paper,
-            borderRadius: 3,
+            borderRadius: { xs: 2, md: 3 },
             boxShadow: `0 8px 32px rgba(138, 43, 226, 0.15)`,
           }}
         >
-          <CardContent sx={{ p: 4 }}>
-            <Box sx={{ textAlign: "center", mb: 4 }}>
+          <CardContent sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
+            <Box sx={{ textAlign: "center", mb: { xs: 2, sm: 3, md: 4 } }}>
               <Typography
                 variant="h3"
                 gutterBottom
                 sx={{
                   color: purpleTheme.text.primary,
                   fontWeight: 700,
+                  fontSize: { xs: "1.5rem", sm: "2rem", md: "2.5rem", lg: "3rem" },
                   background: `linear-gradient(45deg, ${purpleTheme.accent}, ${purpleTheme.secondary})`,
                   backgroundClip: "text",
                   WebkitBackgroundClip: "text",
@@ -644,9 +736,11 @@ export default function PGNUploaderPage() {
                 variant="h6"
                 sx={{
                   color: purpleTheme.text.secondary,
-                  mb: 3,
+                  mb: { xs: 2, sm: 3 },
                   maxWidth: 600,
                   mx: "auto",
+                  fontSize: { xs: "0.875rem", sm: "1rem", md: "1.125rem" },
+                  px: { xs: 1, sm: 0 },
                 }}
               >
                 Get detailed AI insights on your games! Paste your PGN, Lichess
@@ -737,9 +831,9 @@ export default function PGNUploaderPage() {
         </Card>
       )}
 
-      <Stack direction={{ xs: "column", lg: "row" }} spacing={4}>
+      <Stack direction={{ xs: "column", lg: "row" }} spacing={{ xs: 2, sm: 3, lg: 4 }}>
         {!inputsVisible && (
-          <Box sx={{ flex: "0 0 auto" }}>
+          <Box sx={{ flex: "0 0 auto", width: { xs: "100%", lg: "auto" }, display: "flex", justifyContent: "center" }}>
             <Stack spacing={3} alignItems="center">
               <AiChessboardPanel
                 game={game}
@@ -860,8 +954,8 @@ export default function PGNUploaderPage() {
         )}
 
         {!inputsVisible && (
-          <Box sx={{ flex: 1 }}>
-            <Stack spacing={3}>
+          <Box sx={{ flex: 1, minWidth: 0, width: "100%" }}>
+            <Stack spacing={{ xs: 2, sm: 3 }}>
               {moves.length > 0 && (
                 <ChessterAnalysisView
                   isGameReviewMode={true}
@@ -924,8 +1018,7 @@ export default function PGNUploaderPage() {
                 <ResizableChapterSelector
                   chapters={chapters}
                   onChapterSelect={(pgn) => {
-                    setPgnText(pgn);
-                    setTimeout(() => loadPGN(), 0);
+                    loadPGN(pgn);
                   }}
                 />
               )}

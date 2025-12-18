@@ -2,7 +2,7 @@
  * Move validation using chess.js
  */
 
-import { Chess } from 'chess.js';
+import { Chess, Square } from 'chess.js';
 
 export class MoveValidator {
   private chess: Chess;
@@ -45,7 +45,7 @@ export class MoveValidator {
    * Get all legal moves for a specific square
    */
   getLegalMoves(square: string): string[] {
-    const moves = this.chess.moves({ square, verbose: true });
+    const moves = this.chess.moves({ square: square as Square, verbose: true });
     return moves.map((m) => m.to);
   }
 
@@ -96,7 +96,7 @@ export class MoveValidator {
    */
   getPiece(square: string): { type: string; color: string } | null {
     const piece = this.chess.get(square as any);
-    return piece;
+    return piece || null;
   }
 }
 

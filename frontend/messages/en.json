@@ -1,0 +1,133 @@
+{
+  "common": {
+    "chesster": "Chesster",
+    "getStarted": "GET STARTED",
+    "signIn": "SIGN IN",
+    "signUp": "SIGN UP",
+    "dashboard": "Dashboard",
+    "loading": "Loading...",
+    "error": "Error",
+    "language": "EN"
+  },
+  "landing": {
+    "mascot": "Mascot",
+    "letsLearn": "Let's learn!",
+    "heroTitle": "the free, fun, and effective way to master chess!",
+    "heroSubtitle": "Learn chess with AI-powered lessons, puzzles, and personalized coaching.",
+    "alreadyHaveAccount": "I ALREADY HAVE AN ACCOUNT",
+    "features": {
+      "puzzles": "Puzzles",
+      "puzzlesDesc": "Daily tactical challenges",
+      "courses": "Courses",
+      "coursesDesc": "Structured learning paths",
+      "aiAnalysis": "AI Analysis",
+      "aiAnalysisDesc": "Get instant feedback",
+      "play": "Play",
+      "playDesc": "Test your skills"
+    },
+    "whyWorks": {
+      "title": "why chesster works",
+      "subtitle": "Our scientifically-proven methods help you learn chess faster and retain knowledge longer.",
+      "effective": "effective",
+      "effectiveDesc": "Our lessons are designed by chess masters and backed by learning science. You'll see real improvement in your game.",
+      "funEngaging": "fun & engaging",
+      "funEngagingDesc": "Earn XP, unlock achievements, and compete with friends. Learning chess has never been this enjoyable.",
+      "personalized": "personalized",
+      "personalizedDesc": "AI adapts to your skill level and learning style. Every lesson is tailored specifically for you.",
+      "free": "free",
+      "freeDesc": "Access all core features for free. Premium is optional and only for those who want extra perks."
+    },
+    "stats": {
+      "activeLearners": "Active learners",
+      "lessons": "Lessons",
+      "puzzles": "Puzzles",
+      "satisfaction": "Satisfaction"
+    },
+    "howItWorks": {
+      "title": "start learning in minutes",
+      "step1Title": "Create your free account",
+      "step1Desc": "Sign up in seconds. No credit card required. Start your chess journey immediately.",
+      "step2Title": "Take a quick assessment",
+      "step2Desc": "Our AI evaluates your current skill level to personalize your learning path.",
+      "step3Title": "Learn and improve daily",
+      "step3Desc": "Complete bite-sized lessons, solve puzzles, and track your progress. Just 15 minutes a day!"
+    },
+    "explore": {
+      "title": "explore chesster",
+      "coursesTitle": "Courses",
+      "coursesDesc": "Structured lessons from beginner to master",
+      "puzzlesTitle": "Puzzles",
+      "puzzlesDesc": "Sharpen your tactics with daily challenges",
+      "analysisTitle": "Analysis",
+      "analysisDesc": "Deep dive into any position with AI",
+      "gameReviewTitle": "Game Review",
+      "gameReviewDesc": "Learn from your games with AI feedback"
+    },
+    "testimonials": {
+      "title": "loved by chess players",
+      "quote1": "I went from 800 to 1400 rating in just 3 months!",
+      "name1": "Alex M.",
+      "rating1": "1400",
+      "quote2": "The AI tutor explains concepts better than any book I've read.",
+      "name2": "Sarah K.",
+      "rating2": "1200",
+      "quote3": "Finally, a chess app that makes learning fun and not intimidating.",
+      "name3": "Mike R.",
+      "rating3": "1600",
+      "ratingLabel": "Rating"
+    },
+    "cta": {
+      "title": "ready to become a chess master?",
+      "subtitle": "Join our community of learners and start your journey today. It's free!",
+      "button": "GET STARTED FOR FREE"
+    },
+    "footer": {
+      "tagline": "The free, fun, and effective way to learn chess.",
+      "products": "Products",
+      "courses": "Courses",
+      "puzzles": "Puzzles",
+      "analysis": "Analysis",
+      "gameReview": "Game Review",
+      "company": "Company",
+      "about": "About",
+      "careers": "Careers",
+      "blog": "Blog",
+      "press": "Press",
+      "connect": "Connect",
+      "copyright": "© 2024 Chesster. All rights reserved.",
+      "privacy": "Privacy",
+      "terms": "Terms",
+      "cookies": "Cookies"
+    }
+  },
+  "auth": {
+    "signUpTitle": "Create Account",
+    "signInTitle": "Welcome Back",
+    "noAccount": "Don't have an account?",
+    "haveAccount": "Already have an account?"
+  },
+  "dashboard": {
+    "analysisToolsTitle": "Chess Analysis Tools",
+    "analysisToolsSubtitle": "Powerful AI-powered tools to analyze positions, games, and solve puzzles",
+    "positionAnalysis": "Position Analysis",
+    "positionAnalysisDesc": "Analyze any chess position with Stockfish engine and AI coaching",
+    "gameAnalysis": "Game Analysis",
+    "gameAnalysisDesc": "Upload and analyze your complete games with detailed insights",
+    "chessPuzzles": "Chess Puzzles",
+    "chessPuzzlesDesc": "Solve tactical puzzles to improve your calculation skills",
+    "learningJourney": "Your Learning Journey",
+    "learningJourneySubtitle": "Structured courses with AI tutoring to master chess fundamentals",
+    "startLearning": "Start Learning",
+    "noCourses": "No learning courses available yet.",
+    "checkBack": "Check back soon for new content!",
+    "errorLoading": "Error loading courses",
+    "levels": {
+      "beginner": "beginner",
+      "intermediate": "intermediate",
+      "advanced": "advanced"
+    }
+  },
+  "navbar": {
+    "title": "Chess Learning Platform"
+  }
+}

@@ -123,6 +123,13 @@ try:
 except ImportError as e:
     logger.warning(f"⚠️  Could not import chat API: {e}")
 
+try:
+    from api.puzzles import puzzles_bp
+    app.register_blueprint(puzzles_bp)
+    logger.info("✅ Puzzles API registered (multi-puzzle lessons)")
+except ImportError as e:
+    logger.warning(f"⚠️  Could not import puzzles API: {e}")
+
 # Phase 2: SocketIO and RAG pipeline (commented out for Phase 1)
 # socketio = SocketIO(app, cors_allowed_origins="*")
 # user_sessions = {}

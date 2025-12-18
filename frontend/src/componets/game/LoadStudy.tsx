@@ -75,16 +75,34 @@ function LoadStudy({setChapters, setInputsVisible}: GameLoaderProp) {
           const idMatch = studyUrl.match(/study\/([a-zA-Z0-9]+)/);
           if (!idMatch) return alert("Invalid study URL");
 
-          const res = await fetch(
-            `https://lichess.org/api/study/${idMatch[1]}.pgn`
-          );
-          const text = await res.text();
-          const parsed = parsePgnChapters(text);
-          if (parsed.length === 0) return alert("No chapters found");
+          try {
+            const res = await fetch(
+              `https://lichess.org/api/study/${idMatch[1]}.pgn`
+            );
 
-          setChapters(parsed);
+            if (!res.ok) {
+              if (res.status === 404) {
+                return alert("Study not found. Please check the URL.");
+              }
+              return alert(`Failed to load study: ${res.status} ${res.statusText}`);
+            }
 
-          setInputsVisible(false);
+            const text = await res.text();
+
+            // Check if response is HTML (error page) instead of PGN
+            if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+              return alert("This study is private or does not exist. Please use a public study URL.");
+            }
+
+            const parsed = parsePgnChapters(text);
+            if (parsed.length === 0) return alert("No chapters found in this study");
+
+            setChapters(parsed);
+            setInputsVisible(false);
+          } catch (error) {
+            console.error("Error loading study:", error);
+            alert("Failed to load study. Please check your connection and try again.");
+          }
         }}
       >
         Load Study

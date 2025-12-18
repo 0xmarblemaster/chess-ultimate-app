@@ -121,6 +121,9 @@ export default function AiChessboardPanel({
   // Fix hydration mismatch by ensuring client-only rendering
   const [mounted, setMounted] = useState(false);
 
+  // Responsive board sizing
+  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
+
   const [customFen, setCustomFen] = useState("");
   const [isFlipped, setIsFlipped] = useLocalStorage<boolean>(
     "board_ui_flipped",
@@ -137,6 +140,30 @@ export default function AiChessboardPanel({
     "board_ui_size",
     DEFAULT_BOARD_SIZE
   );
+
+  // Panel dimensions - moved here so it's available before responsivePanelDimensions
+  const [panelDimensions, setPanelDimensions] = useLocalStorage<{
+    width: number;
+    height: number;
+  }>("board_ui_show_panel_dimensions", DEFAULT_BOARD_PANEL_DIMENSIONS);
+
+  // Calculate responsive board size based on window width
+  const responsiveBoardSize = useMemo(() => {
+    if (windowWidth < 400) return Math.min(windowWidth - 40, 320); // Very small phones
+    if (windowWidth < 600) return Math.min(windowWidth - 32, 360); // Small phones
+    if (windowWidth < 768) return Math.min(windowWidth - 48, 420); // Large phones
+    if (windowWidth < 1024) return Math.min(windowWidth - 64, 480); // Tablets
+    return boardSize; // Desktop - use user preference
+  }, [windowWidth, boardSize]);
+
+  // Calculate responsive panel dimensions
+  const responsivePanelDimensions = useMemo(() => {
+    if (windowWidth < 400) return { width: windowWidth - 16, height: 'auto' };
+    if (windowWidth < 600) return { width: windowWidth - 16, height: 'auto' };
+    if (windowWidth < 768) return { width: windowWidth - 32, height: 'auto' };
+    if (windowWidth < 1024) return { width: Math.min(windowWidth - 48, 520), height: 'auto' };
+    return { width: panelDimensions.width, height: panelDimensions.height };
+  }, [windowWidth, panelDimensions]);
   const [pieceType, setPieceType] = useLocalStorage<string>(
     "board_piece_type",
     "Cburnett"
@@ -178,10 +205,6 @@ export default function AiChessboardPanel({
     );
 
   // Resize functionality
-  const [panelDimensions, setPanelDimensions] = useLocalStorage<{
-    width: number;
-    height: number;
-  }>("board_ui_show_panel_dimensions", DEFAULT_BOARD_PANEL_DIMENSIONS);
   const [isResizing, setIsResizing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const startPosRef = useRef({ x: 0, y: 0 });
@@ -302,6 +325,19 @@ export default function AiChessboardPanel({
   // Fix hydration mismatch - only render after client-side mount
   useEffect(() => {
     setMounted(true);
+  }, []);
+
+  // Responsive resize listener
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
+    };
+
+    window.addEventListener('resize', handleResize);
+    // Set initial width after mount
+    handleResize();
+
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   // Effect to update game state when moves change
@@ -790,8 +826,13 @@ export default function AiChessboardPanel({
     <Box
       ref={containerRef}
       sx={{
-        width: `${panelDimensions.width}px`,
-        height: `${panelDimensions.height}px`,
+        width: typeof responsivePanelDimensions.width === 'number'
+          ? `${responsivePanelDimensions.width}px`
+          : responsivePanelDimensions.width,
+        height: responsivePanelDimensions.height === 'auto'
+          ? 'auto'
+          : `${responsivePanelDimensions.height}px`,
+        maxWidth: '100%',
         position: "relative",
         border: "1px solid #444",
         borderRadius: 2,
@@ -872,9 +913,9 @@ export default function AiChessboardPanel({
         <Box sx={{ display: "flex", justifyContent: "center", mb: 2, gap: 1 }}>
           {showEvalBar && !puzzleMode && (
             <EvalBar
-              lineEval={stockfishAnalysisResult?.lines[0]} 
+              lineEval={stockfishAnalysisResult?.lines[0]}
               boardOrientation={getBoardOrientation()}
-              height={boardSize} // Match the board height
+              height={responsiveBoardSize} // Match the board height
             />
           )}
           <Chessboard
@@ -898,7 +939,7 @@ export default function AiChessboardPanel({
                 getCurrentThemeColors(boardTheme).lightSquareColor,
             }}
             customArrows={customArrows}
-            boardWidth={boardSize}
+            boardWidth={responsiveBoardSize}
             boardOrientation={getBoardOrientation()}
             customPieces={getCustomPieces(pieceType)}
           />
@@ -1159,47 +1200,53 @@ export default function AiChessboardPanel({
         {(puzzleMode || playMode) && <Divider sx={{ mt: 2 }} />}
       </Box>
 
-      {/* Resize Handle */}
-      <Box
-        onMouseDown={handleMouseDown}
-        sx={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          width: "16px",
-          height: "16px",
-          cursor: "nw-resize",
-          backgroundColor: "#555",
-          borderTopRightRadius: "3px",
-          opacity: 0.7,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          "&:hover": {
-            opacity: 1,
-            backgroundColor: "#666",
-          },
-        }}
-      >
-        <OpenInFullIcon
+      {/* Resize Handle - hidden on mobile */}
+      {windowWidth >= 1024 && (
+        <Box
+          onMouseDown={handleMouseDown}
           sx={{
-            fontSize: "10px",
-            color: "#ccc",
-            transform: "rotate(180deg)",
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            width: "16px",
+            height: "16px",
+            cursor: "nw-resize",
+            backgroundColor: "#555",
+            borderTopRightRadius: "3px",
+            opacity: 0.7,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            "&:hover": {
+              opacity: 1,
+              backgroundColor: "#666",
+            },
           }}
-        />
-      </Box>
+        >
+          <OpenInFullIcon
+            sx={{
+              fontSize: "10px",
+              color: "#ccc",
+              transform: "rotate(180deg)",
+            }}
+          />
+        </Box>
+      )}
 
       {/* Settings Dialog */}
       <Dialog
         open={settingsOpen}
         onClose={handleSettingsClose}
+        fullWidth
+        maxWidth="sm"
         PaperProps={{
           sx: {
             backgroundColor: "#1a1a1a",
             color: "white",
-            minWidth: 450,
+            minWidth: { xs: "90vw", sm: 400, md: 450 },
+            maxWidth: { xs: "95vw", sm: 500 },
             maxHeight: "90vh",
+            m: { xs: 1, sm: 2 },
           },
         }}
       >

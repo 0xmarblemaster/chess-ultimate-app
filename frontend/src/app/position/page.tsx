@@ -3,23 +3,37 @@
 import { useState, useEffect, useRef } from "react";
 import { Box, Stack } from "@mui/material";
 import { Chess } from "chess.js";
-import AiChessboardPanel from "@/componets/analysis/AiChessboard";
+import dynamic from "next/dynamic";
 import useChesster from "@/hooks/useChesster";
 // Clerk authentication disabled for local development
 // import { useSession } from "@clerk/nextjs";
 import { purpleTheme } from "@/theme/theme";
 import Loader from "@/componets/loading/Loader";
 import Warning from "@/componets/loading/SignUpWarning";
-import ChessterAnalysisView from "@/componets/analysis/ChessterAnalysisView";
-import ChatSidebar from "@/componets/ChatSidebar";
 import { useChatSessions } from "@/hooks/useChatSessions";
+
+// Dynamic imports to avoid SSR issues with chess engine
+const AiChessboardPanel = dynamic(() => import("@/componets/analysis/AiChessboard"), { ssr: false });
+const ChessterAnalysisView = dynamic(() => import("@/componets/analysis/ChessterAnalysisView"), { ssr: false });
+const ChatSidebar = dynamic(() => import("@/componets/ChatSidebar"), { ssr: false });
 
 export default function PositionPage() {
   // const session = useSession();
   // Simulated session for no-auth mode
   const session = { isLoaded: true, isSignedIn: true };
-  const [game, setGame] = useState(new Chess());
-  const [fen, setFen] = useState(game.fen());
+
+  // Client-side only flag
+  const [mounted, setMounted] = useState(false);
+
+  // Lazy initialization to avoid SSR issues with chess.js
+  const [game, setGame] = useState<Chess | null>(null);
+  const [fen, setFen] = useState('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
+
+  // Initialize chess on client only
+  useEffect(() => {
+    setGame(new Chess());
+    setMounted(true);
+  }, []);
 
   // Ref to track if we're loading messages from session (prevent save loop)
   const isLoadingFromSession = useRef(false);
@@ -166,7 +180,7 @@ export default function PositionPage() {
     }
   }, [fen, currentSessionId, updateSessionFen]);
 
-  if (!session.isLoaded) {
+  if (!session.isLoaded || !mounted || !game) {
     return <Loader />;
   }
 
@@ -207,14 +221,14 @@ export default function PositionPage() {
       <Box
         sx={{
           flex: 1,
-          p: 4,
+          p: { xs: 1, sm: 2, md: 3, lg: 4 },
           minWidth: 0,
           overflow: "hidden",
         }}
       >
-        <Stack direction={{ xs: "column", lg: "row" }} spacing={4}>
+        <Stack direction={{ xs: "column", lg: "row" }} spacing={{ xs: 2, sm: 3, lg: 4 }}>
         {/* Chessboard Section */}
-        <Box sx={{ flex: "0 0 auto" }}>
+        <Box sx={{ flex: "0 0 auto", width: { xs: "100%", lg: "auto" }, display: "flex", justifyContent: "center" }}>
           <AiChessboardPanel
             game={game}
             fen={fen}
@@ -235,7 +249,7 @@ export default function PositionPage() {
           />
         </Box>
 
-        <Box sx={{ flex: 1, minWidth: 0, maxWidth: "100%" }}>
+        <Box sx={{ flex: 1, minWidth: 0, width: "100%" }}>
           <ChessterAnalysisView
             isGameReviewMode={false}
             stockfishAnalysisResult={stockfishAnalysisResult}

@@ -3,11 +3,14 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth, UserButton } from "@clerk/nextjs"
+import { useLocale } from 'next-intl'
+import LanguageSwitcher from "@/components/LanguageSwitcher"
 
 export default function NavBar() {
   const [mounted, setMounted] = useState(false)
   const { isSignedIn } = useAuth()
   const router = useRouter()
+  const locale = useLocale()
 
   // Prevent hydration mismatch
   useEffect(() => {
@@ -16,10 +19,10 @@ export default function NavBar() {
 
   if (!mounted) {
     return (
-      <nav className="bg-gray-900 text-white" suppressHydrationWarning>
-        <div className="container mx-auto px-4 py-4">
+      <nav className="bg-white border-b border-gray-100" suppressHydrationWarning>
+        <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
-            <div className="text-xl font-bold">Chess Learning Platform</div>
+            <div className="text-xl font-bold text-gray-900">♟️ Chesster</div>
             <div className="h-8 w-24"></div>
           </div>
         </div>
@@ -28,48 +31,29 @@ export default function NavBar() {
   }
 
   return (
-    <nav className="bg-gray-900 text-white shadow-lg">
-      <div className="container mx-auto px-4 py-4">
+    <nav className="bg-white border-b border-gray-100">
+      <div className="container mx-auto px-4 py-3">
         <div className="flex items-center justify-between">
+          {/* Logo - always clickable */}
           <button
-            onClick={() => router.push("/")}
-            className="text-xl font-bold hover:text-purple-400 transition-colors"
+            onClick={() => router.push(isSignedIn ? "/dashboard" : "/")}
+            className="text-xl font-bold text-gray-900 hover:text-purple-600 transition-colors flex items-center gap-1"
           >
-            ♟️ Chess Learning Platform
+            ♟️ Chesster
           </button>
 
-          <div className="flex items-center gap-6">
-            {isSignedIn ? (
-              <>
-                <button
-                  onClick={() => router.push("/dashboard")}
-                  className="hover:text-purple-400 transition-colors"
-                >
-                  Dashboard
-                </button>
-                <UserButton
-                  appearance={{
-                    elements: {
-                      avatarBox: "w-10 h-10"
-                    }
-                  }}
-                />
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={() => router.push("/sign-in")}
-                  className="hover:text-purple-400 transition-colors"
-                >
-                  Sign In
-                </button>
-                <button
-                  onClick={() => router.push("/sign-up")}
-                  className="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg transition-colors"
-                >
-                  Get Started
-                </button>
-              </>
+          {/* Right side: Language Switcher + User Avatar (if signed in) */}
+          <div className="flex items-center gap-3">
+            <LanguageSwitcher currentLocale={locale} variant="minimal" />
+
+            {isSignedIn && (
+              <UserButton
+                appearance={{
+                  elements: {
+                    avatarBox: "w-9 h-9"
+                  }
+                }}
+              />
             )}
           </div>
         </div>

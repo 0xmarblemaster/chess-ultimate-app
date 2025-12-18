@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import {
   Box,
   CircularProgress,
@@ -27,14 +27,15 @@ import {
   SelectChangeEvent,
 } from "@mui/material";
 import { grey } from "@mui/material/colors";
-import { Chess } from "chess.js";
-import { useCallback, useEffect, useMemo } from "react";
-import { Square } from "chess.js";
+import { Chess, Square } from "chess.js";
+import dynamic from "next/dynamic";
 import { TabPanel } from "@/componets/tabs/tab";
 import StockfishAnalysisTab from "@/componets/tabs/StockfishTab";
 import ChatTab from "@/componets/tabs/ChatTab";
-import AiChessboardPanel from "@/componets/analysis/AiChessboard";
 import useChesster from "@/hooks/useChesster";
+
+// Dynamic import to avoid SSR issues with chess engine
+const AiChessboardPanel = dynamic(() => import("@/componets/analysis/AiChessboard"), { ssr: false });
 // Clerk authentication disabled for local development
 // import { useSession } from "@clerk/nextjs";
 import { purpleTheme } from "@/theme/theme";
@@ -59,9 +60,12 @@ export default function PuzzlePage() {
   // Simulated session for no-auth mode
   const session = { isLoaded: true, isSignedIn: true };
 
+  // Client-side only flag
+  const [mounted, setMounted] = useState(false);
+
   const [puzzleData, setPuzzleData] = useState<PuzzleData | null>(null);
   const [puzzleQuery, setPuzzleQuery] = useState<PuzzleQuery | null>(null);
- 
+
   const [puzzleQueryString, setPuzzleQueryString] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,9 +75,15 @@ export default function PuzzlePage() {
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
   const [quickTheme, setQuickTheme] = useState<string>("");
 
-  // Game state
-  const [game, setGame] = useState(new Chess());
+  // Game state - lazy initialization
+  const [game, setGame] = useState<Chess | null>(null);
   const [fen, setFen] = useState("");
+
+  // Initialize on client only
+  useEffect(() => {
+    setGame(new Chess());
+    setMounted(true);
+  }, []);
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
   const [legalMoves, setLegalMoves] = useState<string[]>([]);
 
@@ -450,7 +460,7 @@ export default function PuzzlePage() {
   // Handle square click
   const handleSquareClick = useCallback(
     (square: string) => {
-      if (puzzleComplete || puzzleFailed || showingSolution) return;
+      if (puzzleComplete || puzzleFailed || showingSolution || !game) return;
 
       if (selectedSquare === square) {
         setSelectedSquare(null);
@@ -506,7 +516,7 @@ export default function PuzzlePage() {
     }
 
     // Apply legal move indicators
-    if (!showingSolution) {
+    if (!showingSolution && game) {
       legalMoves.forEach((square) => {
         const piece = game.get(square as Square);
         // Use backgroundImage instead of background to avoid conflict
@@ -581,11 +591,11 @@ export default function PuzzlePage() {
     setMoveSquares({});
   }, [puzzleData]);
 
-  
-   if (!session.isLoaded) {
+
+   if (!session.isLoaded || !mounted || !game) {
       return <Loader />;
     }
-  
+
     if (!session.isSignedIn) {
       return <Warning />;
     }
@@ -593,9 +603,9 @@ export default function PuzzlePage() {
 
   return (
     <>
-      <Box sx={{ p: 4, backgroundColor: purpleTheme.background.main, minHeight: "100vh" }} >
-        <Stack direction={{ xs: "column", md: "row", }} spacing={4} >
-           <Box sx={{ flex: '0 0 auto' }}>
+      <Box sx={{ p: { xs: 1, sm: 2, md: 3, lg: 4 }, backgroundColor: purpleTheme.background.main, minHeight: "100vh" }} >
+        <Stack direction={{ xs: "column", lg: "row" }} spacing={{ xs: 2, sm: 3, lg: 4 }} >
+           <Box sx={{ flex: '0 0 auto', width: { xs: "100%", lg: "auto" }, display: "flex", justifyContent: "center" }}>
              <AiChessboardPanel
             game={game}
             fen={fen}
@@ -631,13 +641,15 @@ export default function PuzzlePage() {
           <Paper
             elevation={3}
             sx={{
-              p: 3,
+              p: { xs: 1.5, sm: 2, md: 3 },
               flex: 1,
-              minHeight: 300,
+              minHeight: { xs: 200, sm: 300 },
               color: "white",
               backgroundColor: purpleTheme.background.paper,
-              maxHeight: "100vh",
+              maxHeight: { xs: "none", lg: "100vh" },
               overflow: "auto",
+              width: "100%",
+              minWidth: 0,
             }}
           >
             <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
