@@ -1,0 +1,229 @@
+'use client'
+
+import { useEffect, useState, useMemo } from 'react'
+import { useAuth, SignInButton } from '@clerk/nextjs'
+import { useTranslations } from 'next-intl'
+import LoadingScreen from '@/components/LoadingScreen'
+import { LessonPath } from '@/components/gamification/LessonPath'
+import { LevelProgressCard } from '@/components/gamification/LevelBadge'
+import { SpeechBubble } from '@/components/mascot/SpeechBubble'
+
+interface Course {
+  id: string
+  title: string
+  description: string
+  level: 'beginner' | 'intermediate' | 'advanced'
+  order_index: number
+  slug?: string
+}
+
+interface CourseProgress {
+  courseId: string
+  completedLessons: number
+  totalLessons: number
+  progress: number
+}
+
+// Generate slug from title if not available
+function generateSlug(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
+export default function LearnPage() {
+  const { getToken, isSignedIn, isLoaded } = useAuth()
+  const t = useTranslations()
+  const [courses, setCourses] = useState<Course[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  // Gamification state (mock data for now)
+  const [userXP] = useState(450)
+  const [courseProgress, setCourseProgress] = useState<Record<string, CourseProgress>>({})
+
+  useEffect(() => {
+    async function fetchCourses() {
+      if (!isLoaded) return
+
+      if (!isSignedIn) {
+        setLoading(false)
+        return
+      }
+
+      try {
+        const token = await getToken()
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/courses`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch courses')
+        }
+
+        const data = await response.json()
+        setCourses(data)
+
+        // Mock progress data - will be replaced with real API
+        const mockProgress: Record<string, CourseProgress> = {}
+        data.forEach((course: Course, index: number) => {
+          mockProgress[course.id] = {
+            courseId: course.id,
+            completedLessons: index === 0 ? 3 : 0,
+            totalLessons: 10,
+            progress: index === 0 ? 30 : 0
+          }
+        })
+        setCourseProgress(mockProgress)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Unknown error')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchCourses()
+  }, [getToken, isLoaded, isSignedIn])
+
+  // Transform courses for LessonPath component
+  const lessonPathCourses = useMemo(() => {
+    return courses
+      .sort((a, b) => a.order_index - b.order_index)
+      .map((course, index) => {
+        const progress = courseProgress[course.id]
+        const isLocked = index > 0 && (courseProgress[courses[index - 1]?.id]?.progress || 0) < 100
+
+        return {
+          id: course.id,
+          slug: course.slug || generateSlug(course.title),
+          title: course.title,
+          level: course.level,
+          progress: progress?.progress || 0,
+          isLocked,
+          lessons: [] // Lessons loaded on course page
+        }
+      })
+  }, [courses, courseProgress])
+
+  // Group courses by level
+  const coursesByLevel = useMemo(() => {
+    const grouped = {
+      beginner: lessonPathCourses.filter(c => c.level === 'beginner'),
+      intermediate: lessonPathCourses.filter(c => c.level === 'intermediate'),
+      advanced: lessonPathCourses.filter(c => c.level === 'advanced'),
+    }
+    return grouped
+  }, [lessonPathCourses])
+
+  if (loading || !isLoaded) {
+    return <LoadingScreen isVisible={true} />
+  }
+
+  if (!isSignedIn) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md text-center">
+          <div className="text-6xl mb-4">♟️</div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Start Your Chess Journey</h1>
+          <p className="text-gray-600 mb-6">
+            Sign in to access our structured learning courses and track your progress.
+          </p>
+          <SignInButton mode="modal">
+            <button className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 px-6 rounded-xl transition-colors">
+              Sign In to Learn
+            </button>
+          </SignInButton>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-gradient-to-br from-purple-600 to-purple-800 text-white">
+        <div className="container mx-auto px-4 py-6">
+          <h1 className="text-2xl font-bold">Learning Path</h1>
+          <p className="text-purple-200 mt-1">Master chess step by step</p>
+        </div>
+      </div>
+
+      <div className="container mx-auto px-4 py-6">
+        {/* Mascot welcome */}
+        <div className="mb-6">
+          <SpeechBubble mood="encouraging" mascotSize="sm">
+            Follow the path to become a chess master! Complete each course to unlock the next level.
+          </SpeechBubble>
+        </div>
+
+        {/* Level Progress */}
+        <div className="mb-8">
+          <LevelProgressCard xp={userXP} />
+        </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-6">
+            {error}
+          </div>
+        )}
+
+        {/* Course Path */}
+        {lessonPathCourses.length > 0 ? (
+          <div className="space-y-8">
+            {/* Beginner Section */}
+            {coursesByLevel.beginner.length > 0 && (
+              <div className="bg-white rounded-2xl shadow-md p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="w-3 h-3 bg-green-500 rounded-full"></span>
+                  <h2 className="text-lg font-bold text-gray-900">Beginner</h2>
+                  <span className="text-sm text-gray-500">
+                    ({coursesByLevel.beginner.filter(c => c.progress === 100).length}/{coursesByLevel.beginner.length} complete)
+                  </span>
+                </div>
+                <LessonPath courses={coursesByLevel.beginner} />
+              </div>
+            )}
+
+            {/* Intermediate Section */}
+            {coursesByLevel.intermediate.length > 0 && (
+              <div className="bg-white rounded-2xl shadow-md p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="w-3 h-3 bg-amber-500 rounded-full"></span>
+                  <h2 className="text-lg font-bold text-gray-900">Intermediate</h2>
+                  <span className="text-sm text-gray-500">
+                    ({coursesByLevel.intermediate.filter(c => c.progress === 100).length}/{coursesByLevel.intermediate.length} complete)
+                  </span>
+                </div>
+                <LessonPath courses={coursesByLevel.intermediate} />
+              </div>
+            )}
+
+            {/* Advanced Section */}
+            {coursesByLevel.advanced.length > 0 && (
+              <div className="bg-white rounded-2xl shadow-md p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="w-3 h-3 bg-red-500 rounded-full"></span>
+                  <h2 className="text-lg font-bold text-gray-900">Advanced</h2>
+                  <span className="text-sm text-gray-500">
+                    ({coursesByLevel.advanced.filter(c => c.progress === 100).length}/{coursesByLevel.advanced.length} complete)
+                  </span>
+                </div>
+                <LessonPath courses={coursesByLevel.advanced} />
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-center text-gray-500 bg-white rounded-2xl p-8">
+            <p className="text-lg">{t('dashboard.noCourses')}</p>
+            <p className="mt-2 text-sm">{t('dashboard.checkBack')}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

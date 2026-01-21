@@ -6,6 +6,7 @@ import { getLocale, getMessages } from 'next-intl/server';
 import "./globals.css";
 import "../styles/chess-animations.css";
 import NavBar from "@/componets/Navbar";
+import { BottomNavigation, BottomNavSpacer } from "@/components/ui/BottomNavigation";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -108,7 +109,11 @@ export default async function RootLayout({
         <body className={`${geistSans.variable} ${geistMono.variable} antialiased`} suppressHydrationWarning>
           <NextIntlClientProvider messages={messages}>
             <NavBar/>
-            {children}
+            <main className="pb-16 md:pb-0">
+              {children}
+            </main>
+            <BottomNavigation />
+            <BottomNavSpacer />
           </NextIntlClientProvider>
         </body>
       </html>

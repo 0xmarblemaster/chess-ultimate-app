@@ -8,6 +8,9 @@ import { AnimatedChessBoard, PuzzleSequence } from '@/components/chess'
 import LoadingScreen from '@/components/LoadingScreen'
 import Link from 'next/link'
 import { ChevronDown, ChevronUp, MessageCircle } from 'lucide-react'
+import { XPGain } from '@/components/gamification/XPDisplay'
+import { CelebrationOverlay, QuickCelebration } from '@/components/gamification/CelebrationOverlay'
+import { InlineTip } from '@/components/mascot/SpeechBubble'
 
 interface ArrowData {
   from: string
@@ -59,6 +62,13 @@ export default function LessonPage() {
   const [error, setError] = useState<string | null>(null)
   const [isChatExpanded, setIsChatExpanded] = useState(true)
   const chatContentRef = useRef<HTMLDivElement>(null)
+
+  // Gamification state
+  const [showXPGain, setShowXPGain] = useState(false)
+  const [xpEarned, setXpEarned] = useState(0)
+  const [showCelebration, setShowCelebration] = useState(false)
+  const [showQuickCelebration, setShowQuickCelebration] = useState(false)
+  const [quickCelebrationMessage, setQuickCelebrationMessage] = useState('')
 
   useEffect(() => {
     async function fetchLesson() {
@@ -177,9 +187,21 @@ export default function LessonPage() {
           body: JSON.stringify({ status: 'completed' })
         }
       )
+
+      // Trigger XP gain animation
+      const earnedXP = lesson?.lesson_type === 'exercise' ? 15 : 10
+      setXpEarned(earnedXP)
+      setShowXPGain(true)
     } catch (err) {
       console.error('Failed to mark lesson complete:', err)
     }
+  }
+
+  // Handle correct move in exercise
+  const handleCorrectMove = async () => {
+    setQuickCelebrationMessage('Great move! 🎯')
+    setShowQuickCelebration(true)
+    await markLessonComplete()
   }
 
   const completeLessonAndRedirect = async () => {
@@ -188,12 +210,18 @@ export default function LessonPage() {
     setCompletingLesson(true)
     try {
       await markLessonComplete()
-      router.push(`/learn/${courseSlug}`)
+      // Show celebration overlay before redirecting
+      setShowCelebration(true)
     } catch (err) {
       console.error('Failed to complete lesson:', err)
-    } finally {
       setCompletingLesson(false)
     }
+  }
+
+  const handleCelebrationClose = () => {
+    setShowCelebration(false)
+    setCompletingLesson(false)
+    router.push(`/learn/${courseSlug}`)
   }
 
   if (loading || !isLoaded) {
@@ -281,27 +309,27 @@ export default function LessonPage() {
           {/* Single puzzle lesson - show AnimatedChessBoard directly */}
           {!lesson.has_multiple_puzzles && lesson.exercise_fen && (lesson.solution_move || lesson.exercise_solution?.targets) && (
             <div className="mb-6">
-              <h3 className="font-semibold mb-4">Interactive Exercise:</h3>
-              <AnimatedChessBoard
-                fen={lesson.exercise_fen}
-                solutionMove={lesson.solution_move || undefined}
-                targetSquares={lesson.exercise_solution?.targets}
-                onCorrectMove={markLessonComplete}
-                onIncorrectMove={(move) => {
-                  console.log('Incorrect move attempted:', move)
-                }}
-                showHints={true}
-                enableAnimations={true}
-                arrowFromSquare={lesson.exercise_solution?.arrow?.from}
-                arrowPath={lesson.exercise_solution?.arrow?.path}
-                showArrowsOverlay={!lesson.exercise_solution?.targets}
-                showStar={false}
-                strictValidation={lesson.exercise_type === 'one_move_puzzle'}
-              />
+              <InlineTip message="Find the best move! Take your time to analyze the position." mood="thinking" variant="compact" />
+              <div className="mt-4">
+                <AnimatedChessBoard
+                  fen={lesson.exercise_fen}
+                  solutionMove={lesson.solution_move || undefined}
+                  targetSquares={lesson.exercise_solution?.targets}
+                  onCorrectMove={handleCorrectMove}
+                  onIncorrectMove={(move) => {
+                    console.log('Incorrect move attempted:', move)
+                  }}
+                  showHints={true}
+                  enableAnimations={true}
+                  arrowFromSquare={lesson.exercise_solution?.arrow?.from}
+                  arrowPath={lesson.exercise_solution?.arrow?.path}
+                  showArrowsOverlay={!lesson.exercise_solution?.targets}
+                  showStar={false}
+                  strictValidation={lesson.exercise_type === 'one_move_puzzle'}
+                />
+              </div>
               {lesson.hint_text && (
-                <p className="text-sm text-gray-600 dark:text-gray-400 mt-4">
-                  💡 Hint: {lesson.hint_text}
-                </p>
+                <InlineTip message={lesson.hint_text} mood="happy" variant="highlight" />
               )}
             </div>
           )}
@@ -309,9 +337,24 @@ export default function LessonPage() {
           <button
             onClick={completeLessonAndRedirect}
             disabled={completingLesson}
-            className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded transition-colors disabled:opacity-50"
+            className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-semibold py-4 px-6 rounded-xl transition-all shadow-lg hover:shadow-xl active:scale-98 disabled:opacity-50 flex items-center justify-center gap-3"
           >
-            {completingLesson ? 'Completing...' : 'Complete Lesson'}
+            {completingLesson ? (
+              <>
+                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Completing...
+              </>
+            ) : (
+              <>
+                <span>Complete Lesson</span>
+                <span className="bg-white/20 px-2 py-0.5 rounded-full text-sm">
+                  +{lesson.lesson_type === 'exercise' ? 15 : 10} XP
+                </span>
+              </>
+            )}
           </button>
         </div>
 
@@ -403,6 +446,31 @@ export default function LessonPage() {
           </div>
         </div>
       </div>
+
+      {/* Gamification Overlays */}
+      {showXPGain && (
+        <XPGain amount={xpEarned} onComplete={() => setShowXPGain(false)} />
+      )}
+
+      {showQuickCelebration && (
+        <QuickCelebration
+          message={quickCelebrationMessage}
+          icon="✨"
+          xp={5}
+          onComplete={() => setShowQuickCelebration(false)}
+        />
+      )}
+
+      {showCelebration && (
+        <CelebrationOverlay
+          type="lessonComplete"
+          title="Lesson Complete!"
+          subtitle={`You've completed "${lesson.title}"`}
+          xpGained={xpEarned}
+          onClose={handleCelebrationClose}
+          autoClose={false}
+        />
+      )}
     </div>
   )
 }
