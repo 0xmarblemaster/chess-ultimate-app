@@ -12,7 +12,8 @@ All endpoints require Clerk authentication and enforce rate limits.
 
 import asyncio
 import logging
-from flask import Blueprint, request, jsonify, g
+import json
+from flask import Blueprint, request, jsonify, g, Response, stream_with_context
 from functools import wraps
 
 from utils.auth import verify_clerk_token, get_current_user_id
@@ -202,6 +203,163 @@ async def chat_analysis():
 
     except Exception as e:
         logger.error(f"Error in chat_analysis: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error'
+        }), 500
+
+
+@chat_bp.route('/api/chat/analysis/stream', methods=['POST'])
+@verify_clerk_token
+def chat_analysis_stream():
+    """
+    Streaming chat endpoint for position/game analysis.
+    Returns Server-Sent Events (SSE) with tokens as they arrive.
+
+    Request body: Same as /api/chat/analysis
+    {
+        "fen": "...",
+        "query": "What is the best move?",
+        "conversation_id": "optional-uuid",
+        "context_type": "position" | "game" | "general"
+    }
+
+    Response: SSE stream
+    data: {"delta": "The"}
+    data: {"delta": " best"}
+    data: {"delta": " move"}
+    ...
+    data: {"done": true, "conversation_id": "uuid", "tokens_used": 150}
+    """
+    try:
+        user_id = get_current_user_id()
+        data = request.get_json()
+
+        # Validate required fields
+        if not data or 'fen' not in data or 'query' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'Missing required fields: fen, query'
+            }), 400
+
+        fen = data['fen']
+        query = data['query'].strip()
+        conversation_id = data.get('conversation_id')
+        context_type = data.get('context_type', 'analysis')
+
+        # Validate inputs
+        if not query:
+            return jsonify({
+                'success': False,
+                'error': 'Query cannot be empty'
+            }), 400
+
+        if len(query) > 2000:
+            return jsonify({
+                'success': False,
+                'error': 'Query too long (max 2000 characters)'
+            }), 400
+
+        # Check rate limits
+        allowed, reason = rate_limiter.check_rate_limit(user_id)
+        if not allowed:
+            logger.warning(f"Rate limit exceeded for user {user_id[:8]}...: {reason}")
+            return jsonify({
+                'success': False,
+                'error': reason,
+                'rate_limited': True
+            }), 429
+
+        # Get or create conversation
+        if conversation_id:
+            # Verify user owns this conversation
+            conversations = conversation_manager.get_user_conversations(user_id, limit=100)
+            if not any(c['id'] == conversation_id for c in conversations):
+                return jsonify({
+                    'success': False,
+                    'error': 'Conversation not found or access denied'
+                }), 404
+            context = conversation_manager.get_context(conversation_id)
+        else:
+            # Create new conversation
+            conversation_id = conversation_manager.create_conversation(
+                user_id=user_id,
+                conversation_type=context_type,
+                context={'fen': fen}
+            )
+            context = []
+
+        # Save user message
+        conversation_manager.save_message(
+            conversation_id=conversation_id,
+            user_id=user_id,
+            role='user',
+            content=query,
+            fen=fen
+        )
+
+        # Build system prompt (same as non-streaming)
+        system_prompt = f"""You are a knowledgeable and friendly chess coach.
+
+Current position (FEN): {fen}
+
+Answer the user's questions about this chess position clearly and helpfully.
+Use chess notation when discussing moves. Be encouraging and educational."""
+
+        # Get the LLM client from session manager
+        llm_client = session_manager.llm_client
+
+        def generate():
+            """Generator that yields SSE-formatted tokens"""
+            full_response = ""
+            token_count = 0
+
+            try:
+                logger.info(f"Starting streaming chat: user={user_id[:8]}..., conv={conversation_id[:8]}...")
+
+                for token in llm_client.generate_stream_with_retry(query, system_prompt):
+                    full_response += token
+                    token_count += 1
+                    yield f"data: {json.dumps({'delta': token})}\n\n"
+
+                # Estimate total tokens (rough approximation)
+                tokens_used = len(full_response) // 4
+
+                # Save assistant message after streaming completes
+                conversation_manager.save_message(
+                    conversation_id=conversation_id,
+                    user_id=user_id,
+                    role='assistant',
+                    content=full_response,
+                    fen=fen,
+                    tokens_used=tokens_used,
+                    model=session_manager.model_name
+                )
+
+                # Track usage for rate limiting
+                rate_limiter.track_request(user_id, tokens_used)
+
+                logger.info(f"Streaming completed: user={user_id[:8]}..., tokens≈{tokens_used}")
+
+                # Send completion signal with metadata
+                yield f"data: {json.dumps({'done': True, 'conversation_id': conversation_id, 'tokens_used': tokens_used})}\n\n"
+
+            except Exception as e:
+                logger.error(f"Error in streaming: {e}", exc_info=True)
+                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+        return Response(
+            stream_with_context(generate()),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                'X-Accel-Buffering': 'no'  # Disable nginx buffering
+            }
+        )
+
+    except Exception as e:
+        logger.error(f"Error in chat_analysis_stream: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': 'Internal server error'

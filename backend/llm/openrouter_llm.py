@@ -3,6 +3,7 @@ OpenRouter LLM Client
 Uses OpenAI SDK format to communicate with OpenRouter API
 """
 import os
+import time
 import logging
 from openai import OpenAI
 
@@ -30,18 +31,18 @@ class OpenRouterLLM:
         self.max_tokens = max_tokens
         self.temperature = temperature
 
+    def _build_messages(self, prompt: str, system_message: str = None) -> list:
+        """Build OpenAI-format messages array."""
+        messages = []
+        if system_message:
+            messages.append({"role": "system", "content": system_message})
+        messages.append({"role": "user", "content": prompt})
+        return messages
+
     def generate(self, prompt: str, system_message: str = None) -> str:
         logger.debug(f"Generating text with model {self.model_name}, prompt (first 50 chars): {prompt[:50]}")
         try:
-            # Build messages array (OpenAI format)
-            messages = []
-
-            # Add system message if provided
-            if system_message:
-                messages.append({"role": "system", "content": system_message})
-
-            # Add user prompt
-            messages.append({"role": "user", "content": prompt})
+            messages = self._build_messages(prompt, system_message)
 
             # Call OpenRouter using OpenAI SDK format
             response = self.client.chat.completions.create(
@@ -61,6 +62,82 @@ class OpenRouterLLM:
         except Exception as e:
             logger.error(f"Error calling OpenRouter API: {e}", exc_info=True)
             return f"Error: OpenRouter API issue - {e}"
+
+    def generate_stream(self, prompt: str, system_message: str = None):
+        """
+        Generate streaming response, yielding tokens as they arrive.
+        Used for real-time chat display like ChatGPT/Claude.
+        """
+        logger.debug(f"Streaming text with model {self.model_name}, prompt (first 50 chars): {prompt[:50]}")
+        try:
+            # Build messages array (OpenAI format)
+            messages = []
+
+            # Add system message if provided
+            if system_message:
+                messages.append({"role": "system", "content": system_message})
+
+            # Add user prompt
+            messages.append({"role": "user", "content": prompt})
+
+            # Call OpenRouter with streaming enabled
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                max_tokens=self.max_tokens,
+                temperature=self.temperature,
+                stream=True  # Enable streaming
+            )
+
+            # Yield each token as it arrives
+            for chunk in response:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
+
+        except Exception as e:
+            logger.error(f"Error in streaming OpenRouter API: {e}", exc_info=True)
+            yield f"Error: OpenRouter API issue - {e}"
+
+    def generate_stream_with_retry(self, prompt: str, system_message: str = None, max_retries: int = 2):
+        """
+        Streaming with automatic retry and non-streaming fallback.
+        On transient errors, retries streaming up to max_retries times.
+        If all streaming attempts fail, falls back to non-streaming generate().
+        """
+        last_error = None
+
+        for attempt in range(max_retries + 1):
+            try:
+                messages = self._build_messages(prompt, system_message)
+                response = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=messages,
+                    max_tokens=self.max_tokens,
+                    temperature=self.temperature,
+                    stream=True
+                )
+                for chunk in response:
+                    if chunk.choices and chunk.choices[0].delta.content:
+                        yield chunk.choices[0].delta.content
+                return  # Stream completed successfully
+            except Exception as e:
+                last_error = e
+                logger.warning(f"Streaming attempt {attempt + 1}/{max_retries + 1} failed: {e}")
+                if attempt < max_retries:
+                    time.sleep(1 * (attempt + 1))
+                    continue
+
+        # All streaming retries exhausted — fall back to non-streaming
+        logger.info("All streaming retries failed, falling back to non-streaming request")
+        try:
+            result = self.generate(prompt, system_message)
+            if not result.startswith("Error:"):
+                yield result
+                return
+        except Exception as fallback_err:
+            logger.error(f"Non-streaming fallback also failed: {fallback_err}", exc_info=True)
+
+        yield f"Error: OpenRouter API issue - {last_error}"
 
     async def agenerate(self, prompt: str, system_message: str = None) -> str:
         # Basic async wrapper - for true async, would need AsyncOpenAI client

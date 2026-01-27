@@ -379,6 +379,126 @@ export default function useChesster(fen: string) {
   [session]
 );
 
+  // Streaming API request for real-time token display (like ChatGPT/Claude)
+  const makeApiRequestStreaming = useCallback(
+    async (
+      fen: string,
+      query: string,
+      mode: string,
+      onToken: (token: string) => void,
+      onComplete: (data: { conversation_id: string; tokens_used: number }) => void,
+      onError: (error: string) => void
+    ): Promise<void> => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
+      try {
+        const token = await session?.getToken();
+
+        if (!token) {
+          throw new Error('Please sign in to use AI chat features');
+        }
+
+        const contextType = mode === 'position' ? 'position' :
+                            mode === 'game' ? 'game' :
+                            mode === 'puzzle' ? 'puzzle' : 'general';
+
+        // Route through Next.js orchestrator (Mastra + Clawdbot + fallback)
+        const response = await fetch(`/api/chat/stream`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            fen,
+            query,
+            conversation_id: conversationIdRef.current,
+            context_type: contextType
+          }),
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          let errorMessage = 'Failed to get AI response';
+          try {
+            const error = await response.json();
+            errorMessage = error.error || errorMessage;
+          } catch {
+            errorMessage = `Request failed with status ${response.status}`;
+          }
+          throw new Error(errorMessage);
+        }
+
+        // Read the SSE stream
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+
+        if (!reader) {
+          throw new Error('No response body');
+        }
+
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+
+          // Keep the last incomplete line in the buffer
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                if (data.delta) {
+                  onToken(data.delta);
+                }
+                if (data.done) {
+                  // Save conversation ID
+                  if (data.conversation_id) {
+                    conversationIdRef.current = data.conversation_id;
+                    try {
+                      localStorage.setItem('current_conversation_id', data.conversation_id);
+                    } catch (e) {
+                      console.warn('Failed to save conversation ID:', e);
+                    }
+                  }
+                  onComplete({
+                    conversation_id: data.conversation_id,
+                    tokens_used: data.tokens_used
+                  });
+                }
+                if (data.error) {
+                  onError(data.error);
+                }
+              } catch (parseError) {
+                console.warn('Failed to parse SSE data:', line);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          onError("Request cancelled");
+        } else {
+          onError(error instanceof Error ? error.message : "Unknown error");
+        }
+      } finally {
+        if (abortControllerRef.current === controller) {
+          abortControllerRef.current = null;
+        }
+      }
+    },
+    [session]
+  );
+
   const fetchOpeningData = useCallback(async (): Promise<void> => {
     const currentFen = currentFenRef.current;
     updateState({ openingLoading: true });
@@ -689,53 +809,80 @@ ${candidateMoves}
       if (!state.chatInput.trim()) return;
       const userMessage = createChatMessage("user", fen, state.chatInput);
       const currentInput = state.chatInput;
-     
+      const assistantMessageId = (Date.now() + 1).toString();
+
+      // Create empty assistant message placeholder for streaming
+      const assistantMessage = createChatMessage(
+        "assistant",
+        fen,
+        "", // Start with empty content
+        undefined,
+        "openrouter",
+        "google/gemini-3-flash-preview",
+        assistantMessageId
+      );
+
+      // Add both messages immediately - user message and empty assistant placeholder
       updateState({
-        chatMessages: [...state.chatMessages, userMessage],
+        chatMessages: [...state.chatMessages, userMessage, assistantMessage],
         chatInput: "",
         chatLoading: true
       });
+
       const currentFen = currentFenRef.current;
-      try {
-        // Determine the context type for the new server-managed API
-        let mode = "position";
 
-        if(questionMode){
-          mode = "question"
-        }else{
-           mode = puzzleMode === true || puzzleQuery
-          ? "puzzle"
-          : "position";
-        }
-
-        // Send only the raw user input - backend will construct the full prompt with context
-        const result = await makeApiRequest(currentFen, currentInput, mode);
-        const assistantMessage = createChatMessage("assistant", fen,result.message, result.maxTokens, result.provider, result.model, (Date.now() + 1).toString(), result.response_time_ms);
-        updateState({
-          chatMessages: [...state.chatMessages, userMessage, assistantMessage],
-          chatLoading: false
-        });
-      } catch (error) {
-        console.error("Error sending chat message:", error);
-        if (!(error instanceof Error && error.message === "Request cancelled")) {
-          const errorMsg = error instanceof Error ? error.message : "An unknown error occurred";
-          const errorMessage = createChatMessage(
-            "assistant",
-            "",
-            errorMsg,
-            undefined,
-            undefined,
-            undefined,
-            (Date.now() + 1).toString()
-          );
-          updateState({
-            chatMessages: [...state.chatMessages, userMessage, errorMessage],
-            chatLoading: false
-          });
-        }
+      // Determine the context type for the new server-managed API
+      let mode = "position";
+      if (questionMode) {
+        mode = "question";
+      } else {
+        mode = puzzleMode === true || puzzleQuery ? "puzzle" : "position";
       }
+
+      // Use streaming API for real-time token display
+      await makeApiRequestStreaming(
+        currentFen,
+        currentInput,
+        mode,
+        // onToken - append each token to the assistant message
+        (token: string) => {
+          setState(prev => {
+            const updatedMessages = [...prev.chatMessages];
+            const lastMsg = updatedMessages[updatedMessages.length - 1];
+            if (lastMsg && lastMsg.id === assistantMessageId) {
+              lastMsg.content += token;
+            }
+            return { ...prev, chatMessages: updatedMessages };
+          });
+        },
+        // onComplete - update metadata and stop loading
+        (data: { conversation_id: string; tokens_used: number }) => {
+          setState(prev => {
+            const updatedMessages = [...prev.chatMessages];
+            const lastMsg = updatedMessages[updatedMessages.length - 1];
+            if (lastMsg && lastMsg.id === assistantMessageId) {
+              lastMsg.maxTokens = data.tokens_used;
+            }
+            return { ...prev, chatMessages: updatedMessages, chatLoading: false };
+          });
+        },
+        // onError - show error message
+        (error: string) => {
+          console.error("Error sending chat message:", error);
+          if (error !== "Request cancelled") {
+            setState(prev => {
+              const updatedMessages = [...prev.chatMessages];
+              const lastMsg = updatedMessages[updatedMessages.length - 1];
+              if (lastMsg && lastMsg.id === assistantMessageId) {
+                lastMsg.content = error || "An error occurred";
+              }
+              return { ...prev, chatMessages: updatedMessages, chatLoading: false };
+            });
+          }
+        }
+      );
     },
-    [state.chatInput, state.chatMessages, buildChatQuery, makeApiRequest, updateState]
+    [fen, state.chatInput, state.chatMessages, makeApiRequestStreaming, updateState]
   );
 
   const handleChatKeyPress = useCallback(
