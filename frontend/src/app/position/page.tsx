@@ -12,10 +12,13 @@ import Loader from "@/componets/loading/Loader";
 import Warning from "@/componets/loading/SignUpWarning";
 import { useChatSessions } from "@/hooks/useChatSessions";
 
+import type { EditorState } from "@/components/editor/BoardEditor";
+
 // Dynamic imports to avoid SSR issues with chess engine
 const AiChessboardPanel = dynamic(() => import("@/componets/analysis/AiChessboard"), { ssr: false });
 const ChessterAnalysisView = dynamic(() => import("@/componets/analysis/ChessterAnalysisView"), { ssr: false });
 const ChatSidebar = dynamic(() => import("@/componets/ChatSidebar"), { ssr: false });
+const EditorControls = dynamic(() => import("@/components/editor/EditorControls"), { ssr: false });
 
 export default function PositionPage() {
   // const session = useSession();
@@ -37,6 +40,10 @@ export default function PositionPage() {
 
   // Ref to track if we're loading messages from session (prevent save loop)
   const isLoadingFromSession = useRef(false);
+
+  // Editor mode state (lifted from AiChessboard for right-panel control)
+  const [editorMode, setEditorMode] = useState(false);
+  const [editorState, setEditorState] = useState<EditorState | null>(null);
 
   // Chat sidebar state
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -246,10 +253,31 @@ export default function PositionPage() {
             stockfishLoading={stockfishLoading}
             stockfishAnalysisResult={stockfishAnalysisResult}
             openingLoading={openingLoading}
+            editorMode={editorMode}
+            onEditorModeChange={setEditorMode}
+            onEditorStateChange={setEditorState}
           />
         </Box>
 
         <Box sx={{ flex: 1, minWidth: 0, width: "100%" }}>
+          {editorMode && editorState ? (
+            <EditorControls
+              turn={editorState.turn}
+              castling={editorState.castling}
+              enPassant={editorState.enPassant}
+              pieces={editorState.pieces}
+              onTurnChange={editorState.onTurnChange}
+              onCastlingChange={editorState.onCastlingChange}
+              onEnPassantChange={editorState.onEnPassantChange}
+              onPreset={editorState.onPreset}
+              onStartingPosition={editorState.onStartingPosition}
+              onClearBoard={editorState.onClearBoard}
+              onFlipBoard={editorState.onFlipBoard}
+              onAnalysisBoard={editorState.onAnalysisBoard}
+              onContinueFromHere={editorState.onContinueFromHere}
+              onStudy={editorState.onStudy}
+            />
+          ) : (
           <ChessterAnalysisView
             isGameReviewMode={false}
             stockfishAnalysisResult={stockfishAnalysisResult}
@@ -291,6 +319,7 @@ export default function PositionPage() {
             setSessionMode={setSessionMode}
             llmLoading={llmLoading}
           />
+          )}
         </Box>
       </Stack>
       </Box>

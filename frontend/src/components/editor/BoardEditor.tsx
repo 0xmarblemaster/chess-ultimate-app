@@ -22,6 +22,23 @@ import { getCurrentThemeColors, BOARD_THEMES } from "@/libs/setting/helper";
 
 type BoardPieceMap = Record<string, string>;
 
+export interface EditorState {
+  turn: "w" | "b";
+  castling: CastlingRights;
+  enPassant: string;
+  pieces: EditorPieces;
+  onTurnChange: (turn: "w" | "b") => void;
+  onCastlingChange: (castling: CastlingRights) => void;
+  onEnPassantChange: (ep: string) => void;
+  onPreset: (fen: string) => void;
+  onStartingPosition: () => void;
+  onClearBoard: () => void;
+  onFlipBoard: () => void;
+  onAnalysisBoard: () => void;
+  onContinueFromHere: () => void;
+  onStudy: () => void;
+}
+
 interface BoardEditorProps {
   /** Override initial FEN (used in embedded mode instead of URL param) */
   initialFen?: string;
@@ -31,6 +48,10 @@ interface BoardEditorProps {
   embedded?: boolean;
   /** Board width override for embedded mode */
   boardWidth?: number;
+  /** When true, don't render EditorControls inline (they'll be rendered externally) */
+  hideControls?: boolean;
+  /** Callback to expose editor state for external EditorControls rendering */
+  onEditorStateChange?: (state: EditorState) => void;
 }
 
 export default function BoardEditor({
@@ -38,6 +59,8 @@ export default function BoardEditor({
   onAnalyze,
   embedded = false,
   boardWidth: propBoardWidth,
+  hideControls = false,
+  onEditorStateChange,
 }: BoardEditorProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -242,6 +265,28 @@ export default function BoardEditor({
     });
   }, [editorUrl]);
 
+  // Expose editor state to parent for external controls rendering
+  useEffect(() => {
+    if (onEditorStateChange) {
+      onEditorStateChange({
+        turn,
+        castling,
+        enPassant,
+        pieces,
+        onTurnChange: setTurn,
+        onCastlingChange: setCastling,
+        onEnPassantChange: setEnPassant,
+        onPreset: handlePreset,
+        onStartingPosition: handleStartingPosition,
+        onClearBoard: handleClearBoard,
+        onFlipBoard: handleFlipBoard,
+        onAnalysisBoard: handleAnalysisBoard,
+        onContinueFromHere: handleContinueFromHere,
+        onStudy: handleStudy,
+      });
+    }
+  }, [turn, castling, enPassant, pieces, onEditorStateChange, handlePreset, handleStartingPosition, handleClearBoard, handleFlipBoard, handleAnalysisBoard, handleContinueFromHere, handleStudy]);
+
   const themeColors = getCurrentThemeColors(boardTheme);
 
   const boardSize = propBoardWidth || (embedded ? 400 : 480);
@@ -303,25 +348,27 @@ export default function BoardEditor({
           />
         </div>
 
-        {/* Controls panel */}
-        <div style={{ flex: "1 1 220px", minWidth: "220px" }}>
-          <EditorControls
-            turn={turn}
-            castling={castling}
-            enPassant={enPassant}
-            pieces={pieces}
-            onTurnChange={setTurn}
-            onCastlingChange={setCastling}
-            onEnPassantChange={setEnPassant}
-            onPreset={handlePreset}
-            onStartingPosition={handleStartingPosition}
-            onClearBoard={handleClearBoard}
-            onFlipBoard={handleFlipBoard}
-            onAnalysisBoard={handleAnalysisBoard}
-            onContinueFromHere={handleContinueFromHere}
-            onStudy={handleStudy}
-          />
-        </div>
+        {/* Controls panel (hidden when rendered externally) */}
+        {!hideControls && (
+          <div style={{ flex: "1 1 220px", minWidth: "220px" }}>
+            <EditorControls
+              turn={turn}
+              castling={castling}
+              enPassant={enPassant}
+              pieces={pieces}
+              onTurnChange={setTurn}
+              onCastlingChange={setCastling}
+              onEnPassantChange={setEnPassant}
+              onPreset={handlePreset}
+              onStartingPosition={handleStartingPosition}
+              onClearBoard={handleClearBoard}
+              onFlipBoard={handleFlipBoard}
+              onAnalysisBoard={handleAnalysisBoard}
+              onContinueFromHere={handleContinueFromHere}
+              onStudy={handleStudy}
+            />
+          </div>
+        )}
       </div>
 
       {/* Black spare pieces (bottom) */}

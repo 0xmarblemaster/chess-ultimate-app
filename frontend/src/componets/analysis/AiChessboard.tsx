@@ -94,6 +94,9 @@ interface AiChessboardPanelProps {
   gameStatus?: string;
   playerSide?: "white" | "black";
   engineThinking?: boolean;
+  editorMode?: boolean;
+  onEditorModeChange?: (mode: boolean) => void;
+  onEditorStateChange?: (state: import("@/components/editor/BoardEditor").EditorState) => void;
 }
 
 export default function AiChessboardPanel({
@@ -120,6 +123,9 @@ export default function AiChessboardPanel({
   gameReviewMode,
   gameInfo,
   engineThinking = false,
+  editorMode = false,
+  onEditorModeChange,
+  onEditorStateChange,
 }: AiChessboardPanelProps) {
   // Fix hydration mismatch by ensuring client-only rendering
   const [mounted, setMounted] = useState(false);
@@ -172,7 +178,6 @@ export default function AiChessboardPanel({
     "Cburnett"
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [editorMode, setEditorMode] = useState(false);
   const [showCoordinates, setShowCoordinates] = useLocalStorage<boolean>(
     "board_show_coordinates",
     DEFAULT_BOARD_SHOW_COORDINATE
@@ -955,7 +960,7 @@ export default function AiChessboardPanel({
                 <Chip
                   label="Analysis Mode"
                   size="small"
-                  onClick={() => setEditorMode(false)}
+                  onClick={() => onEditorModeChange?.(false)}
                   sx={{
                     backgroundColor: !editorMode ? `${modeInfo.color}20` : "transparent",
                     color: !editorMode ? modeInfo.color : "#888",
@@ -969,7 +974,7 @@ export default function AiChessboardPanel({
                 <Chip
                   label="Editor Mode"
                   size="small"
-                  onClick={() => setEditorMode(true)}
+                  onClick={() => onEditorModeChange?.(true)}
                   sx={{
                     backgroundColor: editorMode ? "#1b5e2030" : "transparent",
                     color: editorMode ? "#66bb6a" : "#888",
@@ -1017,8 +1022,10 @@ export default function AiChessboardPanel({
         {editorMode && !puzzleMode && !playMode && !gameReviewMode ? (
           <BoardEditor
             embedded
+            hideControls
             initialFen={fen}
             boardWidth={responsiveBoardSize}
+            onEditorStateChange={onEditorStateChange}
             onAnalyze={(newFen) => {
               // Switch back to analysis mode and load the editor's FEN
               try {
@@ -1028,7 +1035,7 @@ export default function AiChessboardPanel({
               } catch {
                 // Invalid FEN from editor — just switch mode
               }
-              setEditorMode(false);
+              onEditorModeChange?.(false);
             }}
           />
         ) : (
