@@ -26,6 +26,8 @@ import {
   NavigateNext,
   RotateLeft,
   Upload,
+  CameraAlt,
+  Close,
 } from "@mui/icons-material";
 import OpenInFullIcon from "@mui/icons-material/OpenInFull";
 import { Chessboard } from "react-chessboard";
@@ -58,6 +60,7 @@ import {
 } from "@/libs/setting/helper";
 import PlayerInfoBar from "../tabs/PlayerInfoTab";
 import { EvalBar } from "./EvalBar";
+import BoardEditor from "@/components/editor/BoardEditor";
 
 interface AiChessboardPanelProps {
   fen: string;
@@ -169,6 +172,7 @@ export default function AiChessboardPanel({
     "Cburnett"
   );
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [editorMode, setEditorMode] = useState(false);
   const [showCoordinates, setShowCoordinates] = useLocalStorage<boolean>(
     "board_show_coordinates",
     DEFAULT_BOARD_SHOW_COORDINATE
@@ -209,6 +213,11 @@ export default function AiChessboardPanel({
   const containerRef = useRef<HTMLDivElement>(null);
   const startPosRef = useRef({ x: 0, y: 0 });
   const startDimensionsRef = useRef({ width: 0, height: 0 });
+
+  // Photo-to-FEN state
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoLoading, setPhotoLoading] = useState(false);
+  const [photoError, setPhotoError] = useState<string>("");
 
   // Memoized Board analysis
   const boardAnalysis = useMemo(() => {
@@ -727,6 +736,68 @@ export default function AiChessboardPanel({
     }
   }, [customFen, setGame, setFen, clearAnalysis]);
 
+  // Photo-to-FEN handler
+  const handlePhotoUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setPhotoError('Please select an image file');
+      return;
+    }
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const base64Full = e.target?.result as string;
+      const base64Data = base64Full.split(',')[1]; // Remove data:image/...;base64, prefix
+      setPhotoPreview(base64Full);
+      setPhotoError('');
+      setPhotoLoading(true);
+
+      try {
+        const response = await fetch('/api/convert-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: base64Data }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.fen) {
+          // Try to load the FEN into the board
+          try {
+            const newGame = new Chess(data.fen);
+            setGame(newGame);
+            setFen(newGame.fen());
+            setMoveHistory([newGame.fen()]);
+            setCurrentMoveIndex(0);
+            clearAnalysis();
+            setPhotoPreview(null);
+            setSettingsOpen(false);
+          } catch (fenError) {
+            console.error('Invalid FEN from API:', data.fen, fenError);
+            setPhotoError(`Invalid position detected. FEN: ${data.fen}`);
+          }
+        } else {
+          setPhotoError(data.error || 'Failed to convert image to FEN');
+        }
+      } catch (error) {
+        console.error('Photo-to-FEN error:', error);
+        setPhotoError('Network error. Please try again.');
+      } finally {
+        setPhotoLoading(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  }, [setGame, setFen, clearAnalysis]);
+
+  const clearPhotoPreview = useCallback(() => {
+    setPhotoPreview(null);
+    setPhotoError('');
+  }, []);
+
   // Flip board callback
   const flipBoard = useCallback(() => {
     setIsFlipped(!isFlipped);
@@ -878,16 +949,50 @@ export default function AiChessboardPanel({
             spacing={2}
             sx={{ mb: 1.5 }}
           >
-            <Chip
-              label={modeInfo.label}
-              size="small"
-              sx={{
-                backgroundColor: `${modeInfo.color}20`,
-                color: modeInfo.color,
-                fontSize: "0.65rem",
-                fontWeight: 600,
-              }}
-            />
+            {/* Mode tabs — show Analysis/Editor toggle only in default analysis mode */}
+            {!puzzleMode && !playMode && !gameReviewMode ? (
+              <Stack direction="row" spacing={0.5}>
+                <Chip
+                  label="Analysis Mode"
+                  size="small"
+                  onClick={() => setEditorMode(false)}
+                  sx={{
+                    backgroundColor: !editorMode ? `${modeInfo.color}20` : "transparent",
+                    color: !editorMode ? modeInfo.color : "#888",
+                    fontSize: "0.65rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    border: editorMode ? "1px solid #555" : "none",
+                    "&:hover": { backgroundColor: !editorMode ? `${modeInfo.color}30` : "#333" },
+                  }}
+                />
+                <Chip
+                  label="Editor Mode"
+                  size="small"
+                  onClick={() => setEditorMode(true)}
+                  sx={{
+                    backgroundColor: editorMode ? "#1b5e2030" : "transparent",
+                    color: editorMode ? "#66bb6a" : "#888",
+                    fontSize: "0.65rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    border: !editorMode ? "1px solid #555" : "none",
+                    "&:hover": { backgroundColor: editorMode ? "#1b5e2040" : "#333" },
+                  }}
+                />
+              </Stack>
+            ) : (
+              <Chip
+                label={modeInfo.label}
+                size="small"
+                sx={{
+                  backgroundColor: `${modeInfo.color}20`,
+                  color: modeInfo.color,
+                  fontSize: "0.65rem",
+                  fontWeight: 600,
+                }}
+              />
+            )}
             <Box sx={{ flexGrow: 1 }} />
             <IconButton
               onClick={() => setSettingsOpen(true)}
@@ -908,89 +1013,111 @@ export default function AiChessboardPanel({
           </Stack>
         </Paper>
 
-        {gameReviewMode && gameInfo && <TopPlayerBar />}
-        {/* Chessboard */}
-        <Box sx={{ display: "flex", justifyContent: "center", mb: 2, gap: 1 }}>
-          {showEvalBar && !puzzleMode && (
-            <EvalBar
-              lineEval={stockfishAnalysisResult?.lines[0]}
-              boardOrientation={getBoardOrientation()}
-              height={responsiveBoardSize} // Match the board height
-            />
-          )}
-          <Chessboard
-            position={fen}
-            onPieceDrop={puzzleMode ? onDropPuzzle : handlePlayerMove}
-            onSquareClick={
-              puzzleMode ? handleSquarePuzzleClick : handleSquareClick
-            }
-            allowDragOutsideBoard={false}
-            animationDuration={animationDuration}
-            showBoardNotation={showCoordinates}
-            customSquareStyles={
-              puzzleMode ? puzzleCustomSquareStyle : customSquareStyles
-            }
-            customDarkSquareStyle={{
-              backgroundColor:
-                getCurrentThemeColors(boardTheme).darkSquareColor,
-            }}
-            customLightSquareStyle={{
-              backgroundColor:
-                getCurrentThemeColors(boardTheme).lightSquareColor,
-            }}
-            customArrows={customArrows}
+        {/* Editor Mode: show BoardEditor instead of chessboard */}
+        {editorMode && !puzzleMode && !playMode && !gameReviewMode ? (
+          <BoardEditor
+            embedded
+            initialFen={fen}
             boardWidth={responsiveBoardSize}
-            boardOrientation={getBoardOrientation()}
-            customPieces={getCustomPieces(pieceType)}
+            onAnalyze={(newFen) => {
+              // Switch back to analysis mode and load the editor's FEN
+              try {
+                const newGame = new Chess(newFen);
+                setGame(newGame);
+                setFen(newFen);
+              } catch {
+                // Invalid FEN from editor — just switch mode
+              }
+              setEditorMode(false);
+            }}
           />
-        </Box>
-        {gameReviewMode && gameInfo && <BottomPlayerBar />}
+        ) : (
+          <>
+            {gameReviewMode && gameInfo && <TopPlayerBar />}
+            {/* Chessboard */}
+            <Box sx={{ display: "flex", justifyContent: "center", mb: 2, gap: 1 }}>
+              {showEvalBar && !puzzleMode && (
+                <EvalBar
+                  lineEval={stockfishAnalysisResult?.lines[0]}
+                  boardOrientation={getBoardOrientation()}
+                  height={responsiveBoardSize} // Match the board height
+                />
+              )}
+              <Chessboard
+                position={fen}
+                onPieceDrop={puzzleMode ? onDropPuzzle : handlePlayerMove}
+                onSquareClick={
+                  puzzleMode ? handleSquarePuzzleClick : handleSquareClick
+                }
+                allowDragOutsideBoard={false}
+                animationDuration={animationDuration}
+                showBoardNotation={showCoordinates}
+                customSquareStyles={
+                  puzzleMode ? puzzleCustomSquareStyle : customSquareStyles
+                }
+                customDarkSquareStyle={{
+                  backgroundColor:
+                    getCurrentThemeColors(boardTheme).darkSquareColor,
+                }}
+                customLightSquareStyle={{
+                  backgroundColor:
+                    getCurrentThemeColors(boardTheme).lightSquareColor,
+                }}
+                customArrows={customArrows}
+                boardWidth={responsiveBoardSize}
+                boardOrientation={getBoardOrientation()}
+                customPieces={getCustomPieces(pieceType)}
+              />
+            </Box>
+            {gameReviewMode && gameInfo && <BottomPlayerBar />}
 
-        {/* Navigation Controls */}
-        {!playMode && !gameReviewMode && !puzzleMode && (
-          <Stack spacing={2}>
-            {/* Navigation buttons */}
-            <Stack direction="row" spacing={2}>
-              <Button
-                onClick={goToPreviousMove}
-                variant="contained"
-                disabled={isPreviousDisabled}
-                startIcon={<NavigateBefore fontSize="small" />}
-                fullWidth
-                size="small"
-                sx={{
-                  backgroundColor: "#9c27b0",
-                  "&:hover": {
-                    backgroundColor: "#7b1fa2",
-                  },
-                  "&:disabled": {
-                    backgroundColor: "rgba(156, 39, 176, 0.3)",
-                  },
-                }}
-              >
-                Previous
-              </Button>
-              <Button
-                onClick={goToNextMove}
-                variant="contained"
-                disabled={isNextDisabled}
-                endIcon={<NavigateNext fontSize="small" />}
-                fullWidth
-                size="small"
-                sx={{
-                  backgroundColor: "#9c27b0",
-                  "&:hover": {
-                    backgroundColor: "#7b1fa2",
-                  },
-                  "&:disabled": {
-                    backgroundColor: "rgba(156, 39, 176, 0.3)",
-                  },
-                }}
-              >
-                Next
-              </Button>
-            </Stack>
-          </Stack>
+            {/* Navigation Controls */}
+            {!playMode && !gameReviewMode && !puzzleMode && (
+              <Stack spacing={2}>
+                {/* Navigation buttons */}
+                <Stack direction="row" spacing={2}>
+                  <Button
+                    onClick={goToPreviousMove}
+                    variant="contained"
+                    disabled={isPreviousDisabled}
+                    startIcon={<NavigateBefore fontSize="small" />}
+                    fullWidth
+                    size="small"
+                    sx={{
+                      backgroundColor: "#9c27b0",
+                      "&:hover": {
+                        backgroundColor: "#7b1fa2",
+                      },
+                      "&:disabled": {
+                        backgroundColor: "rgba(156, 39, 176, 0.3)",
+                      },
+                    }}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    onClick={goToNextMove}
+                    variant="contained"
+                    disabled={isNextDisabled}
+                    endIcon={<NavigateNext fontSize="small" />}
+                    fullWidth
+                    size="small"
+                    sx={{
+                      backgroundColor: "#9c27b0",
+                      "&:hover": {
+                        backgroundColor: "#7b1fa2",
+                      },
+                      "&:disabled": {
+                        backgroundColor: "rgba(156, 39, 176, 0.3)",
+                      },
+                    }}
+                  >
+                    Next
+                  </Button>
+                </Stack>
+              </Stack>
+            )}
+          </>
         )}
 
         {!puzzleMode && !playMode && (
@@ -1622,6 +1749,97 @@ export default function AiChessboardPanel({
                     >
                       Load FEN
                     </Button>
+
+                    {/* Photo to FEN Section */}
+                    <Divider sx={{ borderColor: "rgba(255,255,255,0.1)", my: 1 }} />
+
+                    <Typography variant="caption" sx={{ color: "grey.500", display: "block", mb: 1 }}>
+                      Or upload a photo of a chess board
+                    </Typography>
+
+                    <Button
+                      variant="outlined"
+                      component="label"
+                      startIcon={<CameraAlt />}
+                      fullWidth
+                      disabled={photoLoading}
+                      sx={{
+                        color: "#00bcd4",
+                        borderColor: "#00bcd4",
+                        "&:hover": {
+                          borderColor: "#0097a7",
+                          backgroundColor: "rgba(0, 188, 212, 0.1)",
+                        },
+                      }}
+                    >
+                      {photoLoading ? "Analyzing..." : "Upload Board Photo"}
+                      <input
+                        type="file"
+                        hidden
+                        accept="image/*"
+                        onChange={handlePhotoUpload}
+                      />
+                    </Button>
+
+                    {/* Photo Preview */}
+                    {photoPreview && (
+                      <Box sx={{ position: "relative", mt: 1 }}>
+                        <img
+                          src={photoPreview}
+                          alt="Chess board preview"
+                          style={{
+                            width: "100%",
+                            maxHeight: "200px",
+                            objectFit: "contain",
+                            borderRadius: "8px",
+                            border: "1px solid rgba(255,255,255,0.2)",
+                          }}
+                        />
+                        <IconButton
+                          size="small"
+                          onClick={clearPhotoPreview}
+                          sx={{
+                            position: "absolute",
+                            top: 4,
+                            right: 4,
+                            backgroundColor: "rgba(0,0,0,0.6)",
+                            "&:hover": { backgroundColor: "rgba(0,0,0,0.8)" },
+                          }}
+                        >
+                          <Close sx={{ color: "white", fontSize: 16 }} />
+                        </IconButton>
+                        {photoLoading && (
+                          <Box
+                            sx={{
+                              position: "absolute",
+                              top: 0,
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              backgroundColor: "rgba(0,0,0,0.5)",
+                              borderRadius: "8px",
+                            }}
+                          >
+                            <Typography sx={{ color: "white" }}>
+                              Analyzing position...
+                            </Typography>
+                          </Box>
+                        )}
+                      </Box>
+                    )}
+
+                    {/* Photo Error */}
+                    {photoError && (
+                      <Typography
+                        variant="caption"
+                        sx={{ color: "#f44336", display: "block", mt: 1 }}
+                      >
+                        {photoError}
+                      </Typography>
+                    )}
                   </Stack>
                 </Box>
               </>
