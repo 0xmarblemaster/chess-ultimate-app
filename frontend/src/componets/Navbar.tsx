@@ -42,15 +42,8 @@ export default function NavBar() {
             ♟️ Chesster
           </button>
 
-          {/* Right side: Editor link + Language Switcher + User Avatar (if signed in) */}
+          {/* Right side: Language Switcher + User Avatar (if signed in) */}
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.push("/editor")}
-              className="text-sm text-gray-600 hover:text-purple-600 transition-colors hidden md:block"
-              title="Board Editor"
-            >
-              Editor
-            </button>
             <LanguageSwitcher currentLocale={locale} variant="minimal" />
 
             {isSignedIn && (
