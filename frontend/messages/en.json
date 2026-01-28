@@ -459,5 +459,56 @@
     "url": "URL",
     "copy": "Copy",
     "copied": "Copied!"
+  },
+  "analysis": {
+    "tabs": {
+      "analysis": "Analysis",
+      "aiChat": "AI Chat",
+      "gamesDatabase": "Games Database"
+    },
+    "sections": {
+      "gameReview": "Game Review",
+      "positionThemeAnalysis": "Position Theme Analysis",
+      "stockfishAnalysis": "Stockfish Analysis",
+      "openingExplorer": "Opening Explorer",
+      "chessDatabase": "Chess Database",
+      "legalMoveAnalysis": "Legal Move Analysis"
+    },
+    "stockfish": {
+      "stockfishOn": "Stockfish On",
+      "stockfishOff": "Stockfish Off",
+      "applyingSettings": "Applying settings...",
+      "startingAnalysis": "Starting analysis...",
+      "settings": "Stockfish Settings",
+      "engineVersion": "Engine Version",
+      "engineVersionDesc": "Choose which Stockfish version to use for analysis",
+      "analysisDepth": "Analysis Depth",
+      "analysisDepthDesc": "Higher depth provides more accurate analysis but takes longer",
+      "numberOfLines": "Number of Lines",
+      "numberOfLinesDesc": "Show multiple best move candidates (AI will analyze all lines)",
+      "done": "Done",
+      "for": "for",
+      "lines": "lines.",
+      "eval": "Eval",
+      "winPercent": "Win %",
+      "moves": "Moves",
+      "restartingAnalysis": "Restarting analysis...",
+      "calculatingLine": "Calculating line {line}...",
+      "reachedDepth": "Reached Depth",
+      "speed": "Speed",
+      "clickForAI": "💡 Click on any line above to get AI analysis of that specific variation",
+      "engines": {
+        "stockfish17": "Stockfish 17 NNUE",
+        "stockfish17Point": "Stockfish 17.1 NNUE",
+        "stockfish16": "Stockfish 16 NNUE",
+        "stockfish11": "Stockfish 11 HCE"
+      },
+      "engineDescriptions": {
+        "stockfish17": "Latest 17 version with NNUE evaluation",
+        "stockfish17Point": "Latest 17.1 version with NNUE evaluation",
+        "stockfish16": "16.1 NNUE stable version, well-tested",
+        "stockfish11": "Older version, faster on weaker hardware"
+      }
+    }
   }
 }

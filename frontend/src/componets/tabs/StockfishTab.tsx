@@ -1,10 +1,10 @@
 import React, { useState } from "react";
-import { 
-    Stack, 
-    Paper, 
-    Typography, 
-    Box, 
-    CircularProgress, 
+import {
+    Stack,
+    Paper,
+    Typography,
+    Box,
+    CircularProgress,
     Switch,
     IconButton,
     Dialog,
@@ -23,6 +23,7 @@ import { UciEngine } from "@/stockfish/engine/UciEngine";
 import Slider from "../stockfish/Slider";
 import { EngineName } from "@/stockfish/engine/engine";
 import { useLocalStorage } from "usehooks-ts";
+import { useTranslations } from "next-intl";
 
 export interface StockfishAnalysisProps {
     stockfishAnalysisResult: PositionEval | null;
@@ -39,22 +40,6 @@ export interface StockfishAnalysisProps {
     formatPrincipalVariation: (pv: string[], fen: string) => string;
 }
 
-// Engine display names mapping
-const ENGINE_DISPLAY_NAMES = {
-    [EngineName.Stockfish17]: 'Stockfish 17 NNUE',
-    [EngineName.Stockfish17Point]: 'Stockfish 17.1 NNUE',
-    [EngineName.Stockfish16]: 'Stockfish 16 NNUE',
-    [EngineName.Stockfish11]: 'Stockfish 11 HCE',
-};
-
-// Engine descriptions
-const ENGINE_DESCRIPTIONS = {
-    [EngineName.Stockfish17]: 'Latest 17 version with NNUE evaluation',
-    [EngineName.Stockfish17Point]: 'Latest 17.1 version with NNUE evaluation',
-    [EngineName.Stockfish16]: '16.1 NNUE stable version, well-tested',
-    [EngineName.Stockfish11]: 'Older version, faster on weaker hardware',
-};
-
 export const StockfishAnalysisTab: React.FC<StockfishAnalysisProps> = ({
     stockfishAnalysisResult,
     stockfishLoading,
@@ -68,6 +53,7 @@ export const StockfishAnalysisTab: React.FC<StockfishAnalysisProps> = ({
     formatEvaluation,
     formatPrincipalVariation,
 }) => {
+    const t = useTranslations("analysis.stockfish");
     const [engineEnabled, setEngineEnabled] = useState(true);
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [isTransitioning, setIsTransitioning] = useState(false);
@@ -75,6 +61,18 @@ export const StockfishAnalysisTab: React.FC<StockfishAnalysisProps> = ({
         "stockfish-engine-picked",
         EngineName.Stockfish17
     );
+
+    // Engine display names mapping (using translations)
+    const getEngineDisplayName = (engine: EngineName) => {
+        const key = engine.replace(/-/g, '').replace(/\./g, 'Point') as 'stockfish17' | 'stockfish17Point' | 'stockfish16' | 'stockfish11';
+        return t(`engines.${key}`);
+    };
+
+    // Engine descriptions (using translations)
+    const getEngineDescription = (engine: EngineName) => {
+        const key = engine.replace(/-/g, '').replace(/\./g, 'Point') as 'stockfish17' | 'stockfish17Point' | 'stockfish16' | 'stockfish11';
+        return t(`engineDescriptions.${key}`);
+    };
 
     // Handle settings changes with smooth transitions
     const handleDepthChange = (newDepth: number) => {
@@ -143,8 +141,7 @@ export const StockfishAnalysisTab: React.FC<StockfishAnalysisProps> = ({
 
     // Get current engine display name
     const getCurrentEngineDisplayName = () => {
-        const baseName = ENGINE_DISPLAY_NAMES[enginePicked] || 'Unknown Engine';
-        return `${baseName}`;
+        return getEngineDisplayName(enginePicked);
     };
 
     // Show loading state when enabled but no results yet or transitioning
@@ -173,7 +170,7 @@ export const StockfishAnalysisTab: React.FC<StockfishAnalysisProps> = ({
                                 }}
                             />
                             <Typography variant="subtitle2" sx={{ color: "white", fontWeight: 600 }}>
-                                Stockfish On
+                                {t("stockfishOn")}
                             </Typography>
                         </Box>
                         <Switch
@@ -209,7 +206,7 @@ export const StockfishAnalysisTab: React.FC<StockfishAnalysisProps> = ({
                             sx={{ color: "#9c27b0" }} 
                         />
                         <Typography variant="body2" sx={{ color: "grey.400" }}>
-                            {isTransitioning ? "Applying settings..." : "Starting analysis..."}
+                            {isTransitioning ? t("applyingSettings") : t("startingAnalysis")}
                         </Typography>
                     </Stack>
                 </Box>
@@ -226,15 +223,15 @@ export const StockfishAnalysisTab: React.FC<StockfishAnalysisProps> = ({
                         }
                     }}
                 >
-                    <DialogTitle>Stockfish Settings</DialogTitle>
+                    <DialogTitle>{t("settings")}</DialogTitle>
                     <DialogContent>
                         <Stack spacing={3} sx={{ pt: 1 }}>
                             <Box>
                                 <Typography variant="body2" sx={{ color: "grey.300", mb: 1 }}>
-                                    Engine Version
+                                    {t("engineVersion")}
                                 </Typography>
                                 <Typography variant="caption" sx={{ color: "grey.400", mb: 2, display: "block" }}>
-                                    Choose which Stockfish version to use for analysis
+                                    {t("engineVersionDesc")}
                                 </Typography>
                                 <FormControl fullWidth>
                                     <Select
@@ -280,10 +277,10 @@ export const StockfishAnalysisTab: React.FC<StockfishAnalysisProps> = ({
                                             <MenuItem key={engine} value={engine}>
                                                 <Box>
                                                     <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                                        {ENGINE_DISPLAY_NAMES[engine]}
+                                                        {getEngineDisplayName(engine)}
                                                     </Typography>
                                                     <Typography variant="caption" sx={{ color: 'grey.400', display: 'block' }}>
-                                                        {ENGINE_DESCRIPTIONS[engine]}
+                                                        {getEngineDescription(engine)}
                                                     </Typography>
                                                 </Box>
                                             </MenuItem>
@@ -293,10 +290,10 @@ export const StockfishAnalysisTab: React.FC<StockfishAnalysisProps> = ({
                             </Box>
                             <Box>
                                 <Typography variant="body2" sx={{ color: "grey.300", mb: 1 }}>
-                                    Analysis Depth: {engineDepth}
+                                    {t("analysisDepth")}: {engineDepth}
                                 </Typography>
                                 <Typography variant="caption" sx={{ color: "grey.400", mb: 2, display: "block" }}>
-                                    Higher depth provides more accurate analysis but takes longer
+                                    {t("analysisDepthDesc")}
                                 </Typography>
                                 <Slider
                                     value={engineDepth}
@@ -308,10 +305,10 @@ export const StockfishAnalysisTab: React.FC<StockfishAnalysisProps> = ({
                             </Box>
                             <Box>
                                 <Typography variant="body2" sx={{ color: "grey.300", mb: 1 }}>
-                                    Number of Lines: {engineLines}
+                                    {t("numberOfLines")}: {engineLines}
                                 </Typography>
                                 <Typography variant="caption" sx={{ color: "grey.400", mb: 2, display: "block" }}>
-                                    Show multiple best move candidates (AI will analyze all lines)
+                                    {t("numberOfLinesDesc")}
                                 </Typography>
                                 <Slider
                                     value={engineLines}
@@ -325,7 +322,7 @@ export const StockfishAnalysisTab: React.FC<StockfishAnalysisProps> = ({
                     </DialogContent>
                     <DialogActions>
                         <Button onClick={handleSettingsClose} sx={{ color: "#9c27b0" }}>
-                            Done
+                            {t("done")}
                         </Button>
                     </DialogActions>
                 </Dialog>
@@ -356,7 +353,7 @@ export const StockfishAnalysisTab: React.FC<StockfishAnalysisProps> = ({
                             }}
                         />
                         <Typography variant="subtitle2" sx={{ color: "grey.400", fontWeight: 600 }}>
-                            Stockfish Off
+                            {t("stockfishOff")}
                         </Typography>
                     </Box>
                     <Switch
@@ -395,15 +392,15 @@ export const StockfishAnalysisTab: React.FC<StockfishAnalysisProps> = ({
                         }
                     }}
                 >
-                    <DialogTitle>Stockfish Settings</DialogTitle>
+                    <DialogTitle>{t("settings")}</DialogTitle>
                     <DialogContent>
                         <Stack spacing={3} sx={{ pt: 1 }}>
                             <Box>
                                 <Typography variant="body2" sx={{ color: "grey.300", mb: 1 }}>
-                                    Engine Version
+                                    {t("engineVersion")}
                                 </Typography>
                                 <Typography variant="caption" sx={{ color: "grey.400", mb: 2, display: "block" }}>
-                                    Choose which Stockfish version to use for analysis
+                                    {t("engineVersionDesc")}
                                 </Typography>
                                 <FormControl fullWidth>
                                     <Select
@@ -449,10 +446,10 @@ export const StockfishAnalysisTab: React.FC<StockfishAnalysisProps> = ({
                                             <MenuItem key={engine} value={engine}>
                                                 <Box>
                                                     <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                                        {ENGINE_DISPLAY_NAMES[engine]}
+                                                        {getEngineDisplayName(engine)}
                                                     </Typography>
                                                     <Typography variant="caption" sx={{ color: 'grey.400', display: 'block' }}>
-                                                        {ENGINE_DESCRIPTIONS[engine]}
+                                                        {getEngineDescription(engine)}
                                                     </Typography>
                                                 </Box>
                                             </MenuItem>
@@ -462,10 +459,10 @@ export const StockfishAnalysisTab: React.FC<StockfishAnalysisProps> = ({
                             </Box>
                             <Box>
                                 <Typography variant="body2" sx={{ color: "grey.300", mb: 1 }}>
-                                    Analysis Depth: {engineDepth}
+                                    {t("analysisDepth")}: {engineDepth}
                                 </Typography>
                                 <Typography variant="caption" sx={{ color: "grey.400", mb: 2, display: "block" }}>
-                                    Higher depth provides more accurate analysis but takes longer
+                                    {t("analysisDepthDesc")}
                                 </Typography>
                                 <Slider
                                     value={engineDepth}
@@ -477,10 +474,10 @@ export const StockfishAnalysisTab: React.FC<StockfishAnalysisProps> = ({
                             </Box>
                             <Box>
                                 <Typography variant="body2" sx={{ color: "grey.300", mb: 1 }}>
-                                    Number of Lines: {engineLines}
+                                    {t("numberOfLines")}: {engineLines}
                                 </Typography>
                                 <Typography variant="caption" sx={{ color: "grey.400", mb: 2, display: "block" }}>
-                                    Show multiple best move candidates (AI will analyze all lines)
+                                    {t("numberOfLinesDesc")}
                                 </Typography>
                                 <Slider
                                     value={engineLines}
@@ -494,7 +491,7 @@ export const StockfishAnalysisTab: React.FC<StockfishAnalysisProps> = ({
                     </DialogContent>
                     <DialogActions>
                         <Button onClick={handleSettingsClose} sx={{ color: "#9c27b0" }}>
-                            Done
+                            {t("done")}
                         </Button>
                     </DialogActions>
                 </Dialog>
@@ -570,34 +567,34 @@ export const StockfishAnalysisTab: React.FC<StockfishAnalysisProps> = ({
                         }} 
                     />
                     <Typography variant="caption" sx={{ color: "grey.400" }}>
-                        for
+                        {t("for")}
                     </Typography>
-                    <Chip 
-                        label={`${engineLines}`} 
-                        size="small" 
-                        sx={{ 
-                            backgroundColor: "rgba(156, 39, 176, 0.2)", 
+                    <Chip
+                        label={`${engineLines}`}
+                        size="small"
+                        sx={{
+                            backgroundColor: "rgba(156, 39, 176, 0.2)",
                             color: "#9c27b0",
                             fontSize: "0.7rem",
                             fontWeight: 600,
                             transition: "all 0.3s ease",
-                        }} 
+                        }}
                     />
                     <Typography variant="caption" sx={{ color: "grey.400" }}>
-                        lines.
+                        {t("lines")}
                     </Typography>
                 </Stack>
 
                 {/* Column Headers */}
                 <Stack direction="row" spacing={2} sx={{ mb: 1 }}>
                     <Typography variant="caption" sx={{ color: "grey.400", minWidth: "60px" }}>
-                        Eval
+                        {t("eval")}
                     </Typography>
                     <Typography variant="caption" sx={{ color: "grey.400", minWidth: "60px" }}>
-                        Win %
+                        {t("winPercent")}
                     </Typography>
                     <Typography variant="caption" sx={{ color: "grey.400", flex: 1 }}>
-                        Moves
+                        {t("moves")}
                     </Typography>
                 </Stack>
             </Paper>
@@ -711,7 +708,7 @@ export const StockfishAnalysisTab: React.FC<StockfishAnalysisProps> = ({
                                     variant="body2"
                                     sx={{ color: "grey.400", fontFamily: "monospace", fontSize: "0.85rem" }}
                                 >
-                                    {isTransitioning ? "Restarting analysis..." : `Calculating line ${stockfishAnalysisResult.lines.length + index + 1}...`}
+                                    {isTransitioning ? t("restartingAnalysis") : t("calculatingLine", { line: stockfishAnalysisResult.lines.length + index + 1 })}
                                 </Typography>
                             </Stack>
                         </Paper>
@@ -731,10 +728,10 @@ export const StockfishAnalysisTab: React.FC<StockfishAnalysisProps> = ({
                 >
                     <Stack direction="row" justifyContent="space-between" alignItems="center">
                         <Typography variant="caption" sx={{ color: "grey.400" }}>
-                            Reached Depth: {stockfishAnalysisResult.lines?.[0]?.depth || engineDepth}
+                            {t("reachedDepth")}: {stockfishAnalysisResult.lines?.[0]?.depth || engineDepth}
                         </Typography>
                         <Typography variant="caption" sx={{ color: "grey.400" }}>
-                            Speed: {stockfishAnalysisResult.lines?.[0]?.nps 
+                            {t("speed")}: {stockfishAnalysisResult.lines?.[0]?.nps
                                 ? `${(stockfishAnalysisResult.lines[0].nps / 1000000).toFixed(2)} Mn/s`
                                 : "1.35 Mn/s"
                             }
@@ -809,10 +806,10 @@ export const StockfishAnalysisTab: React.FC<StockfishAnalysisProps> = ({
                                         <MenuItem key={engine} value={engine}>
                                             <Box>
                                                 <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                                    {ENGINE_DISPLAY_NAMES[engine]}
+                                                    {getEngineDisplayName(engine)}
                                                 </Typography>
                                                 <Typography variant="caption" sx={{ color: 'grey.400', display: 'block' }}>
-                                                    {ENGINE_DESCRIPTIONS[engine]}
+                                                    {getEngineDescription(engine)}
                                                 </Typography>
                                             </Box>
                                         </MenuItem>
@@ -865,7 +862,7 @@ export const StockfishAnalysisTab: React.FC<StockfishAnalysisProps> = ({
                     variant="caption"
                     sx={{ color: "grey.500", fontStyle: "italic" }}
                 >
-                    💡 Click on any line above to get AI analysis of that specific variation
+                    {t("clickForAI")}
                 </Typography>
             </Box>
         </Box>

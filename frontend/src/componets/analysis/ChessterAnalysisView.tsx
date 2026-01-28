@@ -18,6 +18,7 @@ import {
   Chat as ChatIcon,
   Storage as StorageIcon,
 } from "@mui/icons-material";
+import { useTranslations } from "next-intl";
 
 import { darkGreyTheme, purpleTheme } from "@/theme/theme";
 import StockfishAnalysisTab from "../tabs/StockfishTab";
@@ -201,6 +202,7 @@ function ChessterAnalysisView({
   allGames,
   onGameSelect,
 }: ChessterAnalysisViewProps) {
+  const t = useTranslations("analysis");
   const [analysisTab, setAnalysisTab] = useState<number>(0);
   const [activeAnalysisTab, setActiveAnalysisTab] = useState<number>(0);
 
@@ -215,6 +217,8 @@ function ChessterAnalysisView({
         overflow: "hidden",
         display: "flex",
         flexDirection: "column",
+        minWidth: 0,
+        width: "100%",
       }}
     >
       <Box
@@ -249,11 +253,11 @@ function ChessterAnalysisView({
           <Tab
             icon={<AnalyticsIcon />}
             iconPosition="start"
-            label="Analysis"
+            label={t("tabs.analysis")}
           />
-          <Tab icon={<ChatIcon />} iconPosition="start" label="AI Chat" />
+          <Tab icon={<ChatIcon />} iconPosition="start" label={t("tabs.aiChat")} />
           {isGameReviewMode && allGames && allGames.length > 1 && (
-            <Tab icon={<StorageIcon />} iconPosition="start" label="Games Database" />
+            <Tab icon={<StorageIcon />} iconPosition="start" label={t("tabs.gamesDatabase")} />
           )}
         </Tabs>
       </Box>
@@ -262,7 +266,12 @@ function ChessterAnalysisView({
         sx={{
           p: 3,
           flex: 1,
-          overflow: "auto",
+          overflow: "hidden",
+          minWidth: 0,
+          minHeight: 0,
+          width: "100%",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
         <TabPanel value={analysisTab} index={0}>
@@ -299,7 +308,7 @@ function ChessterAnalysisView({
                       fontWeight: 600,
                     }}
                   >
-                    Game Review
+                    {t("sections.gameReview")}
                   </Typography>
                 </AccordionSummary>
                 <AccordionDetails
@@ -349,7 +358,7 @@ function ChessterAnalysisView({
                       fontWeight: 600,
                     }}
                   >
-                    Position Theme Analysis
+                    {t("sections.positionThemeAnalysis")}
                   </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
@@ -389,7 +398,7 @@ function ChessterAnalysisView({
                       fontWeight: 600,
                     }}
                   >
-                    Position Theme Analysis
+                    {t("sections.positionThemeAnalysis")}
                   </Typography>
                 </AccordionSummary>
                 <AccordionDetails>
@@ -440,7 +449,7 @@ function ChessterAnalysisView({
                       fontWeight: 600,
                     }}
                   >
-                    Stockfish Analysis
+                    {t("sections.stockfishAnalysis")}
                   </Typography>
                 </Box>
               </AccordionSummary>
@@ -502,7 +511,7 @@ function ChessterAnalysisView({
                       fontWeight: 600,
                     }}
                   >
-                    Opening Explorer
+                    {t("sections.openingExplorer")}
                   </Typography>
                 </Box>
               </AccordionSummary>
@@ -558,7 +567,7 @@ function ChessterAnalysisView({
                       fontWeight: 600,
                     }}
                   >
-                    Chess Database
+                    {t("sections.chessDatabase")}
                   </Typography>
                 </Box>
               </AccordionSummary>
@@ -615,7 +624,7 @@ function ChessterAnalysisView({
                       fontWeight: 600,
                     }}
                   >
-                    Legal Move Analysis
+                    {t("sections.legalMoveAnalysis")}
                   </Typography>
                 </Box>
               </AccordionSummary>
