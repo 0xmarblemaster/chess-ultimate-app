@@ -2,12 +2,14 @@
 
 import React, { Suspense } from "react";
 import dynamic from "next/dynamic";
+import { useTranslations } from "next-intl";
 
 const BoardEditor = dynamic(() => import("@/components/editor/BoardEditor"), {
   ssr: false,
 });
 
 function EditorContent() {
+  const t = useTranslations("editor");
   return (
     <div
       style={{
@@ -27,7 +29,7 @@ function EditorContent() {
           color: "#ccc",
         }}
       >
-        Board Editor
+        {t("boardEditor")}
       </h1>
       <BoardEditor />
     </div>
@@ -35,6 +37,7 @@ function EditorContent() {
 }
 
 export default function EditorPage() {
+  const t = useTranslations("editor");
   return (
     <Suspense
       fallback={
@@ -48,7 +51,7 @@ export default function EditorPage() {
             color: "#999",
           }}
         >
-          Loading editor...
+          {t("loadingEditor")}
         </div>
       }
     >

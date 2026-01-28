@@ -1,4 +1,5 @@
 import React, { CSSProperties, JSX } from "react";
+import { useTranslations } from "next-intl";
 import {
   Stack,
   Button,
@@ -127,6 +128,7 @@ export default function AiChessboardPanel({
   onEditorModeChange,
   onEditorStateChange,
 }: AiChessboardPanelProps) {
+  const tEditor = useTranslations("editor");
   // Fix hydration mismatch by ensuring client-only rendering
   const [mounted, setMounted] = useState(false);
 
@@ -844,7 +846,7 @@ export default function AiChessboardPanel({
     if (playMode) return { label: "Play Mode", color: "#4caf50" };
     if (gameReviewMode)
       return { label: "Game Analysis Mode", color: "#eaeb96ff" };
-    return { label: "Analysis Mode", color: "#bc58ceff" };
+    return { label: tEditor("analysisMode"), color: "#bc58ceff" };
   };
 
   const modeInfo = getModeInfo();
@@ -958,7 +960,7 @@ export default function AiChessboardPanel({
             {!puzzleMode && !playMode && !gameReviewMode ? (
               <Stack direction="row" spacing={0.5}>
                 <Chip
-                  label="Analysis Mode"
+                  label={tEditor("analysisMode")}
                   size="small"
                   onClick={() => onEditorModeChange?.(false)}
                   sx={{
@@ -972,7 +974,7 @@ export default function AiChessboardPanel({
                   }}
                 />
                 <Chip
-                  label="Editor Mode"
+                  label={tEditor("editorMode")}
                   size="small"
                   onClick={() => onEditorModeChange?.(true)}
                   sx={{

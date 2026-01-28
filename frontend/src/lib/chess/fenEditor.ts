@@ -39,11 +39,11 @@ export const STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq 
 export const EMPTY_FEN = "8/8/8/8/8/8/8/8 w - - 0 1";
 
 export const PRESET_POSITIONS: Record<string, string> = {
-  "Starting Position": STARTING_FEN,
-  "Empty Board": EMPTY_FEN,
-  "King + Pawn vs King": "8/8/8/8/4P3/8/8/4K2k w - - 0 1",
-  "Rook Endgame": "8/8/8/8/8/8/4K3/R6k w - - 0 1",
-  "Queen vs Rook": "8/8/8/8/8/8/4K3/Q5rk w - - 0 1",
+  startingPosition: STARTING_FEN,
+  emptyBoard: EMPTY_FEN,
+  kingPawnVsKing: "8/8/8/8/4P3/8/8/4K2k w - - 0 1",
+  rookEndgame: "8/8/8/8/8/8/4K3/R6k w - - 0 1",
+  queenVsRook: "8/8/8/8/8/8/4K3/Q5rk w - - 0 1",
 };
 
 /**

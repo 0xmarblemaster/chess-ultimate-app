@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 import { PieceCode, getPieceImageSrc } from "@/lib/chess/fenEditor";
 
 const WHITE_PIECES: PieceCode[] = ["wK", "wQ", "wR", "wB", "wN", "wP"];
@@ -21,6 +22,7 @@ export default function SparePieces({
   onSelect,
   onDragStart,
 }: SparePiecesProps) {
+  const t = useTranslations("editor");
   const pieces = color === "white" ? WHITE_PIECES : BLACK_PIECES;
 
   return (
@@ -87,7 +89,7 @@ export default function SparePieces({
           alignItems: "center",
           justifyContent: "center",
         }}
-        title="Pointer (move pieces)"
+        title={t("pointerTool")}
       >
         <svg
           width="24"
@@ -123,7 +125,7 @@ export default function SparePieces({
           alignItems: "center",
           justifyContent: "center",
         }}
-        title="Delete pieces"
+        title={t("deleteTool")}
       >
         <svg
           width="24"

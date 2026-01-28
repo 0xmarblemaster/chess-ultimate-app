@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useEffect, useMemo } from "react";
+import { useTranslations } from "next-intl";
 import { Chessboard } from "react-chessboard";
 import { useRouter, useSearchParams } from "next/navigation";
 import SparePieces from "./SparePieces";
@@ -62,6 +63,7 @@ export default function BoardEditor({
   hideControls = false,
   onEditorStateChange,
 }: BoardEditorProps = {}) {
+  const t = useTranslations("editor");
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -393,7 +395,7 @@ export default function BoardEditor({
         }}
       >
         <label style={{ color: "#999", fontSize: "12px", flexShrink: 0 }}>
-          FEN
+          {t("fen")}
         </label>
         <input
           type="text"
@@ -429,7 +431,7 @@ export default function BoardEditor({
         }}
       >
         <label style={{ color: "#999", fontSize: "12px", flexShrink: 0 }}>
-          URL
+          {t("url")}
         </label>
         <input
           type="text"
@@ -459,7 +461,7 @@ export default function BoardEditor({
             transition: "background-color 0.15s",
           }}
         >
-          {copied ? "Copied!" : "Copy"}
+          {copied ? t("copied") : t("copy")}
         </button>
       </div>}
     </div>

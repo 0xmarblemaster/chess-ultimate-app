@@ -115,6 +115,8 @@
     "gameAnalysisDesc": "Upload and analyze your complete games with detailed insights",
     "chessPuzzles": "Chess Puzzles",
     "chessPuzzlesDesc": "Solve tactical puzzles to improve your calculation skills",
+    "opponentAnalysis": "Opponent Analysis",
+    "opponentAnalysisDesc": "Search players, analyze their games, openings and playing style",
     "learningJourney": "Your Learning Journey",
     "learningJourneySubtitle": "Structured courses with AI tutoring to master chess fundamentals",
     "startLearning": "Start Learning",
@@ -125,9 +127,337 @@
       "beginner": "beginner",
       "intermediate": "intermediate",
       "advanced": "advanced"
+    },
+    "continueLearning": "Continue Learning",
+    "quickActions": "Quick Actions",
+    "todaysGoals": "Today's Goals",
+    "practiceToday": "Practice today",
+    "keepStreakAlive": "Keep your streak alive",
+    "completeLesson": "Complete a lesson",
+    "learnSomethingNew": "Learn something new",
+    "solvePuzzles": "Solve 3 puzzles",
+    "sharpenTactics": "Sharpen your tactics",
+    "lessonsCompleted": "lessons completed",
+    "continue": "Continue"
+  },
+  "gamification": {
+    "xp": "XP",
+    "level": "Level",
+    "streak": "Streak",
+    "dayStreak": "day streak",
+    "daysStreak": "day streak",
+    "streakFrozen": "Streak frozen",
+    "streakLost": "Streak lost!",
+    "keepItGoing": "Keep it going!",
+    "youreOnFire": "You're on fire!",
+    "practiceToKeepStreak": "Practice today to keep your streak!",
+    "streakProtected": "Your streak is protected for today",
+    "levels": {
+      "pawn": "Pawn",
+      "knight": "Knight",
+      "bishop": "Bishop",
+      "rook": "Rook",
+      "queen": "Queen",
+      "king": "King"
+    },
+    "levelProgress": "Level Progress",
+    "xpToNextLevel": "XP to next level",
+    "celebration": {
+      "lessonComplete": "Lesson Complete!",
+      "courseComplete": "Course Complete!",
+      "levelUp": "Level Up!",
+      "achievementUnlocked": "Achievement Unlocked!",
+      "greatJob": "Great job!",
+      "keepGoing": "Keep going!",
+      "amazing": "Amazing!",
+      "perfect": "Perfect!",
+      "xpEarned": "XP earned"
     }
+  },
+  "mascot": {
+    "greeting": {
+      "morning": "Good morning",
+      "afternoon": "Good afternoon",
+      "evening": "Good evening"
+    },
+    "messages": {
+      "onFire": "You're on fire! Keep that streak going!",
+      "greatConsistency": "Great consistency! Practice makes perfect!",
+      "readyToStart": "Ready to start your chess journey?",
+      "welcomeBack": "Welcome back! Let's continue learning!",
+      "followPath": "Follow the path to become a chess master! Complete each course to unlock the next level.",
+      "findBestMove": "Find the best move! Take your time to analyze the position.",
+      "greatMove": "Great move!"
+    }
+  },
+  "navigation": {
+    "home": "Home",
+    "learn": "Learn",
+    "puzzles": "Puzzles",
+    "analyze": "Analyze",
+    "profile": "Profile"
+  },
+  "learn": {
+    "title": "Learning Path",
+    "subtitle": "Master chess step by step",
+    "beginner": "Beginner",
+    "intermediate": "Intermediate",
+    "advanced": "Advanced",
+    "complete": "complete",
+    "signInToLearn": "Sign In to Learn",
+    "startJourney": "Start Your Chess Journey",
+    "signInPrompt": "Sign in to access our structured learning courses and track your progress."
+  },
+  "profile": {
+    "yourProgress": "Your Progress",
+    "yourStats": "Your Stats",
+    "lessonsCompleted": "Lessons Completed",
+    "puzzlesSolved": "Puzzles Solved",
+    "coursesCompleted": "Courses Completed",
+    "minutesPracticed": "Minutes Practiced",
+    "achievements": "Achievements",
+    "account": "Account",
+    "accountSettings": "Account Settings",
+    "signOut": "Sign Out",
+    "achievementsList": {
+      "firstSteps": "First Steps",
+      "firstStepsDesc": "Complete your first lesson",
+      "quickLearner": "Quick Learner",
+      "quickLearnerDesc": "Complete 5 lessons",
+      "onFire": "On Fire",
+      "onFireDesc": "Maintain a 7-day streak",
+      "puzzleMaster": "Puzzle Master",
+      "puzzleMasterDesc": "Solve 50 puzzles",
+      "knightRank": "Knight Rank",
+      "knightRankDesc": "Reach Knight level",
+      "courseComplete": "Course Complete",
+      "courseCompleteDesc": "Complete any course"
+    }
+  },
+  "lesson": {
+    "completeLesson": "Complete Lesson",
+    "completing": "Completing...",
+    "lessonComplete": "Lesson Complete!",
+    "youveCompleted": "You've completed",
+    "signInRequired": "Please sign in to access this lesson",
+    "authError": "Unable to authenticate. Please try signing in again.",
+    "sessionExpired": "Session expired. Please sign in again.",
+    "loadError": "Failed to load lesson. Please try again.",
+    "notFound": "Lesson not found",
+    "backToCourse": "Back to Course",
+    "backTo": "Back to {course}",
+    "course": "Course",
+    "practicePuzzles": "Practice Puzzles ({count} puzzles)",
+    "greatMove": "Great move! 🎯",
+    "aiTutor": "AI Tutor",
+    "aiTutorPrompt": "Ask your AI tutor any questions about this lesson!",
+    "you": "You",
+    "thinking": "Thinking...",
+    "askQuestion": "Ask a question...",
+    "send": "Send",
+    "collapseChat": "Collapse chat",
+    "expandChat": "Expand chat"
+  },
+  "course": {
+    "signInRequired": "Please sign in to access this course",
+    "backToDashboard": "Back to Dashboard",
+    "sessionExpired": "Session expired",
+    "loadError": "Failed to load course data",
+    "retry": "Retry",
+    "notFound": "Course not found",
+    "lessonTypes": {
+      "theory": "Theory",
+      "exercise": "Exercise",
+      "puzzle": "Puzzle"
+    },
+    "review": "Review",
+    "start": "Start",
+    "completePreviousToUnlock": "Complete previous lesson to unlock",
+    "noModules": "No modules available yet"
   },
   "navbar": {
     "title": "Chess Learning Platform"
+  },
+  "puzzle": {
+    "tabs": {
+      "puzzleInfo": "Puzzle Info",
+      "stockfishAnalysis": "Stockfish Analysis",
+      "aiChat": "AI Chat"
+    },
+    "themes": {
+      "title": "Puzzle Themes",
+      "quickSelect": "Quick Select",
+      "randomPuzzle": "Random Puzzle",
+      "advancedSelection": "Advanced Theme Selection",
+      "activeThemes": "Active Themes",
+      "thisPuzzle": "This Puzzle"
+    },
+    "solution": {
+      "title": "Solution View",
+      "previous": "Previous",
+      "next": "Next",
+      "exit": "Exit Solution"
+    },
+    "actions": {
+      "hint": "Hint",
+      "showSolution": "Show Solution",
+      "reset": "Reset",
+      "nextPuzzle": "Next Puzzle"
+    },
+    "rating": "Rating",
+    "status": {
+      "complete": "Puzzle Complete!",
+      "hintUsed": "Hint used",
+      "perfectSolve": "Perfect solve!",
+      "wrongMove": "Wrong move! Use the Show Solution button to see the correct moves.",
+      "hintShown": "Hint: The highlighted squares show the best move!",
+      "viewingSolution": "Viewing solution - use the navigation buttons to step through the moves.",
+      "notFound": "Puzzle combo not present! Please try other puzzle themes"
+    },
+    "stockfish": {
+      "title": "Stockfish 17 NNUE LITE Analysis"
+    },
+    "dialog": {
+      "selectThemes": "Select Puzzle Themes",
+      "selectThemesDesc": "Choose one or more themes to focus your puzzle practice. Leave empty for random puzzles.",
+      "selectThemesLabel": "Select Themes",
+      "searchPlaceholder": "Type to search themes...",
+      "popularThemes": "Popular Themes",
+      "byDifficulty": "By Difficulty",
+      "cancel": "Cancel",
+      "clearAll": "Clear All",
+      "applyGetPuzzle": "Apply & Get Puzzle"
+    }
+  },
+  "opponent": {
+    "title": "Opponent Analysis",
+    "subtitle": "Search for any player to analyze their games, openings, and playing style",
+    "searchPlaceholder": "Search player by name...",
+    "searchButton": "Search",
+    "noResults": "No players found",
+    "tryDifferent": "Try a different search term",
+    "profile": {
+      "title": "Player Profile",
+      "games": "Games",
+      "winRate": "Win Rate",
+      "highestElo": "Highest ELO",
+      "latestElo": "Latest ELO",
+      "activeFrom": "Active From",
+      "lastGame": "Last Game",
+      "fideId": "FIDE ID",
+      "title_label": "Title"
+    },
+    "stats": {
+      "winsWhite": "Wins (White)",
+      "winsBlack": "Wins (Black)",
+      "lossesWhite": "Losses (White)",
+      "lossesBlack": "Losses (Black)",
+      "draws": "Draws"
+    },
+    "filters": {
+      "title": "Filter Games",
+      "result": "Result",
+      "all": "All",
+      "wins": "Wins",
+      "losses": "Losses",
+      "draws": "Draws",
+      "color": "Color",
+      "white": "White",
+      "black": "Black",
+      "both": "Both",
+      "eloMin": "Min ELO",
+      "eloMax": "Max ELO",
+      "dateFrom": "From Date",
+      "dateTo": "To Date",
+      "eco": "ECO Code",
+      "apply": "Apply Filters",
+      "reset": "Reset"
+    },
+    "games": {
+      "title": "Games",
+      "opponent": "Opponent",
+      "result": "Result",
+      "date": "Date",
+      "eco": "ECO",
+      "event": "Event",
+      "viewPgn": "View PGN",
+      "replay": "Replay",
+      "noGames": "No games found with current filters",
+      "loading": "Loading games..."
+    },
+    "replay": {
+      "title": "Game Replay",
+      "close": "Close",
+      "start": "Go to start",
+      "end": "Go to end",
+      "autoPlay": "Auto-play",
+      "move": "Move",
+      "flip": "Flip board"
+    },
+    "engine": {
+      "title": "Engine Analysis",
+      "analyzing": "Analyzing...",
+      "waiting": "Waiting for position",
+      "depth": "Depth",
+      "bestMove": "Best move",
+      "line": "Line"
+    },
+    "openings": {
+      "title": "Opening Repertoire",
+      "asWhite": "As White",
+      "asBlack": "As Black",
+      "opening": "Opening",
+      "games": "Games",
+      "winRate": "Win %",
+      "drawRate": "Draw %",
+      "noData": "No opening data available"
+    },
+    "opponents": {
+      "title": "Frequent Opponents",
+      "player": "Player",
+      "games": "Games",
+      "score": "Score",
+      "noData": "No opponent data available"
+    },
+    "database": {
+      "status": "Database Status",
+      "indexing": "Indexing in progress...",
+      "ready": "Ready",
+      "totalGames": "Total Games",
+      "totalPlayers": "Total Players",
+      "lastUpdated": "Last Updated"
+    }
+  },
+  "editor": {
+    "boardEditor": "Board Editor",
+    "analysisMode": "Analysis Mode",
+    "editorMode": "Editor Mode",
+    "setTheBoard": "Set the board",
+    "choosePosition": "Choose a position...",
+    "variant": "Variant",
+    "standard": "Standard",
+    "colorToPlay": "Color to play",
+    "white": "White",
+    "black": "Black",
+    "castling": "Castling",
+    "enPassant": "En passant",
+    "none": "-",
+    "startingPosition": "Starting Position",
+    "clearBoard": "Clear Board",
+    "flipBoard": "Flip Board",
+    "analysisBoard": "Analysis Board",
+    "continueFromHere": "Continue from here",
+    "study": "Study",
+    "pointerTool": "Pointer (move pieces)",
+    "deleteTool": "Delete pieces",
+    "emptyBoard": "Empty Board",
+    "kingPawnVsKing": "King + Pawn vs King",
+    "rookEndgame": "Rook Endgame",
+    "queenVsRook": "Queen vs Rook",
+    "loadingEditor": "Loading editor...",
+    "fen": "FEN",
+    "url": "URL",
+    "copy": "Copy",
+    "copied": "Copied!"
   }
 }

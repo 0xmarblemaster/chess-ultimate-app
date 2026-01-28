@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 import {
   CastlingRights,
   EditorPieces,
@@ -83,6 +84,7 @@ export default function EditorControls({
   onContinueFromHere,
   onStudy,
 }: EditorControlsProps) {
+  const t = useTranslations("editor");
   const epOptions = getEnPassantOptions(pieces, turn);
   const castlingAvail = computeCastlingAvailability(pieces);
 
@@ -98,7 +100,7 @@ export default function EditorControls({
     >
       {/* Set the board */}
       <div style={sectionStyle}>
-        <label style={labelStyle}>Set the board</label>
+        <label style={labelStyle}>{t("setTheBoard")}</label>
         <select
           style={selectStyle}
           onChange={(e) => {
@@ -108,11 +110,11 @@ export default function EditorControls({
           defaultValue=""
         >
           <option value="" disabled>
-            Choose a position...
+            {t("choosePosition")}
           </option>
-          {Object.keys(PRESET_POSITIONS).map((name) => (
-            <option key={name} value={name}>
-              {name}
+          {Object.keys(PRESET_POSITIONS).map((key) => (
+            <option key={key} value={key}>
+              {t(key)}
             </option>
           ))}
         </select>
@@ -120,15 +122,15 @@ export default function EditorControls({
 
       {/* Variant */}
       <div style={sectionStyle}>
-        <label style={labelStyle}>Variant</label>
+        <label style={labelStyle}>{t("variant")}</label>
         <select style={selectStyle} value="standard" disabled>
-          <option value="standard">Standard</option>
+          <option value="standard">{t("standard")}</option>
         </select>
       </div>
 
       {/* Color to play */}
       <div style={sectionStyle}>
-        <label style={labelStyle}>Color to play</label>
+        <label style={labelStyle}>{t("colorToPlay")}</label>
         <div style={{ display: "flex", gap: "12px" }}>
           <label
             style={{
@@ -146,7 +148,7 @@ export default function EditorControls({
               checked={turn === "w"}
               onChange={() => onTurnChange("w")}
             />
-            White
+            {t("white")}
           </label>
           <label
             style={{
@@ -164,14 +166,14 @@ export default function EditorControls({
               checked={turn === "b"}
               onChange={() => onTurnChange("b")}
             />
-            Black
+            {t("black")}
           </label>
         </div>
       </div>
 
       {/* Castling */}
       <div style={sectionStyle}>
-        <label style={labelStyle}>Castling</label>
+        <label style={labelStyle}>{t("castling")}</label>
 
         {/* White castling */}
         <div
@@ -183,7 +185,7 @@ export default function EditorControls({
           }}
         >
           <span style={{ color: "#999", fontSize: "12px", width: "40px" }}>
-            White
+            {t("white")}
           </span>
           <label
             style={{
@@ -236,7 +238,7 @@ export default function EditorControls({
           }}
         >
           <span style={{ color: "#999", fontSize: "12px", width: "40px" }}>
-            Black
+            {t("black")}
           </span>
           <label
             style={{
@@ -283,13 +285,13 @@ export default function EditorControls({
 
       {/* En passant */}
       <div style={sectionStyle}>
-        <label style={labelStyle}>En passant</label>
+        <label style={labelStyle}>{t("enPassant")}</label>
         <select
           style={selectStyle}
           value={enPassant}
           onChange={(e) => onEnPassantChange(e.target.value)}
         >
-          <option value="-">-</option>
+          <option value="-">{t("none")}</option>
           {epOptions.map((sq) => (
             <option key={sq} value={sq}>
               {sq}
@@ -310,7 +312,7 @@ export default function EditorControls({
             (e.currentTarget.style.backgroundColor = "#333")
           }
         >
-          Starting Position
+          {t("startingPosition")}
         </button>
         <button
           style={btnStyle}
@@ -322,7 +324,7 @@ export default function EditorControls({
             (e.currentTarget.style.backgroundColor = "#333")
           }
         >
-          Clear Board
+          {t("clearBoard")}
         </button>
         <button
           style={btnStyle}
@@ -334,7 +336,7 @@ export default function EditorControls({
             (e.currentTarget.style.backgroundColor = "#333")
           }
         >
-          Flip Board
+          {t("flipBoard")}
         </button>
         <button
           style={{
@@ -350,7 +352,7 @@ export default function EditorControls({
             (e.currentTarget.style.backgroundColor = "#1b5e20")
           }
         >
-          Analysis Board &rarr;
+          {t("analysisBoard")} &rarr;
         </button>
         <button
           style={{
@@ -366,7 +368,7 @@ export default function EditorControls({
             (e.currentTarget.style.backgroundColor = "#0d47a1")
           }
         >
-          Continue from here &rarr;
+          {t("continueFromHere")} &rarr;
         </button>
         <button
           style={{
@@ -382,7 +384,7 @@ export default function EditorControls({
             (e.currentTarget.style.backgroundColor = "#4a148c")
           }
         >
-          Study &rarr;
+          {t("study")} &rarr;
         </button>
       </div>
     </div>
