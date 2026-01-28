@@ -38,6 +38,10 @@ export interface EditorState {
   onAnalysisBoard: () => void;
   onContinueFromHere: () => void;
   onStudy: () => void;
+  photoPreview?: string | null;
+  photoLoading?: boolean;
+  photoError?: string;
+  onUploadPhoto?: (event: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
 interface BoardEditorProps {
@@ -53,6 +57,11 @@ interface BoardEditorProps {
   hideControls?: boolean;
   /** Callback to expose editor state for external EditorControls rendering */
   onEditorStateChange?: (state: EditorState) => void;
+  /** Photo upload state and handlers */
+  photoPreview?: string | null;
+  photoLoading?: boolean;
+  photoError?: string;
+  onPhotoUpload?: (event: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
 export default function BoardEditor({
@@ -62,6 +71,10 @@ export default function BoardEditor({
   boardWidth: propBoardWidth,
   hideControls = false,
   onEditorStateChange,
+  photoPreview,
+  photoLoading,
+  photoError,
+  onPhotoUpload,
 }: BoardEditorProps = {}) {
   const t = useTranslations("editor");
   const router = useRouter();
@@ -285,9 +298,13 @@ export default function BoardEditor({
         onAnalysisBoard: handleAnalysisBoard,
         onContinueFromHere: handleContinueFromHere,
         onStudy: handleStudy,
+        photoPreview,
+        photoLoading,
+        photoError,
+        onUploadPhoto: onPhotoUpload,
       });
     }
-  }, [turn, castling, enPassant, pieces, onEditorStateChange, handlePreset, handleStartingPosition, handleClearBoard, handleFlipBoard, handleAnalysisBoard, handleContinueFromHere, handleStudy]);
+  }, [turn, castling, enPassant, pieces, onEditorStateChange, handlePreset, handleStartingPosition, handleClearBoard, handleFlipBoard, handleAnalysisBoard, handleContinueFromHere, handleStudy, photoPreview, photoLoading, photoError, onPhotoUpload]);
 
   const themeColors = getCurrentThemeColors(boardTheme);
 

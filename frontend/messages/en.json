@@ -458,7 +458,9 @@
     "fen": "FEN",
     "url": "URL",
     "copy": "Copy",
-    "copied": "Copied!"
+    "copied": "Copied!",
+    "uploadBoardPhoto": "Upload Board Photo",
+    "analyzingPhoto": "Analyzing..."
   },
   "analysis": {
     "tabs": {

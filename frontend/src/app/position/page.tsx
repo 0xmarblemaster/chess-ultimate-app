@@ -276,6 +276,10 @@ export default function PositionPage() {
               onAnalysisBoard={editorState.onAnalysisBoard}
               onContinueFromHere={editorState.onContinueFromHere}
               onStudy={editorState.onStudy}
+              photoPreview={editorState.photoPreview}
+              photoLoading={editorState.photoLoading}
+              photoError={editorState.photoError}
+              onUploadPhoto={editorState.onUploadPhoto}
             />
           ) : (
           <ChessterAnalysisView

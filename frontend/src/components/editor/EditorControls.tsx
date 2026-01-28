@@ -25,6 +25,10 @@ interface EditorControlsProps {
   onAnalysisBoard: () => void;
   onContinueFromHere: () => void;
   onStudy: () => void;
+  photoPreview?: string | null;
+  photoLoading?: boolean;
+  photoError?: string;
+  onUploadPhoto?: (event: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
 const sectionStyle: React.CSSProperties = {
@@ -83,6 +87,10 @@ export default function EditorControls({
   onAnalysisBoard,
   onContinueFromHere,
   onStudy,
+  photoPreview,
+  photoLoading,
+  photoError,
+  onUploadPhoto,
 }: EditorControlsProps) {
   const t = useTranslations("editor");
   const epOptions = getEnPassantOptions(pieces, turn);
@@ -386,6 +394,85 @@ export default function EditorControls({
         >
           {t("study")} &rarr;
         </button>
+
+        {/* Upload Board Photo button */}
+        {onUploadPhoto && (
+          <label
+            style={{
+              ...btnStyle,
+              backgroundColor: "#00838f",
+              borderColor: "#00acc1",
+              cursor: photoLoading ? "default" : "pointer",
+              opacity: photoLoading ? 0.7 : 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            onMouseEnter={(e) => {
+              if (!photoLoading) {
+                e.currentTarget.style.backgroundColor = "#00acc1";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!photoLoading) {
+                e.currentTarget.style.backgroundColor = "#00838f";
+              }
+            }}
+          >
+            {photoLoading ? t("analyzingPhoto") : t("uploadBoardPhoto")}
+            <input
+              type="file"
+              hidden
+              accept="image/*"
+              onChange={onUploadPhoto}
+              disabled={photoLoading}
+            />
+          </label>
+        )}
+
+        {/* Photo Preview */}
+        {photoPreview && (
+          <div
+            style={{
+              position: "relative",
+              marginTop: "8px",
+              marginBottom: "8px",
+              borderRadius: "4px",
+              border: "1px solid #555",
+              overflow: "hidden",
+            }}
+          >
+            <img
+              src={photoPreview}
+              alt="Board preview"
+              style={{
+                width: "100%",
+                maxHeight: "150px",
+                objectFit: "contain",
+                display: "block",
+              }}
+            />
+          </div>
+        )}
+
+        {/* Photo Error */}
+        {photoError && (
+          <div
+            style={{
+              color: "#f44336",
+              fontSize: "12px",
+              marginTop: "4px",
+              marginBottom: "8px",
+              padding: "8px",
+              backgroundColor: "rgba(244, 67, 54, 0.1)",
+              borderRadius: "4px",
+              border: "1px solid #f44336",
+              lineHeight: "1.4",
+            }}
+          >
+            {photoError}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1028,6 +1028,10 @@ export default function AiChessboardPanel({
             initialFen={fen}
             boardWidth={responsiveBoardSize}
             onEditorStateChange={onEditorStateChange}
+            photoPreview={photoPreview}
+            photoLoading={photoLoading}
+            photoError={photoError}
+            onPhotoUpload={handlePhotoUpload}
             onAnalyze={(newFen) => {
               // Switch back to analysis mode and load the editor's FEN
               try {

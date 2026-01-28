@@ -458,7 +458,9 @@
     "fen": "FEN",
     "url": "URL",
     "copy": "Копировать",
-    "copied": "Скопировано!"
+    "copied": "Скопировано!",
+    "uploadBoardPhoto": "Загрузить фото доски",
+    "analyzingPhoto": "Анализируется..."
   },
   "analysis": {
     "tabs": {
