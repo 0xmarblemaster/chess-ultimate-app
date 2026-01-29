@@ -10,7 +10,9 @@
     "language": "KK",
     "previous": "Артқа",
     "next": "Алға",
-    "page": "Бет {current} / {total}"
+    "page": "Бет {current} / {total}",
+    "delete": "Жою",
+    "cancel": "Болдырмау"
   },
   "landing": {
     "mascot": "Талисман",
@@ -515,7 +517,15 @@
         "stockfish16": "16.1 NNUE тұрақты нұсқасы, жақсы тексерілген",
         "stockfish11": "Ескі нұсқа, әлсіз жабдықта жылдамырақ"
       }
-    }
+    },
+    "newChat": "Жаңа шахмат чаты",
+    "collapse": "Жасыру",
+    "noChatsYet": "Әлі чаттар жоқ",
+    "startNewChat": "Шахмат талдауын бастау үшін жаңа чат бастаңыз",
+    "renameChat": "Чатты қайта атау",
+    "deleteChat": "Чатты жою",
+    "chatCount": "{count, plural, =0 {0 чат} one {# чат} other {# чат}}",
+    "deleteConfirmMessage": "Осы чатты жойғыңыз келе ме? Бұл әрекетті болдырмауға болмайды."
   },
   "game": {
     "saveReview": "Шолуды сақтау",

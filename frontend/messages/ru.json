@@ -10,7 +10,9 @@
     "language": "RU",
     "previous": "Назад",
     "next": "Далее",
-    "page": "Страница {current} из {total}"
+    "page": "Страница {current} из {total}",
+    "delete": "Удалить",
+    "cancel": "Отмена"
   },
   "landing": {
     "mascot": "Маскот",
@@ -515,7 +517,15 @@
         "stockfish16": "Стабильная версия 16.1 NNUE, хорошо протестирована",
         "stockfish11": "Старая версия, быстрее на слабом оборудовании"
       }
-    }
+    },
+    "newChat": "Новый шахматный чат",
+    "collapse": "Свернуть",
+    "noChatsYet": "Пока нет чатов",
+    "startNewChat": "Начните новый чат для анализа шахмат",
+    "renameChat": "Переименовать чат",
+    "deleteChat": "Удалить чат",
+    "chatCount": "{count, plural, =0 {0 чатов} one {# чат} few {# чата} many {# чатов} other {# чатов}}",
+    "deleteConfirmMessage": "Вы уверены, что хотите удалить этот чат? Это действие нельзя отменить."
   },
   "game": {
     "saveReview": "Сохранить обзор",

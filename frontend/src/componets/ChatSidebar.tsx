@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { ChatSession } from '@/hooks/useChatSessions';
 import ConfirmDialog from './ui/ConfirmDialog';
 
@@ -26,6 +27,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
   onToggleCollapse,
   isCollapsed = false,
 }) => {
+  const t = useTranslations();
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -78,7 +80,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
-          <span>New Chess Chat</span>
+          <span>{t('analysis.newChat')}</span>
         </button>
         <button
           onClick={onToggleCollapse}
@@ -88,7 +90,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
           </svg>
-          <span>Collapse</span>
+          <span>{t('analysis.collapse')}</span>
         </button>
       </div>
 
@@ -97,10 +99,10 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
         {sessions.length === 0 ? (
           <div className="p-6 text-center">
             <div className="text-purple-300/60 text-sm">
-              No chats yet
+              {t('analysis.noChatsYet')}
             </div>
             <div className="text-slate-400 text-xs mt-2">
-              Start a new chat to begin your chess analysis
+              {t('analysis.startNewChat')}
             </div>
           </div>
         ) : (
@@ -162,7 +164,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
                             handleStartEdit(session);
                           }}
                           className="p-1.5 text-slate-400 hover:text-purple-300 hover:bg-purple-500/20 rounded transition-colors"
-                          title="Rename chat"
+                          title={t('analysis.renameChat')}
                         >
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -175,7 +177,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
                             setDeleteDialogOpen(true);
                           }}
                           className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-500/20 rounded transition-colors"
-                          title="Delete chat"
+                          title={t('analysis.deleteChat')}
                         >
                           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -198,7 +200,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
             </svg>
             <span>
-              {sessions.length} chat{sessions.length !== 1 ? 's' : ''}
+              {t('analysis.chatCount', { count: sessions.length })}
             </span>
           </div>
         </div>
@@ -225,10 +227,10 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog
         open={deleteDialogOpen}
-        title="Delete Chat"
-        message="Are you sure you want to delete this chat? This action cannot be undone."
-        confirmText="Delete"
-        cancelText="Cancel"
+        title={t('analysis.deleteChat')}
+        message={t('analysis.deleteConfirmMessage')}
+        confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
         variant="danger"
         onConfirm={() => {
           if (sessionToDelete) {
