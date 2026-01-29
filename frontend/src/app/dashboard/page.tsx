@@ -151,21 +151,21 @@ export default function DashboardPage() {
     return levels[level] || level
   }
 
-  const getGreeting = () => {
+  const greeting = useMemo(() => {
     const hour = new Date().getHours()
-    const name = user?.firstName || 'Chess Player'
+    const name = user?.firstName || t('common.chesster')
 
-    if (hour < 12) return `Good morning, ${name}!`
-    if (hour < 18) return `Good afternoon, ${name}!`
-    return `Good evening, ${name}!`
-  }
+    if (hour < 12) return `${t('mascot.greeting.morning')}, ${name}!`
+    if (hour < 18) return `${t('mascot.greeting.afternoon')}, ${name}!`
+    return `${t('mascot.greeting.evening')}, ${name}!`
+  }, [user?.firstName, t])
 
-  const getMascotMessage = () => {
-    if (streakDays >= 7) return "You're on fire! Keep that streak going! 🔥"
-    if (streakDays >= 3) return "Great consistency! Practice makes perfect!"
-    if (currentCourse?.progress === 0) return "Ready to start your chess journey?"
-    return "Welcome back! Let's continue learning!"
-  }
+  const mascotMessage = useMemo(() => {
+    if (streakDays >= 7) return t('mascot.messages.onFire')
+    if (streakDays >= 3) return t('mascot.messages.greatConsistency')
+    if (currentCourse?.progress === 0) return t('mascot.messages.readyToStart')
+    return t('mascot.messages.welcomeBack')
+  }, [streakDays, currentCourse?.progress, t])
 
   if (loading || !isLoaded) {
     return <LoadingScreen isVisible={true} />
@@ -184,9 +184,9 @@ export default function DashboardPage() {
             <LevelBadge xp={userXP} size="sm" showName={false} />
           </div>
 
-          <h1 className="text-2xl font-bold">{getGreeting()}</h1>
+          <h1 className="text-2xl font-bold">{greeting}</h1>
           <p className="text-purple-200 mt-1">
-            {getLevelFromXp(userXP).charAt(0).toUpperCase() + getLevelFromXp(userXP).slice(1)} Level • {userXP.toLocaleString()} XP
+            {t(`gamification.levels.${getLevelFromXp(userXP)}`)} {t('gamification.level')} • {userXP.toLocaleString()} {t('gamification.xp')}
           </p>
         </div>
       </div>
@@ -195,7 +195,7 @@ export default function DashboardPage() {
         {/* Mascot greeting */}
         <div className="mb-6">
           <SpeechBubble mood={streakDays >= 3 ? 'celebrating' : 'happy'} mascotSize="sm">
-            {getMascotMessage()}
+            {mascotMessage}
           </SpeechBubble>
         </div>
 
@@ -208,7 +208,7 @@ export default function DashboardPage() {
             >
               <div className="flex items-center justify-between mb-3">
                 <span className="text-sm font-medium text-purple-600 uppercase tracking-wide">
-                  Continue Learning
+                  {t('dashboard.continueLearning')}
                 </span>
                 <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                   currentCourse.level === 'beginner' ? 'bg-green-100 text-green-700' :
@@ -235,10 +235,10 @@ export default function DashboardPage() {
 
               <div className="mt-4 flex items-center justify-between">
                 <span className="text-sm text-gray-500">
-                  {courseProgress[currentCourse.id]?.completedLessons || 0} of {courseProgress[currentCourse.id]?.totalLessons || 0} lessons completed
+                  {courseProgress[currentCourse.id]?.completedLessons || 0} / {courseProgress[currentCourse.id]?.totalLessons || 0} {t('dashboard.lessonsCompleted')}
                 </span>
                 <span className="text-purple-600 font-semibold flex items-center gap-1">
-                  Continue →
+                  {t('dashboard.continue')} →
                 </span>
               </div>
             </Link>
@@ -247,7 +247,7 @@ export default function DashboardPage() {
 
         {/* Quick Actions */}
         <div className="mb-8">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">Quick Actions</h2>
+          <h2 className="text-lg font-bold text-gray-900 mb-4">{t('dashboard.quickActions')}</h2>
           <div className="grid grid-cols-3 gap-3">
             {analysisTools.map((tool) => (
               <Link
@@ -295,7 +295,7 @@ export default function DashboardPage() {
 
         {/* Daily Goals / Achievements teaser */}
         <div className="bg-white rounded-2xl shadow-md p-6 mb-8">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">Today's Goals</h2>
+          <h2 className="text-lg font-bold text-gray-900 mb-4">{t('dashboard.todaysGoals')}</h2>
           <div className="space-y-3">
             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
               <div className="flex items-center gap-3">
@@ -303,12 +303,12 @@ export default function DashboardPage() {
                   {streakDays > 0 ? '✅' : '⏳'}
                 </div>
                 <div>
-                  <div className="font-medium text-gray-900">Practice today</div>
-                  <div className="text-sm text-gray-500">Keep your streak alive</div>
+                  <div className="font-medium text-gray-900">{t('dashboard.practiceToday')}</div>
+                  <div className="text-sm text-gray-500">{t('dashboard.keepStreakAlive')}</div>
                 </div>
               </div>
               <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
-                +5 XP
+                +5 {t('gamification.xp')}
               </span>
             </div>
 
@@ -318,12 +318,12 @@ export default function DashboardPage() {
                   📚
                 </div>
                 <div>
-                  <div className="font-medium text-gray-900">Complete a lesson</div>
-                  <div className="text-sm text-gray-500">Learn something new</div>
+                  <div className="font-medium text-gray-900">{t('dashboard.completeLesson')}</div>
+                  <div className="text-sm text-gray-500">{t('dashboard.learnSomethingNew')}</div>
                 </div>
               </div>
               <span className="text-xs font-medium text-purple-600 bg-purple-50 px-2 py-1 rounded-full">
-                +10 XP
+                +10 {t('gamification.xp')}
               </span>
             </div>
 
@@ -333,12 +333,12 @@ export default function DashboardPage() {
                   🧩
                 </div>
                 <div>
-                  <div className="font-medium text-gray-900">Solve 3 puzzles</div>
-                  <div className="text-sm text-gray-500">Sharpen your tactics</div>
+                  <div className="font-medium text-gray-900">{t('dashboard.solvePuzzles')}</div>
+                  <div className="text-sm text-gray-500">{t('dashboard.sharpenTactics')}</div>
                 </div>
               </div>
               <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded-full">
-                +15 XP
+                +15 {t('gamification.xp')}
               </span>
             </div>
           </div>
