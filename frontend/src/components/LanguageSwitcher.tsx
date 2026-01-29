@@ -35,8 +35,8 @@ export default function LanguageSwitcher({
     // Set cookie for the new locale
     document.cookie = `NEXT_LOCALE=${newLocale};path=/;max-age=31536000`
     setIsOpen(false)
-    // Refresh the page to apply the new locale
-    router.refresh()
+    // Force full page reload to apply the new locale (server must re-read cookie)
+    window.location.reload()
   }
 
   const currentFlag = localeFlags[currentLocale as Locale] || '🌐'
