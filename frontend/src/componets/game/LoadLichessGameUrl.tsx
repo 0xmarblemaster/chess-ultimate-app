@@ -1,3 +1,5 @@
+'use client'
+
 import { Box, Typography, Button, TextField } from "@mui/material";
 import { useState } from "react";
 import { CircularProgress } from "@mui/material";
@@ -11,6 +13,7 @@ import {
 } from "@/libs/game/helper";
 import { Chess } from "chess.js";
 import { MoveAnalysis } from "@/hooks/useGameReview";
+import { useTranslations } from "next-intl";
 
 export interface ParsedComment {
   move: string;
@@ -48,20 +51,20 @@ function LoadLichessGameUrl({
   analyzeGameTheme,
   setLlmAnalysisResult,
 }: LoadLichessGameUrlProp) {
+  const t = useTranslations('lichess')
+  const tPlaceholder = useTranslations('playerSearch')
   const [loadingGame, setLoadingGame] = useState(false);
   const [gameUrl, setGameUrl] = useState("");
 
   const handleLoadLichessGame = async () => {
     if (!gameUrl.trim()) {
-      alert("Please enter a Lichess game URL");
+      alert(t('enterUrl'));
       return;
     }
 
     const gameId = getValidGameId(gameUrl);
     if (!gameId) {
-      alert(
-        "Invalid Lichess game URL. Please use a URL like: https://lichess.org/abcdefgh"
-      );
+      alert(t('enterUrl'));
       return;
     }
 
@@ -101,7 +104,7 @@ function LoadLichessGameUrl({
         });
       } catch (pgnError) {
         console.error("Error parsing PGN:", pgnError);
-        alert("Invalid PGN data received from Lichess");
+        alert(t('invalidPGN'));
       }
     } catch (error) {
       console.error("Error loading Lichess game:", error);
@@ -134,7 +137,7 @@ function LoadLichessGameUrl({
         label="Paste Lichess Game URL"
         value={gameUrl}
         onChange={(e) => setGameUrl(e.target.value)}
-        placeholder="https://lichess.org/abcdefgh or https://lichess.org/abcdefgh1234"
+        placeholder={tPlaceholder('lichessUrlPlaceholder')}
         sx={{
           backgroundColor: purpleTheme.background.input,
           borderRadius: 2,

@@ -7,7 +7,10 @@
     "dashboard": "Главная",
     "loading": "Загрузка...",
     "error": "Ошибка",
-    "language": "RU"
+    "language": "RU",
+    "previous": "Назад",
+    "next": "Далее",
+    "page": "Страница {current} из {total}"
   },
   "landing": {
     "mascot": "Маскот",
@@ -512,5 +515,118 @@
         "stockfish11": "Старая версия, быстрее на слабом оборудовании"
       }
     }
+  },
+  "game": {
+    "saveReview": "Сохранить обзор",
+    "noReviewToSave": "Нет обзора для сохранения. Пожалуйста, сначала создайте обзор.",
+    "errorLoadingSaved": "Ошибка загрузки сохранённой игры",
+    "enterPGN": "Пожалуйста, введите или вставьте PGN",
+    "autoAnalysis": "Автоанализ",
+    "autoAnalysisTooltip": "Включить автоанализ при выборе игр из базы. Отключите для более быстрого просмотра (экономия 2-40 сек на игру).",
+    "whiteToMove": "Ход белых.",
+    "blackToMove": "Ход чёрных.",
+    "loadFailed": "Не удалось загрузить задачу. Попробуйте ещё раз.",
+    "pgnView": "Просмотр PGN",
+    "moveListView": "Список ходов",
+    "previous": "Назад",
+    "next": "Далее",
+    "previousArrow": "Назад (←)",
+    "nextArrow": "Далее (→)"
+  },
+  "database": {
+    "filterPlaceholder": "Фильтр...",
+    "performanceNote": "Оптимизирована производительность: используется пагинация и отложенная фильтрация для плавного просмотра больших коллекций игр",
+    "refreshData": "Обновить данные"
+  },
+  "chat": {
+    "conversationStarters": "Начало разговора",
+    "positionLibrary": "Библиотека позиций",
+    "chatHistory": "История чата",
+    "stopSpeaking": "Остановить озвучивание",
+    "settings": "Настройки",
+    "viewOnBoard": "Посмотреть позицию на доске",
+    "copyMessage": "Копировать сообщение",
+    "stopResponse": "Остановить ответ",
+    "expandPanel": "Развернуть панель сеанса",
+    "collapsePanel": "Свернуть панель",
+    "renameChat": "Переименовать чат",
+    "deleteChat": "Удалить чат",
+    "deleteChatConfirm": "Удалить чат"
+  },
+  "puzzles": {
+    "lessonTitle": "Маты ладьёй",
+    "lessonDescription": "Поставьте мат ладьёй",
+    "instruction": "Нажмите на ладью, затем на клетку для мата!",
+    "progress": "Прогресс",
+    "puzzleNumber": "Задача {number}",
+    "completed": "выполнено",
+    "allComplete": "Все задачи решены!",
+    "masteredAll": "Вы освоили все {count} задач.",
+    "hint": "Подсказка:",
+    "previous": "Назад",
+    "next": "Далее",
+    "resetProgress": "Сбросить весь прогресс урока? Все задачи будут отмечены как нерешённые.",
+    "resetFailed": "Не удалось сбросить прогресс. Попробуйте ещё раз.",
+    "noPuzzles": "Задачи для этого урока не найдены",
+    "fetchFailed": "Не удалось загрузить задачи",
+    "resetProgressButton": "Сбросить прогресс",
+    "noMoves": "Нет ходов",
+    "unknown": "Неизвестно",
+    "whiteWins": "Победа белых",
+    "blackWins": "Победа чёрных",
+    "draw": "Ничья",
+    "ongoing": "В процессе",
+    "games": "партий",
+    "peak": "Пик: {elo}",
+    "page": "Страница {current} из {total}"
+  },
+  "lichess": {
+    "enterUrl": "Пожалуйста, введите URL игры с Lichess",
+    "invalidPGN": "Получены недействительные PGN данные с Lichess",
+    "invalidStudyUrl": "Неверный URL учебника",
+    "studyNotFound": "Учебник не найден. Проверьте URL.",
+    "studyPrivate": "Этот учебник приватный или не существует. Пожалуйста, используйте публичный URL.",
+    "noChapters": "В этом учебнике не найдено глав",
+    "studyLoadFailed": "Не удалось загрузить учебник. Проверьте подключение и попробуйте снова.",
+    "invalidPGNInput": "Недействительный PGN ввод!"
+  },
+  "modelSettings": {
+    "apiKeyPlaceholder": "Введите ваш API ключ OpenRouter...",
+    "ngrokPlaceholder": "Введите ваш ngrok endpoint https:..."
+  },
+  "review": {
+    "commentPlaceholder": "Добавьте свои мысли о позиции...",
+    "moveCommentPlaceholder": "Введите ваш комментарий или мысли об этом ходе...",
+    "reviewSaved": "Обзор игры успешно сохранён!"
+  },
+  "board": {
+    "fenPlaceholder": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKQ w KQkq - 0 1",
+    "invalidFEN": "Неверная строка FEN.",
+    "showHint": "Показать подсказку",
+    "resetBoard": "Сбросить доску",
+    "changeLanguage": "Изменить язык",
+    "pgnFormat": "Формат PGN",
+    "moveList": "Список ходов",
+    "evalGraph": "График оценки",
+    "closeEval": "закрыть"
+  },
+  "playerSearch": {
+    "eloMinPlaceholder": "1000",
+    "eloMaxPlaceholder": "2800",
+    "ecoPlaceholder": "B90",
+    "lichessUrlPlaceholder": "https://lichess.org/abcdefgh или https://lichess.org/abcdefgh1234",
+    "studyUrlPlaceholder": "https://lichess.org/study/GuglnqGD",
+    "pgnPlaceholder": "1. e4 e5 2. Nf3 Nc6 3. Bb5 a6..."
+  },
+  "errors": {
+    "fetchFailed": "Не удалось загрузить задачи",
+    "resetFailed": "Не удалось сбросить прогресс",
+    "invalidPuzzleData": "Получены недействительные данные задачи",
+    "fetchCoursesFailed": "Не удалось загрузить курсы",
+    "fetchLessonFailed": "Не удалось загрузить урок",
+    "noAuthToken": "Нет токена авторизации",
+    "sessionExpired": "Сеанс истёк",
+    "fetchCourseFailed": "Не удалось загрузить данные курса",
+    "invalidResponseFormat": "Неверный формат ответа: ходы не найдены"
   }
 }

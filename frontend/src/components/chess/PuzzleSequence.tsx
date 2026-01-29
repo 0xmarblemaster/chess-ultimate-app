@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { AnimatedChessBoard } from '@/components/chess'
-import { ChevronLeft, ChevronRight, Check, Trophy } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Check, Trophy, RotateCcw } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 interface Puzzle {
   id: string
@@ -36,6 +37,8 @@ export default function PuzzleSequence({
   getToken,
   onAllPuzzlesComplete
 }: PuzzleSequenceProps) {
+  const t = useTranslations('puzzles')
+  const tErrors = useTranslations('errors')
   const [puzzles, setPuzzles] = useState<Puzzle[]>([])
   const [currentIndex, setCurrentIndex] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
@@ -44,6 +47,7 @@ export default function PuzzleSequence({
   const [error, setError] = useState<string | null>(null)
   const [allComplete, setAllComplete] = useState(false)
   const [justSolved, setJustSolved] = useState(false)
+  const [resetting, setResetting] = useState(false)
 
   const apiUrl = process.env.NEXT_PUBLIC_API_URL
 
@@ -61,7 +65,7 @@ export default function PuzzleSequence({
       )
 
       if (!res.ok) {
-        throw new Error('Failed to fetch puzzles')
+        throw new Error(tErrors('fetchFailed'))
       }
 
       const data = await res.json()
@@ -72,7 +76,7 @@ export default function PuzzleSequence({
       setAllComplete(data.completed_count >= data.total_count && data.total_count > 0)
     } catch (err) {
       console.error('Error fetching puzzles:', err)
-      setError('Failed to load puzzles')
+      setError(t('noPuzzles'))
     } finally {
       setLoading(false)
     }
@@ -150,6 +154,46 @@ export default function PuzzleSequence({
     setCurrentIndex(index)
   }
 
+  // Reset all progress for this lesson
+  const resetProgress = async () => {
+    if (!confirm(t('resetProgress'))) {
+      return
+    }
+
+    setResetting(true)
+    try {
+      const token = await getToken()
+      if (!token) return
+
+      const res = await fetch(
+        `${apiUrl}/api/learn/${courseSlug}/${lessonSlug}/puzzles/reset`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      )
+
+      if (!res.ok) {
+        throw new Error(tErrors('resetFailed'))
+      }
+
+      // Reset local state
+      setPuzzles(prev => prev.map(p => ({ ...p, completed: false, attempts: 0 })))
+      setCompletedCount(0)
+      setCurrentIndex(1)
+      setAllComplete(false)
+      setJustSolved(false)
+    } catch (err) {
+      console.error('Error resetting progress:', err)
+      alert(t('resetFailed'))
+    } finally {
+      setResetting(false)
+    }
+  }
+
   // Get current puzzle
   const currentPuzzle = puzzles.find(p => p.order_index === currentIndex)
 
@@ -164,7 +208,7 @@ export default function PuzzleSequence({
   if (error || !currentPuzzle) {
     return (
       <div className="text-center py-8 text-gray-500">
-        {error || 'No puzzles found for this lesson'}
+        {error || t('noPuzzles')}
       </div>
     )
   }
@@ -208,21 +252,31 @@ export default function PuzzleSequence({
               </svg>
             </div>
             <div>
-              <h3 className="font-bold text-lg">Rook Checkmates</h3>
-              <p className="text-sm text-white/80">Deliver checkmate with the rook</p>
+              <h3 className="font-bold text-lg">{t('lessonTitle')}</h3>
+              <p className="text-sm text-white/80">{t('lessonDescription')}</p>
             </div>
           </div>
 
           <p className="text-sm bg-white/10 rounded p-3">
-            Click on the rook, then click on the square to deliver checkmate!
+            {t('instruction')}
           </p>
         </div>
 
         {/* Progress */}
         <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium">Progress</span>
-            <span className="text-sm text-gray-500">{completedCount}/{totalCount}</span>
+            <span className="text-sm font-medium">{t('progress')}</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-500">{completedCount}/{totalCount}</span>
+              <button
+                onClick={resetProgress}
+                disabled={resetting || completedCount === 0}
+                className="p-1 text-gray-400 hover:text-red-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                title={t('resetProgressButton')}
+              >
+                <RotateCcw className={`w-4 h-4 ${resetting ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
           </div>
           <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
             <div
@@ -253,7 +307,7 @@ export default function PuzzleSequence({
                         : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                     }
                   `}
-                  title={`Puzzle ${p.order_index}${isCompleted ? ' (completed)' : ''}`}
+                  title={`${t('puzzleNumber', { number: p.order_index })}${isCompleted ? ` (${t('completed')})` : ''}`}
                 >
                   {isCompleted && !isCurrent ? (
                     <Check className="w-4 h-4" />
@@ -273,10 +327,10 @@ export default function PuzzleSequence({
               <Trophy className="w-8 h-8 text-green-600" />
               <div>
                 <p className="font-semibold text-green-800 dark:text-green-200">
-                  All puzzles complete!
+                  {t('allComplete')}
                 </p>
                 <p className="text-sm text-green-600 dark:text-green-400">
-                  You've mastered all {totalCount} puzzles.
+                  {t('masteredAll', { count: totalCount })}
                 </p>
               </div>
             </div>
@@ -287,7 +341,7 @@ export default function PuzzleSequence({
         {currentPuzzle.hint_text && !currentPuzzle.completed && (
           <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
             <p className="text-sm text-yellow-800 dark:text-yellow-200">
-              <span className="font-medium">Hint:</span> {currentPuzzle.hint_text}
+              <span className="font-medium">{t('hint')}</span> {currentPuzzle.hint_text}
             </p>
           </div>
         )}
@@ -303,7 +357,7 @@ export default function PuzzleSequence({
                        transition-colors text-sm font-medium"
           >
             <ChevronLeft className="w-4 h-4" />
-            Previous
+            {t('previous')}
           </button>
 
           <span className="text-sm text-gray-500">
@@ -318,7 +372,7 @@ export default function PuzzleSequence({
                        disabled:opacity-50 disabled:cursor-not-allowed
                        transition-colors text-sm font-medium"
           >
-            Next
+            {t('next')}
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>

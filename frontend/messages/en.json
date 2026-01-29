@@ -7,7 +7,10 @@
     "dashboard": "Dashboard",
     "loading": "Loading...",
     "error": "Error",
-    "language": "EN"
+    "language": "EN",
+    "previous": "Previous",
+    "next": "Next",
+    "page": "Page {current} of {total}"
   },
   "landing": {
     "mascot": "Mascot",
@@ -512,5 +515,118 @@
         "stockfish11": "Older version, faster on weaker hardware"
       }
     }
+  },
+  "game": {
+    "saveReview": "Save Review",
+    "noReviewToSave": "No game review to save. Please generate a review first.",
+    "errorLoadingSaved": "Error loading saved game",
+    "enterPGN": "Please enter or paste PGN content",
+    "autoAnalysis": "Auto-analysis",
+    "autoAnalysisTooltip": "Enable auto-analysis when selecting games from the database. Disable for faster browsing (2-40s per game saved).",
+    "whiteToMove": "White to move.",
+    "blackToMove": "Black to move.",
+    "loadFailed": "Failed to load puzzle. Please try again.",
+    "pgnView": "PGN view",
+    "moveListView": "Move list view",
+    "previous": "Previous",
+    "next": "Next",
+    "previousArrow": "Previous (←)",
+    "nextArrow": "Next (→)"
+  },
+  "database": {
+    "filterPlaceholder": "Filter...",
+    "performanceNote": "Performance optimized: Uses pagination and debounced filtering for smooth browsing of large game collections",
+    "refreshData": "Refresh data"
+  },
+  "chat": {
+    "conversationStarters": "Conversation starters",
+    "positionLibrary": "Position Library",
+    "chatHistory": "Chat History",
+    "stopSpeaking": "Stop speaking",
+    "settings": "Settings",
+    "viewOnBoard": "View position on board",
+    "copyMessage": "Copy message",
+    "stopResponse": "Stop response",
+    "expandPanel": "Expand Session Panel",
+    "collapsePanel": "Collapse Panel",
+    "renameChat": "Rename chat",
+    "deleteChat": "Delete chat",
+    "deleteChatConfirm": "Delete Chat"
+  },
+  "puzzles": {
+    "lessonTitle": "Rook Checkmates",
+    "lessonDescription": "Deliver checkmate with the rook",
+    "instruction": "Click on the rook, then click on the square to deliver checkmate!",
+    "progress": "Progress",
+    "puzzleNumber": "Puzzle {number}",
+    "completed": "completed",
+    "allComplete": "All puzzles complete!",
+    "masteredAll": "You've mastered all {count} puzzles.",
+    "hint": "Hint:",
+    "previous": "Previous",
+    "next": "Next",
+    "resetProgress": "Reset all progress for this lesson? All puzzles will be marked as unsolved.",
+    "resetFailed": "Failed to reset progress. Please try again.",
+    "noPuzzles": "No puzzles found for this lesson",
+    "fetchFailed": "Failed to fetch puzzles",
+    "resetProgressButton": "Reset progress",
+    "noMoves": "No moves",
+    "unknown": "Unknown",
+    "whiteWins": "White wins",
+    "blackWins": "Black wins",
+    "draw": "Draw",
+    "ongoing": "Ongoing",
+    "games": "games",
+    "peak": "Peak: {elo}",
+    "page": "Page {current} of {total}"
+  },
+  "lichess": {
+    "enterUrl": "Please enter a Lichess game URL",
+    "invalidPGN": "Invalid PGN data received from Lichess",
+    "invalidStudyUrl": "Invalid study URL",
+    "studyNotFound": "Study not found. Please check the URL.",
+    "studyPrivate": "This study is private or does not exist. Please use a public study URL.",
+    "noChapters": "No chapters found in this study",
+    "studyLoadFailed": "Failed to load study. Please check your connection and try again.",
+    "invalidPGNInput": "Invalid PGN input!"
+  },
+  "modelSettings": {
+    "apiKeyPlaceholder": "Enter your OpenRouter API key...",
+    "ngrokPlaceholder": "Enter your ngrok endpoint https:..."
+  },
+  "review": {
+    "commentPlaceholder": "Add your thoughts about the position...",
+    "moveCommentPlaceholder": "Enter your comment or thoughts about this move...",
+    "reviewSaved": "Game review saved successfully!"
+  },
+  "board": {
+    "fenPlaceholder": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKQ w KQkq - 0 1",
+    "invalidFEN": "Invalid FEN string.",
+    "showHint": "Show hint",
+    "resetBoard": "Reset board",
+    "changeLanguage": "Change language",
+    "pgnFormat": "PGN Format",
+    "moveList": "Move List",
+    "evalGraph": "Eval Graph",
+    "closeEval": "close"
+  },
+  "playerSearch": {
+    "eloMinPlaceholder": "1000",
+    "eloMaxPlaceholder": "2800",
+    "ecoPlaceholder": "B90",
+    "lichessUrlPlaceholder": "https://lichess.org/abcdefgh or https://lichess.org/abcdefgh1234",
+    "studyUrlPlaceholder": "https://lichess.org/study/GuglnqGD",
+    "pgnPlaceholder": "1. e4 e5 2. Nf3 Nc6 3. Bb5 a6..."
+  },
+  "errors": {
+    "fetchFailed": "Failed to fetch puzzles",
+    "resetFailed": "Failed to reset progress",
+    "invalidPuzzleData": "Invalid puzzle data received",
+    "fetchCoursesFailed": "Failed to fetch courses",
+    "fetchLessonFailed": "Failed to fetch lesson",
+    "noAuthToken": "No auth token",
+    "sessionExpired": "Session expired",
+    "fetchCourseFailed": "Failed to fetch course data",
+    "invalidResponseFormat": "Invalid response format: moves not found"
   }
 }
