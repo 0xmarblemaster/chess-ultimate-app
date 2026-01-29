@@ -1,10 +1,14 @@
+'use client'
+
 import React from 'react';
+import { useTranslations } from 'next-intl';
 
 interface LoadingScreenProps {
   isVisible: boolean;
 }
 
 const LoadingScreen: React.FC<LoadingScreenProps> = ({ isVisible }) => {
+  const t = useTranslations('common');
   if (!isVisible) return null;
 
   return (
@@ -173,7 +177,7 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ isVisible }) => {
           <div className="chess-piece bishop">♝</div>
           <div className="chess-piece knight">♞</div>
           <div className="chess-piece pawn">♟</div>
-          <div className="loading-text">Loading...</div>
+          <div className="loading-text">{t('loading')}</div>
         </div>
       </div>
     </>

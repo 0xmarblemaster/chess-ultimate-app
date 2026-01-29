@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 
 interface StreakBannerProps {
   streakDays: number;
@@ -10,6 +11,7 @@ interface StreakBannerProps {
 
 export function StreakBanner({ streakDays, lastActivityDate, showCalendar = false }: StreakBannerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const t = useTranslations('gamification');
 
   const isActiveToday = lastActivityDate
     ? new Date(lastActivityDate).toDateString() === new Date().toDateString()
@@ -47,9 +49,9 @@ export function StreakBanner({ streakDays, lastActivityDate, showCalendar = fals
             🔥
           </div>
           <div className="text-left">
-            <div className="text-2xl font-bold">{streakDays} day streak!</div>
+            <div className="text-2xl font-bold">{streakDays} {t('dayStreak')}!</div>
             <div className="text-sm text-orange-100">
-              {isActiveToday ? "You've practiced today!" : 'Practice to keep your streak!'}
+              {isActiveToday ? t('streakProtected') : t('practiceToKeepStreak')}
             </div>
           </div>
         </div>
@@ -67,7 +69,7 @@ export function StreakBanner({ streakDays, lastActivityDate, showCalendar = fals
 
       {isExpanded && showCalendar && (
         <div className="mt-4 pt-4 border-t border-orange-400">
-          <div className="text-sm text-orange-100 mb-2">This Week</div>
+          <div className="text-sm text-orange-100 mb-2">{t('thisWeek')}</div>
           <div className="flex justify-between">
             {getWeekDays().map((day, i) => (
               <div key={i} className="flex flex-col items-center gap-1">
