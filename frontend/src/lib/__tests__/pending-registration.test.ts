@@ -36,6 +36,9 @@ function makeBuilder(table: string) {
     eq() {
       return chain;
     },
+    in() {
+      return chain;
+    },
     limit() {
       return chain;
     },
@@ -72,7 +75,18 @@ vi.mock('@clerk/nextjs/server', () => ({
   }),
 }));
 
-import { claimPendingByJwt } from '../pending-registration';
+// The `ce_pending_jti` cookie value on the simulated request (undefined = none).
+const cookieStore: { value: string | undefined } = { value: undefined };
+vi.mock('next/headers', () => ({
+  cookies: async () => ({
+    get: (name: string) =>
+      name === 'ce_pending_jti' && cookieStore.value !== undefined
+        ? { value: cookieStore.value }
+        : undefined,
+  }),
+}));
+
+import { claimPendingByJwt, hasLivePendingCookie } from '../pending-registration';
 
 const ORG = '00000000-0000-0000-0000-000000000004';
 const STUDENT = '00000000-0000-0000-0000-000000000001';
@@ -84,6 +98,7 @@ beforeEach(() => {
   upserted.length = 0;
   updated.length = 0;
   createMembershipSpy.mockClear();
+  cookieStore.value = undefined;
 });
 
 describe('claimPendingByJwt', () => {
@@ -251,5 +266,36 @@ describe('claimPendingByJwt', () => {
     const res = await claimPendingByJwt(RAW_JWT, 'clerk-user', null);
     expect(res).toEqual({ ok: false, reason: 'claimed_by_other' });
     expect(upserted).toHaveLength(0);
+  });
+});
+
+describe('hasLivePendingCookie', () => {
+  it('is false when no ce_pending_jti cookie is present', async () => {
+    cookieStore.value = undefined;
+    expect(await hasLivePendingCookie()).toBe(false);
+  });
+
+  it('is true when the cookie maps to a live pending row', async () => {
+    cookieStore.value = RAW_JWT;
+    scripts['pending_registrations'] = [
+      { data: [{ created_at: new Date().toISOString(), status: 'pending' }] },
+    ];
+    expect(await hasLivePendingCookie()).toBe(true);
+  });
+
+  it('is false when the matching row is expired (older than 7 days)', async () => {
+    cookieStore.value = RAW_JWT;
+    const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+    scripts['pending_registrations'] = [
+      { data: [{ created_at: eightDaysAgo, status: 'pending' }] },
+    ];
+    expect(await hasLivePendingCookie()).toBe(false);
+  });
+
+  it('is false when no pending (unconsumed) row matches the cookie', async () => {
+    // A consumed/claimed row is filtered out by the status=pending query.
+    cookieStore.value = RAW_JWT;
+    scripts['pending_registrations'] = [{ data: [] }];
+    expect(await hasLivePendingCookie()).toBe(false);
   });
 });

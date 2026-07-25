@@ -71,6 +71,11 @@ export default function EmpireNoLinkClient({
   // link can never complete from browser state. Show a terminal expired screen
   // instead of the indefinite "setting up" wait.
   const [expired, setExpired] = useState(false)
+  // The poll cap was reached with no stashed JWT and a `recoverable: false`
+  // status — nothing left can complete the link from here (typically an
+  // external browser after an in-app-webview OAuth bounce). Show recovery
+  // guidance instead of the calm static "setting up" screen.
+  const [deadEnd, setDeadEnd] = useState(false)
 
   useEffect(() => {
     // localStorage isn't available during SSR, so this must read in an effect.
@@ -83,6 +88,10 @@ export default function EmpireNoLinkClient({
     let timer: ReturnType<typeof setTimeout> | undefined
     const start = Date.now()
     let attempt = 0
+    // Latest `recoverable` from a no_link status response. Undefined until the
+    // first successful poll, so a poll that never reached the server stays a
+    // calm wait rather than a false dead end.
+    let lastRecoverable: boolean | undefined
 
     const linked = () => {
       if (cancelled) return
@@ -132,12 +141,18 @@ export default function EmpireNoLinkClient({
       if (cancelled) return
       if (Date.now() - start >= POLL_MAX_MS) {
         setPolling(false)
+        // No stashed JWT to replay and the server says the link can't complete
+        // from here — this is a dead end, not a calm wait. Show guidance.
+        if (!readStoredJwt() && lastRecoverable === false) setDeadEnd(true)
         return
       }
       try {
         const res = await fetch('/api/chess-empire/link/status')
         if (res.ok) {
           const data = await res.json()
+          if (typeof data?.recoverable === 'boolean') {
+            lastRecoverable = data.recoverable
+          }
           if (data?.state && data.state !== 'no_link') {
             linked()
             return
@@ -167,6 +182,7 @@ export default function EmpireNoLinkClient({
 
   const restart = useCallback(() => {
     setExpired(false)
+    setDeadEnd(false)
     setPolling(true)
     setRunId((n) => n + 1)
   }, [])
@@ -195,6 +211,46 @@ export default function EmpireNoLinkClient({
                 {t('noLinkExpiredReopen')}
               </a>
             )}
+          </div>
+        </div>
+      </main>
+    )
+  }
+
+  if (deadEnd) {
+    return (
+      <main
+        data-testid="empire-home-nolink-deadend"
+        className="min-h-screen px-4 sm:px-6 lg:px-10 py-12 lg:py-20"
+        style={{ backgroundColor: '#F6F7F9', color: '#0F172A' }}
+      >
+        <div className="max-w-2xl mx-auto text-center flex flex-col items-center gap-5">
+          <div className="rounded-2xl bg-white border border-slate-200 p-8 sm:p-10 shadow-sm w-full">
+            <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
+              {t('noLinkDeadEndTitle')}
+            </h1>
+            <p className="mt-3 text-slate-600 text-sm sm:text-base">
+              {t('noLinkDeadEndBody')}
+            </p>
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-4">
+              {startOverUrl && (
+                <a
+                  data-testid="empire-nolink-deadend-reopen"
+                  href={startOverUrl}
+                  className="inline-block rounded-full bg-slate-900 px-5 py-2.5 font-semibold text-white hover:bg-slate-700"
+                >
+                  {t('noLinkExpiredReopen')}
+                </a>
+              )}
+              <button
+                type="button"
+                data-testid="empire-nolink-deadend-refresh"
+                onClick={restart}
+                className="font-semibold text-slate-500 underline underline-offset-4 hover:text-slate-700"
+              >
+                {t('noLinkRefresh')}
+              </button>
+            </div>
           </div>
         </div>
       </main>

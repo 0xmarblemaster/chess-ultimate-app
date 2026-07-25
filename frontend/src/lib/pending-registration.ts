@@ -94,6 +94,25 @@ export async function hasUsablePendingRegistration(
   );
 }
 
+/**
+ * True iff the `ce_pending_jti` cookie on the current request maps to a still
+ * usable (status `pending`, within TTL) registration row — i.e. the branch link
+ * can still complete server-side from cookie state alone. Lets the no-link view
+ * tell a recoverable wait apart from a dead end. One indexed lookup, best-effort
+ * (treats a missing cookie or any error as "not recoverable").
+ */
+export async function hasLivePendingCookie(): Promise<boolean> {
+  let rawJwt: string | undefined;
+  try {
+    const store = await cookies();
+    rawJwt = store.get(CE_PENDING_COOKIE)?.value;
+  } catch {
+    return false;
+  }
+  if (!rawJwt) return false;
+  return hasUsablePendingRegistration([rawJwt]);
+}
+
 export type PendingClaimResult =
   | { ok: true; orgId: string; studentId: string; memberType: MemberType }
   | {

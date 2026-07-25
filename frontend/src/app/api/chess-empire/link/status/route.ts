@@ -11,7 +11,10 @@ import 'server-only';
 import { NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import { getMembershipStateForUser } from '@/lib/chess-empire-member';
-import { autoClaimPendingCookie } from '@/lib/pending-registration';
+import {
+  autoClaimPendingCookie,
+  hasLivePendingCookie,
+} from '@/lib/pending-registration';
 
 export async function GET() {
   const { userId } = await auth();
@@ -23,7 +26,16 @@ export async function GET() {
     // that never managed a body-JWT replay still links from the cookie alone.
     await autoClaimPendingCookie(userId);
     const membership = await getMembershipStateForUser(userId);
-    return NextResponse.json({ state: membership.state, role: membership.role });
+    // `recoverable` tells a still-`no_link` client whether the branch link can
+    // yet complete from server-side cookie state, or whether it's a dead end
+    // (e.g. an external browser after an in-app-webview OAuth bounce, which
+    // carries no pending cookie). The `state` field is unchanged.
+    const recoverable = await hasLivePendingCookie();
+    return NextResponse.json({
+      state: membership.state,
+      role: membership.role,
+      recoverable,
+    });
   } catch (err) {
     console.error('[chess-empire/link/status] lookup failed', err);
     return NextResponse.json({ error: 'server_error' }, { status: 500 });

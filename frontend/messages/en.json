@@ -1670,7 +1670,9 @@
     "noLinkStartOver": "Start over",
     "noLinkExpiredTitle": "Your invite link has expired",
     "noLinkExpiredBody": "Open your branch invite link again and pick your name. If you don't have the link, ask your coach for it.",
-    "noLinkExpiredReopen": "Reopen the invite"
+    "noLinkExpiredReopen": "Reopen the invite",
+    "noLinkDeadEndTitle": "We couldn't finish setting up your account",
+    "noLinkDeadEndBody": "This can happen when your invite link opened inside another app. Re-open your branch invite link in your browser and pick your name to finish connecting, or ask your coach to link you."
   },
   "adminCe": {
     "title": "Students",

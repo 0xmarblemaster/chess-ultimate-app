@@ -12,7 +12,7 @@
  *   - shows the spinner while polling
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, waitFor, cleanup, act } from '@testing-library/react';
 
 const refresh = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
@@ -231,6 +231,59 @@ describe('EmpireNoLinkClient', () => {
         fetchMock.mock.calls.some((c) => String(c[0]).includes('/status')),
       ).toBe(true),
     );
+  });
+
+  it('shows dead-end guidance at the poll cap with no JWT and recoverable:false', async () => {
+    vi.useFakeTimers();
+    try {
+      // No stored JWT; status stays no_link and the server says it can't recover.
+      fetchMock.mockResolvedValue(jsonRes(200, { state: 'no_link', recoverable: false }));
+      render(
+        <EmpireNoLinkClient>
+          <Static />
+        </EmpireNoLinkClient>,
+      );
+      // Flush the initial claim skip + first status poll (records recoverable)...
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      // ...then blow past the ~10-min poll cap.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(11 * 60_000);
+      });
+
+      expect(screen.getByTestId('empire-home-nolink-deadend')).toBeTruthy();
+      expect(screen.getByText('noLinkDeadEndTitle')).toBeTruthy();
+      expect(screen.queryByTestId('empire-nolink-stalled')).toBeNull();
+      expect(refresh).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the calm static screen at the poll cap when recoverable:true', async () => {
+    vi.useFakeTimers();
+    try {
+      fetchMock.mockResolvedValue(jsonRes(200, { state: 'no_link', recoverable: true }));
+      render(
+        <EmpireNoLinkClient>
+          <Static />
+        </EmpireNoLinkClient>,
+      );
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(11 * 60_000);
+      });
+
+      // A recoverable wait is not a dead end — the calm static screen shows.
+      expect(screen.queryByTestId('empire-home-nolink-deadend')).toBeNull();
+      expect(screen.getByTestId('empire-nolink-stalled')).toBeTruthy();
+      expect(screen.getByTestId('static-message')).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('polls /link/status and refreshes when the state leaves no_link', async () => {

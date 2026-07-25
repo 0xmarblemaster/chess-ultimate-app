@@ -23,9 +23,11 @@ vi.mock('@/lib/chess-empire-member', () => ({
 }));
 
 // Auto-claim is a no-op here (no pending cookie); its own path is tested in
-// pending-registration.test.ts.
+// pending-registration.test.ts. `hasLivePendingCookie` drives `recoverable`.
+const recoverableStore = { current: false };
 vi.mock('@/lib/pending-registration', () => ({
   autoClaimPendingCookie: vi.fn(async () => false),
+  hasLivePendingCookie: vi.fn(async () => recoverableStore.current),
 }));
 
 import { GET } from '../status/route';
@@ -34,6 +36,7 @@ beforeEach(() => {
   authStore.userId = 'user-1';
   memberStore.result = { state: 'no_link', role: 'student' };
   memberStore.throws = false;
+  recoverableStore.current = false;
 });
 
 describe('GET /api/chess-empire/link/status', () => {
@@ -43,22 +46,44 @@ describe('GET /api/chess-empire/link/status', () => {
     expect(res.status).toBe(401);
   });
 
-  it('returns no_link for an unlinked user', async () => {
+  it('returns no_link with recoverable:false when no live pending cookie exists', async () => {
     const res = await GET();
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ state: 'no_link', role: 'student' });
+    expect(await res.json()).toEqual({
+      state: 'no_link',
+      role: 'student',
+      recoverable: false,
+    });
+  });
+
+  it('reports recoverable:true when a live pending cookie can still complete the link', async () => {
+    recoverableStore.current = true;
+    const res = await GET();
+    expect(await res.json()).toEqual({
+      state: 'no_link',
+      role: 'student',
+      recoverable: true,
+    });
   });
 
   it('returns verified once the row is written', async () => {
     memberStore.result = { state: 'verified', role: 'student' };
     const res = await GET();
-    expect(await res.json()).toEqual({ state: 'verified', role: 'student' });
+    expect(await res.json()).toEqual({
+      state: 'verified',
+      role: 'student',
+      recoverable: false,
+    });
   });
 
   it('returns pending_confirm state', async () => {
     memberStore.result = { state: 'pending_confirm', role: 'student' };
     const res = await GET();
-    expect(await res.json()).toEqual({ state: 'pending_confirm', role: 'student' });
+    expect(await res.json()).toEqual({
+      state: 'pending_confirm',
+      role: 'student',
+      recoverable: false,
+    });
   });
 
   it('500 when the lookup throws', async () => {
