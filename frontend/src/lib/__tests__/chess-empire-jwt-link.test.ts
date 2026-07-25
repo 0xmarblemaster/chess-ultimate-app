@@ -62,7 +62,7 @@ vi.mock('@clerk/nextjs/server', () => ({
   }),
 }));
 
-import { linkMemberViaInviteJwt } from '../chess-empire-jwt-link';
+import { linkMemberViaInviteJwt, logStrandedUserOnce } from '../chess-empire-jwt-link';
 import { signInviteJwt } from '../invite-jwt';
 
 const payload = {
@@ -164,5 +164,28 @@ describe('linkMemberViaInviteJwt', () => {
     const res = await linkMemberViaInviteJwt(token, 'clerk-user', 'a@b.com');
     expect(res).toEqual({ ok: false, reason: 'jwt_invalid', fallbackToEmail: false });
     expect(upserted).toHaveLength(0);
+  });
+});
+
+describe('logStrandedUserOnce', () => {
+  it('inserts a stranded row (source=claim, status=stranded) when none exists', async () => {
+    scripts['link_attempts.select'] = [{ data: [] }]; // existing check: none
+    scripts['link_attempts.insert'] = [{ error: null }];
+    await logStrandedUserOnce({ userId: 'user-9', email: 'x@y.com' });
+
+    const row = inserted.find((i) => i.table === 'link_attempts');
+    expect(row?.payload).toMatchObject({
+      user_id: 'user-9',
+      email: 'x@y.com',
+      attempted_source: 'claim',
+      status: 'stranded',
+      organization_id: null,
+    });
+  });
+
+  it('is once-only: skips the insert when a stranded row already exists', async () => {
+    scripts['link_attempts.select'] = [{ data: [{ id: 'existing' }] }];
+    await logStrandedUserOnce({ userId: 'user-9', email: 'x@y.com' });
+    expect(inserted.find((i) => i.table === 'link_attempts')).toBeUndefined();
   });
 });

@@ -19,9 +19,16 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { rateLimit } from '@/lib/in-memory-rate-limit';
-import { linkMemberViaInviteJwt } from '@/lib/chess-empire-jwt-link';
+import {
+  linkMemberViaInviteJwt,
+  logStrandedUserOnce,
+} from '@/lib/chess-empire-jwt-link';
 import { INVITE_JWT_CLAIM_GRACE_SECONDS } from '@/lib/invite-jwt';
-import { claimPendingByJwt, CE_PENDING_COOKIE } from '@/lib/pending-registration';
+import {
+  claimPendingByJwt,
+  hasUsablePendingRegistration,
+  CE_PENDING_COOKIE,
+} from '@/lib/pending-registration';
 
 const PER_IP_LIMIT = 10;
 const PER_USER_LIMIT = 5;
@@ -89,7 +96,7 @@ export async function POST(req: NextRequest) {
   const success = (studentId: string) =>
     NextResponse.json({ ok: true, state: 'verified', studentId });
 
-  // (a) Body invite JWT — the client-stashed replay. The 24h grace window lets
+  // (a) Body invite JWT — the client-stashed replay. The 7-day grace window lets
   // an expired-but-signed JWT through (jti single-use is still enforced).
   let bodyResult:
     | Awaited<ReturnType<typeof linkMemberViaInviteJwt>>
@@ -117,6 +124,17 @@ export async function POST(req: NextRequest) {
   // Nothing linked — report the body JWT's diagnosis so the client knows
   // whether to keep replaying. Only `invalid` is signature-class terminal.
   if (bodyResult) {
+    // Terminal JWT (expired beyond grace or invalid) with no pending-row
+    // recovery = a stranded user who can only be linked manually. Emit a
+    // one-time audit signal so admins can find them.
+    if (bodyResult.reason === 'jwt_expired' || bodyResult.reason === 'jwt_invalid') {
+      const recoverable = await hasUsablePendingRegistration(
+        [inviteJwt, cookieJwt].filter(Boolean),
+      );
+      if (!recoverable) {
+        await logStrandedUserOnce({ userId, email });
+      }
+    }
     switch (bodyResult.reason) {
       case 'jwt_expired':
         return NextResponse.json({ error: 'expired', terminal: true }, { status: 410 });

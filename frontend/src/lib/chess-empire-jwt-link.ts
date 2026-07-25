@@ -27,7 +27,12 @@ import {
   type MemberType,
 } from '@/lib/invite-jwt';
 
-export type AttemptSource = 'jwt' | 'email_auto' | 'admin_manual' | 'backfill';
+export type AttemptSource =
+  | 'jwt'
+  | 'email_auto'
+  | 'admin_manual'
+  | 'backfill'
+  | 'claim';
 export type AttemptStatus =
   | 'success'
   | 'pending_row_success'
@@ -36,7 +41,8 @@ export type AttemptStatus =
   | 'jwt_invalid'
   | 'jwt_expired'
   | 'jwt_replayed'
-  | 'webhook_error';
+  | 'webhook_error'
+  | 'stranded';
 
 export interface AttemptRow {
   organization_id: string | null;
@@ -63,6 +69,39 @@ export async function logLinkAttempt(row: AttemptRow): Promise<void> {
     });
   } catch (err) {
     console.error('[ce-link] Failed to write link_attempts row:', err);
+  }
+}
+
+/**
+ * Record that a claim attempt ended terminally with no recovery path — the JWT
+ * expired beyond the claim grace (or was invalid) AND no `pending_registrations`
+ * row exists to complete the link. These users can only be linked manually, so
+ * we emit a single `stranded` audit signal per user for admin follow-up
+ * (`scripts/list-stranded-students.mjs`). Idempotent: skips if a `stranded` row
+ * for this user already exists, so the client's retry loop never spams the table.
+ */
+export async function logStrandedUserOnce(args: {
+  userId: string;
+  email: string | null;
+}): Promise<void> {
+  try {
+    const existing = await supabaseAdmin
+      .from('link_attempts')
+      .select('id')
+      .eq('user_id', args.userId)
+      .eq('status', 'stranded')
+      .limit(1);
+    if (existing.data && existing.data.length > 0) return;
+    await supabaseAdmin.from('link_attempts').insert({
+      organization_id: null,
+      user_id: args.userId,
+      email: args.email,
+      attempted_source: 'claim',
+      status: 'stranded',
+    });
+    console.warn(`[ce-link] stranded user recorded: ${args.userId}`);
+  } catch (err) {
+    console.error('[ce-link] Failed to write stranded link_attempts row:', err);
   }
 }
 

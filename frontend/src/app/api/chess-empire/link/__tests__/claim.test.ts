@@ -26,16 +26,23 @@ const linkResult: { current: JwtLinkResult } = {
   current: { ok: true, orgId: 'org-1', studentId: 'stu-1', memberType: 'student' },
 };
 const linkSpy = vi.fn(async () => linkResult.current);
+const strandedSpy = vi.fn(async () => {});
 vi.mock('@/lib/chess-empire-jwt-link', () => ({
   linkMemberViaInviteJwt: (...args: unknown[]) => linkSpy(...(args as [])),
+  logStrandedUserOnce: (...args: unknown[]) => strandedSpy(...(args as [])),
 }));
 
 // The cookie→pending-row fallback is unit-tested separately; here it never
 // finds a row (the test Request carries no cookie anyway).
 const pendingSpy = vi.fn(async () => ({ ok: false, reason: 'not_found' }));
+// Whether a usable pending row exists — drives the stranded-detection branch.
+const pendingExists = { current: false };
+const pendingExistsSpy = vi.fn(async () => pendingExists.current);
 vi.mock('@/lib/pending-registration', () => ({
   CE_PENDING_COOKIE: 'ce_pending_jti',
   claimPendingByJwt: (...args: unknown[]) => pendingSpy(...(args as [])),
+  hasUsablePendingRegistration: (...args: unknown[]) =>
+    pendingExistsSpy(...(args as [])),
 }));
 
 import { POST } from '../claim/route';
@@ -54,6 +61,9 @@ beforeEach(() => {
   authStore.userId = 'user-1';
   linkResult.current = { ok: true, orgId: 'org-1', studentId: 'stu-1', memberType: 'student' };
   linkSpy.mockClear();
+  strandedSpy.mockClear();
+  pendingExistsSpy.mockClear();
+  pendingExists.current = false;
 });
 
 describe('POST /api/chess-empire/link/claim', () => {
@@ -94,6 +104,40 @@ describe('POST /api/chess-empire/link/claim', () => {
     const res = await POST(makeReq({ inviteJwt: 'x' }) as never);
     expect(res.status).toBe(410);
     expect(await res.json()).toEqual({ error: 'expired', terminal: true });
+  });
+
+  it('logs a stranded user on terminal expiry with no recoverable pending row', async () => {
+    linkResult.current = { ok: false, reason: 'jwt_expired', fallbackToEmail: true };
+    pendingExists.current = false;
+    const res = await POST(makeReq({ inviteJwt: 'x' }) as never);
+    expect(res.status).toBe(410);
+    expect(strandedSpy).toHaveBeenCalledOnce();
+    expect(strandedSpy).toHaveBeenCalledWith({ userId: 'user-1', email: 'a@b.com' });
+  });
+
+  it('logs a stranded user on terminal invalid JWT', async () => {
+    linkResult.current = { ok: false, reason: 'jwt_invalid', fallbackToEmail: false };
+    pendingExists.current = false;
+    const res = await POST(makeReq({ inviteJwt: 'x' }) as never);
+    expect(res.status).toBe(400);
+    expect(strandedSpy).toHaveBeenCalledOnce();
+  });
+
+  it('does NOT log stranded when a usable pending row still exists', async () => {
+    linkResult.current = { ok: false, reason: 'jwt_expired', fallbackToEmail: true };
+    pendingExists.current = true;
+    const res = await POST(makeReq({ inviteJwt: 'x' }) as never);
+    expect(res.status).toBe(410);
+    expect(pendingExistsSpy).toHaveBeenCalledOnce();
+    expect(strandedSpy).not.toHaveBeenCalled();
+  });
+
+  it('does NOT log stranded on a replayed (already-linked) JWT', async () => {
+    linkResult.current = { ok: false, reason: 'jwt_replayed', fallbackToEmail: false };
+    const res = await POST(makeReq({ inviteJwt: 'x' }) as never);
+    expect(res.status).toBe(409);
+    expect(strandedSpy).not.toHaveBeenCalled();
+    expect(pendingExistsSpy).not.toHaveBeenCalled();
   });
 
   it('409 terminal on replayed / already-linked JWT', async () => {

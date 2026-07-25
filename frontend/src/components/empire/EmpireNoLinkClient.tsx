@@ -12,10 +12,12 @@
  * On every mount (initial load, `router.refresh`, or the manual Refresh button)
  * this:
  *   1. Replays any stashed invite JWT to `/api/chess-empire/link/claim`. The
- *      server accepts an expired-but-signed JWT within a 24h grace window, and
+ *      server accepts an expired-but-signed JWT within a 7-day grace window, and
  *      falls back to the `ce_pending_jti` cookie → pending row. The stashed JWT
  *      is cleared ONLY on success or a signature-class (`invalid`) terminal —
- *      an expiry never wipes it, since the server may still accept it.
+ *      an expiry never wipes it, since the server may still accept it. A
+ *      terminal 410 (expired beyond grace, no server-side pending recovery)
+ *      stops the wait and shows an explicit "invite expired" screen instead.
  *   2. Polls `/api/chess-empire/link/status` with capped exponential backoff
  *      (up to ~10 min) and `router.refresh()`es the moment the state leaves
  *      `no_link`. After the cap it shows the static screen plus a Refresh
@@ -65,6 +67,10 @@ export default function EmpireNoLinkClient({
   // Bumping this re-runs the claim + poll cycle (Refresh button / restart).
   const [runId, setRunId] = useState(0)
   const [startOverUrl, setStartOverUrl] = useState<string | null>(null)
+  // The stashed JWT expired beyond grace with no server-side recovery — the
+  // link can never complete from browser state. Show a terminal expired screen
+  // instead of the indefinite "setting up" wait.
+  const [expired, setExpired] = useState(false)
 
   useEffect(() => {
     // localStorage isn't available during SSR, so this must read in an effect.
@@ -84,9 +90,11 @@ export default function EmpireNoLinkClient({
       router.refresh()
     }
 
-    async function claimIfPresent(): Promise<void> {
+    // Returns true when the cycle is terminal (linked or expired) and polling
+    // should NOT start.
+    async function claimIfPresent(): Promise<boolean> {
       const jwt = readStoredJwt()
-      if (!jwt) return
+      if (!jwt) return false
       try {
         const res = await fetch('/api/chess-empire/link/claim', {
           method: 'POST',
@@ -96,15 +104,28 @@ export default function EmpireNoLinkClient({
         if (res.ok) {
           clearStoredJwt()
           linked()
-          return
+          return true
         }
         const data = await res.json().catch(() => ({}))
         // Only a signature-class terminal is truly hopeless. An expired JWT may
         // still be claimable later via the server-side pending row, so keep it.
         if (data?.error === 'invalid') clearStoredJwt()
+        // A terminal 410 means the JWT expired beyond grace AND no server-side
+        // pending row could recover it — the link can never complete from here.
+        // Surface an explicit expired screen instead of waiting forever. Keep
+        // the JWT (harmless, and never clear it on expiry) so a manual link or
+        // coach-side action can still succeed.
+        if (res.status === 410 && data?.error === 'expired') {
+          if (!cancelled) {
+            setPolling(false)
+            setExpired(true)
+          }
+          return true
+        }
       } catch {
         // Network hiccup — polling still runs and the webhook is the backstop.
       }
+      return false
     }
 
     async function pollStatus(): Promise<void> {
@@ -134,8 +155,8 @@ export default function EmpireNoLinkClient({
     }
 
     void (async () => {
-      await claimIfPresent()
-      if (!cancelled) void pollStatus()
+      const terminal = await claimIfPresent()
+      if (!cancelled && !terminal) void pollStatus()
     })()
 
     return () => {
@@ -145,9 +166,40 @@ export default function EmpireNoLinkClient({
   }, [router, runId])
 
   const restart = useCallback(() => {
+    setExpired(false)
     setPolling(true)
     setRunId((n) => n + 1)
   }, [])
+
+  if (expired) {
+    return (
+      <main
+        data-testid="empire-home-nolink-expired"
+        className="min-h-screen px-4 sm:px-6 lg:px-10 py-12 lg:py-20"
+        style={{ backgroundColor: '#F6F7F9', color: '#0F172A' }}
+      >
+        <div className="max-w-2xl mx-auto text-center flex flex-col items-center gap-5">
+          <div className="rounded-2xl bg-white border border-slate-200 p-8 sm:p-10 shadow-sm w-full">
+            <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
+              {t('noLinkExpiredTitle')}
+            </h1>
+            <p className="mt-3 text-slate-600 text-sm sm:text-base">
+              {t('noLinkExpiredBody')}
+            </p>
+            {startOverUrl && (
+              <a
+                data-testid="empire-nolink-expired-reopen"
+                href={startOverUrl}
+                className="mt-6 inline-block rounded-full bg-slate-900 px-5 py-2.5 font-semibold text-white hover:bg-slate-700"
+              >
+                {t('noLinkExpiredReopen')}
+              </a>
+            )}
+          </div>
+        </div>
+      </main>
+    )
+  }
 
   if (polling) {
     return (

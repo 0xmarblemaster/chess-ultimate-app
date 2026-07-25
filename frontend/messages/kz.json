@@ -1667,7 +1667,10 @@
     "coachRosterTitle": "Оқушылар",
     "coachRosterEmpty": "Оқушылар әлі жоқ.",
     "noLinkRefresh": "Жаңарту",
-    "noLinkStartOver": "Қайта бастау"
+    "noLinkStartOver": "Қайта бастау",
+    "noLinkExpiredTitle": "Шақыру сілтемесінің мерзімі өтті",
+    "noLinkExpiredBody": "Филиалыңыздың шақыру сілтемесін қайта ашып, атыңызды таңдаңыз. Сілтеме болмаса, жаттықтырушыңыздан сұраңыз.",
+    "noLinkExpiredReopen": "Шақыруды қайта ашу"
   },
   "adminCe": {
     "title": "Оқушылар",

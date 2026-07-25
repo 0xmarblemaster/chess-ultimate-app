@@ -110,8 +110,8 @@ describe('invite-jwt', () => {
   describe('grace window', () => {
     const now = 1_700_000_000;
 
-    it('exposes a 24-hour claim grace constant', () => {
-      expect(INVITE_JWT_CLAIM_GRACE_SECONDS).toBe(24 * 60 * 60);
+    it('exposes a 7-day claim grace constant (matches pending_registrations TTL)', () => {
+      expect(INVITE_JWT_CLAIM_GRACE_SECONDS).toBe(7 * 24 * 60 * 60);
     });
 
     it('defaults to strict (grace 0): expired one second past exp is rejected', () => {
@@ -146,6 +146,21 @@ describe('invite-jwt', () => {
       const token = signInviteJwt(payload, 900, now);
       const claims = verifyInviteJwt(token, now + 100, INVITE_JWT_CLAIM_GRACE_SECONDS);
       expect(claims.org_id).toBe(payload.org_id);
+    });
+
+    it('accepts a token expired ~6 days ago under the 7-day claim grace', () => {
+      const token = signInviteJwt(payload, 900, now); // exp = now + 900
+      const sixDays = now + 900 + 6 * 24 * 60 * 60;
+      const claims = verifyInviteJwt(token, sixDays, INVITE_JWT_CLAIM_GRACE_SECONDS);
+      expect(claims.student_id).toBe(payload.student_id);
+    });
+
+    it('rejects a token expired beyond the 7-day claim grace', () => {
+      const token = signInviteJwt(payload, 900, now); // exp = now + 900
+      const eightDays = now + 900 + 8 * 24 * 60 * 60;
+      expect(() =>
+        verifyInviteJwt(token, eightDays, INVITE_JWT_CLAIM_GRACE_SECONDS),
+      ).toThrowError(/expired/i);
     });
   });
 

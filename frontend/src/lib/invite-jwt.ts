@@ -25,8 +25,13 @@ export const INVITE_JWT_TTL_SECONDS = 15 * 60;
  * passed branch validation, and jti single-use is still enforced — so an
  * expired-but-valid signature is safe to accept for a bounded window after
  * `exp`. NEVER used by the webhook path; the default `verifyInviteJwt` grace is 0.
+ *
+ * Set to 7 days to match the `pending_registrations` row TTL — a student who
+ * completes sign-up days after the JWT was minted (slow OAuth round-trip, closed
+ * the tab, retried later) still links from the stashed token rather than
+ * stranding on the no-link screen.
  */
-export const INVITE_JWT_CLAIM_GRACE_SECONDS = 24 * 60 * 60;
+export const INVITE_JWT_CLAIM_GRACE_SECONDS = 7 * 24 * 60 * 60;
 
 export type MemberType = 'student' | 'coach';
 

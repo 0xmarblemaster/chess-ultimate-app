@@ -1667,7 +1667,10 @@
     "coachRosterTitle": "Ученики",
     "coachRosterEmpty": "Учеников пока нет.",
     "noLinkRefresh": "Обновить",
-    "noLinkStartOver": "Начать заново"
+    "noLinkStartOver": "Начать заново",
+    "noLinkExpiredTitle": "Ссылка-приглашение устарела",
+    "noLinkExpiredBody": "Откройте ссылку-приглашение вашего филиала ещё раз и снова выберите своё имя. Если ссылки нет — попросите её у тренера.",
+    "noLinkExpiredReopen": "Открыть приглашение заново"
   },
   "adminCe": {
     "title": "Ученики",

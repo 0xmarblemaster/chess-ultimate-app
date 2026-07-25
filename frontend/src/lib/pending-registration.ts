@@ -71,6 +71,29 @@ export async function insertPendingRegistration(args: {
   }
 }
 
+/**
+ * True iff a still-usable (status `pending`, within TTL) registration exists for
+ * any of the given raw invite JWTs. Lets the claim path distinguish a genuinely
+ * stranded user (terminal JWT, no server-side recovery) from one whose pending
+ * row can still complete the link. Best-effort — treats errors as "no row".
+ */
+export async function hasUsablePendingRegistration(
+  rawJwts: string[],
+): Promise<boolean> {
+  const hashes = rawJwts.filter(Boolean).map(jwtJtiHash);
+  if (hashes.length === 0) return false;
+  const { data, error } = await supabaseAdmin
+    .from('pending_registrations')
+    .select('created_at, status')
+    .in('jti_hash', hashes)
+    .eq('status', 'pending');
+  if (error || !data) return false;
+  const now = Date.now();
+  return (data as Array<{ created_at: string }>).some(
+    (r) => now - new Date(r.created_at).getTime() <= PENDING_REGISTRATION_TTL_MS,
+  );
+}
+
 export type PendingClaimResult =
   | { ok: true; orgId: string; studentId: string; memberType: MemberType }
   | {

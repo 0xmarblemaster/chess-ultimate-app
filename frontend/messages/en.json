@@ -1667,7 +1667,10 @@
     "coachRosterTitle": "Students",
     "coachRosterEmpty": "No students assigned yet.",
     "noLinkRefresh": "Refresh",
-    "noLinkStartOver": "Start over"
+    "noLinkStartOver": "Start over",
+    "noLinkExpiredTitle": "Your invite link has expired",
+    "noLinkExpiredBody": "Open your branch invite link again and pick your name. If you don't have the link, ask your coach for it.",
+    "noLinkExpiredReopen": "Reopen the invite"
   },
   "adminCe": {
     "title": "Students",
