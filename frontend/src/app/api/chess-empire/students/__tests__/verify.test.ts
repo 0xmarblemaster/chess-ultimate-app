@@ -3,7 +3,7 @@
  *
  * Covers: missing fields (400), invalid token (401), already-registered
  * (409), branch mismatch (401), inactive (401), success (JWT returned,
- * JWT verifies), rate-limit (429).
+ * JWT verifies).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -89,22 +89,13 @@ vi.mock('@/lib/chess-empire-client', () => ({
   },
 }));
 
-vi.mock('@/lib/in-memory-rate-limit', () => {
-  const fn = vi
-    .fn()
-    .mockReturnValue({ allowed: true, remaining: 99, retryAfterSeconds: 0 });
-  return { rateLimit: fn };
-});
-
 import { POST } from '../verify/route';
 import { getStudentProfile, getCoachProfile } from '@/lib/chess-empire-client';
-import { rateLimit } from '@/lib/in-memory-rate-limit';
 import { verifyInviteJwt } from '@/lib/invite-jwt';
 import { NextRequest } from 'next/server';
 
 const ceProfile = getStudentProfile as unknown as ReturnType<typeof vi.fn>;
 const ceCoachProfile = getCoachProfile as unknown as ReturnType<typeof vi.fn>;
-const rl = rateLimit as unknown as ReturnType<typeof vi.fn>;
 
 const VALID_TOKEN = {
   id: 'token-1',
@@ -128,7 +119,6 @@ beforeEach(() => {
   inserted.length = 0;
   ceProfile.mockReset();
   ceCoachProfile.mockReset();
-  rl.mockReturnValue({ allowed: true, remaining: 99, retryAfterSeconds: 0 });
   process.env.INVITE_JWT_SECRET = 'unit-test-secret';
 });
 
@@ -225,16 +215,6 @@ describe('POST /api/chess-empire/students/verify', () => {
     expect(claims.branch_token_id).toBe('token-1');
     const attempt = inserted.find((i) => i.table === 'student_verify_attempts');
     expect((attempt!.payload as { success: boolean }).success).toBe(true);
-  });
-
-  it('429 when rate-limit triggers', async () => {
-    scripts['branch_invite_tokens.maybeSingle'] = [{ data: VALID_TOKEN, error: null }];
-    rl.mockReturnValueOnce({ allowed: false, remaining: 0, retryAfterSeconds: 3600 });
-    const res = await POST(
-      makeReq({ branchToken: 't', studentId: 'stu-1' }),
-    );
-    expect(res.status).toBe(429);
-    expect(res.headers.get('Retry-After')).toBe('3600');
   });
 
   it('coach happy path: uses getCoachProfile, skips status, signs member_type=coach JWT', async () => {

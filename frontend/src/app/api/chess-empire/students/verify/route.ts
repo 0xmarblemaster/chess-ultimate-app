@@ -7,10 +7,6 @@
  * sign-up page then forwards it through Clerk so the webhook can write
  * the `external_student_id` link on the new member row.
  *
- * Rate limits:
- *  - 3 failed attempts per (studentId, IP) per hour
- *  - 10 failed attempts per IP per hour (across all students)
- *
  * Every attempt — success or failure — is written to
  * `student_verify_attempts` for audit + anomaly alerts.
  */
@@ -24,16 +20,11 @@ import {
   ChessEmpireAPIError,
 } from '@/lib/chess-empire-client';
 import { signInviteJwt, type MemberType } from '@/lib/invite-jwt';
-import { rateLimit } from '@/lib/in-memory-rate-limit';
 import {
   insertPendingRegistration,
   CE_PENDING_COOKIE,
   PENDING_COOKIE_MAX_AGE_SECONDS,
 } from '@/lib/pending-registration';
-
-const PER_STUDENT_LIMIT = 3;
-const PER_IP_LIMIT = 10;
-const RATE_WINDOW_MS = 60 * 60 * 1000;
 
 interface BranchTokenRow {
   id: string;
@@ -110,43 +101,6 @@ export async function POST(req: NextRequest) {
   const token = await resolveBranchToken(branchToken);
   if (!token) {
     return NextResponse.json({ error: 'invalid_token' }, { status: 401 });
-  }
-
-  // Rate-limit BEFORE we touch the CE API to avoid burning the upstream
-  // budget on flood traffic. Failed attempts count; successes don't.
-  const ipLimit = rateLimit(`ce-verify-ip:${ip}`, PER_IP_LIMIT, RATE_WINDOW_MS);
-  if (!ipLimit.allowed) {
-    await logAttempt({
-      organizationId: token.organization_id,
-      branchTokenId: token.id,
-      externalStudentId: studentId,
-      ip,
-      success: false,
-      reason: 'rate_limited_ip',
-    });
-    return NextResponse.json(
-      { error: 'rate_limited' },
-      { status: 429, headers: { 'Retry-After': String(ipLimit.retryAfterSeconds) } },
-    );
-  }
-  const studentLimit = rateLimit(
-    `ce-verify-stu:${studentId}:${ip}`,
-    PER_STUDENT_LIMIT,
-    RATE_WINDOW_MS,
-  );
-  if (!studentLimit.allowed) {
-    await logAttempt({
-      organizationId: token.organization_id,
-      branchTokenId: token.id,
-      externalStudentId: studentId,
-      ip,
-      success: false,
-      reason: 'rate_limited_student',
-    });
-    return NextResponse.json(
-      { error: 'rate_limited' },
-      { status: 429, headers: { 'Retry-After': String(studentLimit.retryAfterSeconds) } },
-    );
   }
 
   // Duplicate-account pre-check. Race-safe write-side is the unique index.

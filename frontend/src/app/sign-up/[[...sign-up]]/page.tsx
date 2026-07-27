@@ -3,12 +3,13 @@
 import { SignUp } from '@clerk/nextjs'
 import { useTranslations } from 'next-intl'
 import Image from 'next/image'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import { useBranding, useOrganization } from '@/contexts/OrganizationContext'
 import {
   CE_INVITE_JWT_STORAGE_KEY,
   clearInviteOnboardingState,
+  readStoredInviteJwt,
   readWelcomeOnboardingUrl,
 } from '@/lib/invite-storage'
 import { computeSignupGuard } from '@/lib/signup-guard'
@@ -53,10 +54,25 @@ export default function SignUpPage() {
   const router = useRouter()
   const { isWhiteLabel, org } = useOrganization()
   const searchParams = useSearchParams()
-  const inviteJwt = searchParams?.get('invite') ?? null
+  const pathname = usePathname()
+  const queryInviteJwt = searchParams?.get('invite') ?? null
+
+  // Storage fallback for the invite JWT. Clerk's multi-step sign-up drops the
+  // `?invite=` query param after the CONTINUE button (e.g. on the OTP step), so
+  // when it's absent we replay the copy the welcome flow stashed. Populated
+  // client-only by the guard effect below (storage isn't available during SSR),
+  // so first paint uses the query param and matches the server render.
+  const [storedInviteJwt, setStoredInviteJwt] = useState<string | null>(null)
+  const inviteJwt = queryInviteJwt ?? storedInviteJwt
   const invite = useMemo(() => previewInvite(inviteJwt), [inviteJwt])
   const isChessEmpire = org?.slug === 'chess-empire'
   const hasValidInvite = !!inviteJwt && invite !== null && !invite.expired
+
+  // Any path beyond the base /sign-up route is a Clerk internal sub-step
+  // (verify-email-address, sso-callback, continue, …). The guard must never
+  // fire on these — Clerk drops the invite query param during its own
+  // navigation, so a bounce here would kill an in-progress registration.
+  const isClerkSubStep = /\/sign-up\/.+/.test(pathname ?? '')
 
   // Bare-registration guard: on a white-label org domain a sign-up MUST arrive
   // through the welcome flow with a valid invite JWT. Without one, clear any
@@ -64,23 +80,37 @@ export default function SignUpPage() {
   // re-does find-yourself → confirm. Main-domain sign-up is unaffected. Runs
   // client-side only (storage + host resolution), so it gates rendering via
   // `blocked` to avoid flashing the form before the redirect.
+  //
+  // The effective invite is resolved fresh from storage *inside* this effect —
+  // `storedInviteJwt` state lags by a render, so relying on it here would bounce
+  // a genuine storage-fallback visitor before their stashed JWT loads.
   const [blocked, setBlocked] = useState(false)
   useEffect(() => {
+    const effectiveJwt = queryInviteJwt ?? readStoredInviteJwt()
+    if (!queryInviteJwt && effectiveJwt) {
+      // Surface the stored JWT to render so the unsafeMetadata prop and the
+      // welcome greeting benefit from the fallback too.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setStoredInviteJwt(effectiveJwt)
+    }
+    const preview = previewInvite(effectiveJwt)
+    const effectiveHasValidInvite =
+      !!effectiveJwt && preview !== null && !preview.expired
     const decision = computeSignupGuard({
       isWhiteLabel,
-      hasValidInvite,
+      hasValidInvite: effectiveHasValidInvite,
       storedWelcomeUrl: readWelcomeOnboardingUrl(),
+      isClerkSubStep,
     })
     if (decision.action === 'redirect') {
       clearInviteOnboardingState()
       // Client-only gate: the decision depends on sessionStorage + host, which
       // aren't available during SSR/first paint, so it must live in an effect.
       // Deriving it at render time would cause a hydration mismatch.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setBlocked(true)
       router.replace(decision.target)
     }
-  }, [isWhiteLabel, hasValidInvite, router])
+  }, [queryInviteJwt, isWhiteLabel, isClerkSubStep, router])
 
   // Persist the invite JWT so the dashboard's no_link poller can replay it to
   // /link/claim if Clerk drops unsafeMetadata during an OAuth redirect. Written

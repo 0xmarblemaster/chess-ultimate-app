@@ -26,9 +26,11 @@ vi.mock('next/image', () => ({
 
 const routerReplace = vi.fn();
 const searchState: { invite: string | null } = { invite: null };
+const pathState: { pathname: string } = { pathname: '/sign-up' };
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: routerReplace, push: vi.fn() }),
   useSearchParams: () => ({ get: (k: string) => (k === 'invite' ? searchState.invite : null) }),
+  usePathname: () => pathState.pathname,
 }));
 
 const orgState: { isWhiteLabel: boolean; slug: string } = { isWhiteLabel: false, slug: '' };
@@ -64,6 +66,7 @@ beforeEach(() => {
   cleanup();
   routerReplace.mockReset();
   searchState.invite = null;
+  pathState.pathname = '/sign-up';
   orgState.isWhiteLabel = false;
   orgState.slug = '';
   sessionStorage.clear();
@@ -123,6 +126,34 @@ describe('Sign-up bare-registration guard', () => {
     render(<SignUpPage />);
 
     expect(screen.getByTestId('clerk-signup')).toBeTruthy();
+    expect(routerReplace).not.toHaveBeenCalled();
+  });
+
+  it('white-label + Clerk sub-step + dropped invite query → proceeds (the bug)', async () => {
+    // Clerk navigates to the OTP step and drops `?invite=`. The guard must not
+    // fire here, or the in-progress registration is killed.
+    orgState.isWhiteLabel = true;
+    orgState.slug = 'chess-empire';
+    pathState.pathname = '/sign-up/verify-email-address';
+    searchState.invite = null;
+
+    render(<SignUpPage />);
+
+    expect(screen.getByTestId('clerk-signup')).toBeTruthy();
+    expect(routerReplace).not.toHaveBeenCalled();
+  });
+
+  it('white-label + no invite query but valid invite in storage → proceeds', async () => {
+    orgState.isWhiteLabel = true;
+    orgState.slug = 'chess-empire';
+    searchState.invite = null;
+    sessionStorage.setItem(CE_INVITE_JWT_STORAGE_KEY, validInviteJwt());
+
+    render(<SignUpPage />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId('clerk-signup')).toBeTruthy(),
+    );
     expect(routerReplace).not.toHaveBeenCalled();
   });
 });

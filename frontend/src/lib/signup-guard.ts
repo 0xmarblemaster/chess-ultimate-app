@@ -20,6 +20,12 @@ export interface SignupGuardInput {
   storedWelcomeUrl: string | null;
   /** Fallback landing when no welcome URL was stored (org welcome landing). */
   fallbackUrl?: string;
+  /**
+   * True when the page is on a Clerk internal sub-step (OTP verify, SSO
+   * callback, continue, …). Clerk drops the `?invite=` query param on these
+   * navigations, so the guard must NEVER fire there or it kills the flow.
+   */
+  isClerkSubStep?: boolean;
 }
 
 export type SignupGuardDecision =
@@ -31,7 +37,14 @@ export function computeSignupGuard({
   hasValidInvite,
   storedWelcomeUrl,
   fallbackUrl = '/',
+  isClerkSubStep = false,
 }: SignupGuardInput): SignupGuardDecision {
+  // Clerk sub-step (e.g. verify-email-address): the invite query param is
+  // dropped by Clerk's own navigation, so the flow is already in progress —
+  // never bounce it.
+  if (isClerkSubStep) {
+    return { action: 'proceed' };
+  }
   // Main domain, or a valid invite in hand — nothing to block.
   if (!isWhiteLabel || hasValidInvite) {
     return { action: 'proceed' };

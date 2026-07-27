@@ -66,6 +66,23 @@ export function readBranchWelcomeUrl(): string | null {
 }
 
 /**
+ * Read the stashed invite JWT, preferring sessionStorage (survives same-origin
+ * OAuth returns) and falling back to localStorage. Returns null if absent or
+ * storage is unavailable. The JWT's own `exp` still bounds validity — callers
+ * that gate on freshness must re-check it.
+ */
+export function readStoredInviteJwt(): string | null {
+  try {
+    return (
+      sessionStorage.getItem(CE_INVITE_JWT_STORAGE_KEY) ??
+      localStorage.getItem(CE_INVITE_JWT_STORAGE_KEY)
+    );
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Clear every trace of an in-flight invite/onboarding so a blocked bare sign-up
  * can't later replay stale state. Wipes the invite JWT from both storages and
  * the stored welcome URLs.
