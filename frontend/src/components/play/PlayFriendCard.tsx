@@ -5,10 +5,24 @@
  * challenge via POST /api/live-games/challenge, copy the invite link, and navigate
  * the creator to the live-game lobby. Rendered by the play page only when
  * ONLINE_PLAY_ENABLED is on (the flag gate lives at the call site).
+ *
+ * Two layouts share all of the challenge logic:
+ *  - `variant="card"` (default): the original vertical card.
+ *  - `variant="horizontal"`: a full-width bar that sits above the bot grid.
+ *    Desktop shows a single wrapping row (title + controls + button); below the
+ *    `md` breakpoint it collapses to a pill that expands the options inline.
  */
 
 import React, { useState } from 'react';
-import { Box, Button, Typography, ToggleButton, ToggleButtonGroup } from '@mui/material';
+import {
+  Box,
+  Button,
+  Typography,
+  ToggleButton,
+  ToggleButtonGroup,
+  useMediaQuery,
+  useTheme,
+} from '@mui/material';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { playText } from '@/lib/botI18n';
@@ -37,19 +51,40 @@ const COLORS: Array<{ key: ColorChoice; colorKey: string }> = [
   { key: 'black', colorKey: 'black' },
 ];
 
-export default function PlayFriendCard() {
+const PILL_SX = {
+  borderRadius: '12px !important',
+  border: '1px solid #E3EAF6 !important',
+  px: 2,
+} as const;
+
+const SURFACE_SX = {
+  bgcolor: '#FFFFFF',
+  border: '1px solid #E3EAF6',
+  boxShadow: '0 8px 24px rgba(30,60,120,0.08)',
+} as const;
+
+type Variant = 'card' | 'horizontal';
+
+interface PlayFriendCardProps {
+  variant?: Variant;
+}
+
+export default function PlayFriendCard({ variant = 'card' }: PlayFriendCardProps) {
   const t = useTranslations('bots');
   const router = useRouter();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [tcKey, setTcKey] = useState('5+0');
   const [color, setColor] = useState<ColorChoice>('random');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   const createChallenge = async () => {
     if (creating) return;
     setCreating(true);
     setError(null);
-    const tc = TIME_CONTROLS.find((t) => t.key === tcKey) ?? TIME_CONTROLS[1];
+    const tc = TIME_CONTROLS.find((x) => x.key === tcKey) ?? TIME_CONTROLS[1];
     try {
       const res = await fetch('/api/live-games/challenge', {
         method: 'POST',
@@ -80,84 +115,217 @@ export default function PlayFriendCard() {
     }
   };
 
-  return (
-    <Box
-      data-testid="play-friend-card"
+  // Pre-resolved localized option labels, shared by both layouts.
+  const timeOptions = TIME_CONTROLS.map((tc) => ({
+    key: tc.key,
+    label: tc.untimedKey ? playText(t, 'untimed', tc.label) : tc.label,
+  }));
+  const colorOptions = COLORS.map((c) => ({ key: c.key, label: playText(t, c.colorKey, c.key) }));
+
+  const timeGroup = (extraSx?: object) => (
+    <ToggleButtonGroup
+      value={tcKey}
+      exclusive
+      onChange={(_e, v) => v && setTcKey(v)}
+      sx={{ flexWrap: 'wrap', gap: 1, ...extraSx }}
+    >
+      {timeOptions.map((o) => (
+        <ToggleButton key={o.key} value={o.key} sx={PILL_SX}>
+          {o.label}
+        </ToggleButton>
+      ))}
+    </ToggleButtonGroup>
+  );
+
+  const colorGroup = (extraSx?: object) => (
+    <ToggleButtonGroup
+      value={color}
+      exclusive
+      onChange={(_e, v) => v && setColor(v as ColorChoice)}
+      sx={{ flexWrap: 'wrap', gap: 1, ...extraSx }}
+    >
+      {colorOptions.map((o) => (
+        <ToggleButton key={o.key} value={o.key} sx={PILL_SX}>
+          {o.label}
+        </ToggleButton>
+      ))}
+    </ToggleButtonGroup>
+  );
+
+  const caption = (text: string) => (
+    <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, color: '#5C6B85', mb: 0.75 }}>
+      {text}
+    </Typography>
+  );
+
+  const errorEl = error && (
+    <Typography variant="body2" sx={{ color: '#C62828', mb: 1.5 }}>
+      {error}
+    </Typography>
+  );
+
+  const createButton = (extraSx?: object) => (
+    <Button
+      variant="contained"
+      disabled={creating}
+      onClick={createChallenge}
+      data-testid="create-challenge"
       sx={{
-        p: { xs: 2, sm: 3 },
-        borderRadius: '20px',
-        bgcolor: '#FFFFFF',
-        border: '1px solid #E3EAF6',
-        boxShadow: '0 8px 24px rgba(30,60,120,0.08)',
+        borderRadius: '999px',
+        textTransform: 'none',
+        fontWeight: 800,
+        py: 1.25,
+        whiteSpace: 'nowrap',
+        bgcolor: '#2E6BFF',
+        '&:hover': { bgcolor: '#2258db' },
+        ...extraSx,
       }}
     >
-      <Typography variant="body2" sx={{ color: '#5C6B85', mb: 2 }}>
-        {playText(t, 'friendSubtitle', 'Create a game and share the link — it opens live for both of you.')}
-      </Typography>
+      {creating ? playText(t, 'creating', 'Creating…') : playText(t, 'createGameLink', 'Create game link')}
+    </Button>
+  );
 
-      <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, color: '#5C6B85', mb: 0.75 }}>
-        {playText(t, 'timeControl', 'TIME CONTROL')}
-      </Typography>
-      <ToggleButtonGroup
-        value={tcKey}
-        exclusive
-        onChange={(_e, v) => v && setTcKey(v)}
-        sx={{ flexWrap: 'wrap', gap: 1, mb: 2 }}
+  // ── Default vertical card ────────────────────────────────────────────────
+  if (variant === 'card') {
+    return (
+      <Box
+        data-testid="play-friend-card"
+        sx={{ p: { xs: 2, sm: 3 }, borderRadius: '20px', ...SURFACE_SX }}
       >
-        {TIME_CONTROLS.map((tc) => (
-          <ToggleButton
-            key={tc.key}
-            value={tc.key}
-            sx={{ borderRadius: '12px !important', border: '1px solid #E3EAF6 !important', px: 2 }}
-          >
-            {tc.untimedKey ? playText(t, 'untimed', tc.label) : tc.label}
-          </ToggleButton>
-        ))}
-      </ToggleButtonGroup>
-
-      <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, color: '#5C6B85', mb: 0.75 }}>
-        {playText(t, 'yourColor', 'YOUR COLOR')}
-      </Typography>
-      <ToggleButtonGroup
-        value={color}
-        exclusive
-        onChange={(_e, v) => v && setColor(v as ColorChoice)}
-        sx={{ flexWrap: 'wrap', gap: 1, mb: 2 }}
-      >
-        {COLORS.map((c) => (
-          <ToggleButton
-            key={c.key}
-            value={c.key}
-            sx={{ borderRadius: '12px !important', border: '1px solid #E3EAF6 !important', px: 2 }}
-          >
-            {playText(t, c.colorKey, c.key)}
-          </ToggleButton>
-        ))}
-      </ToggleButtonGroup>
-
-      {error && (
-        <Typography variant="body2" sx={{ color: '#C62828', mb: 1.5 }}>
-          {error}
+        <Typography variant="body2" sx={{ color: '#5C6B85', mb: 2 }}>
+          {playText(t, 'friendSubtitle', 'Create a game and share the link — it opens live for both of you.')}
         </Typography>
-      )}
 
-      <Button
-        variant="contained"
-        fullWidth
-        disabled={creating}
-        onClick={createChallenge}
-        data-testid="create-challenge"
-        sx={{
-          borderRadius: '999px',
-          textTransform: 'none',
-          fontWeight: 800,
-          py: 1.25,
-          bgcolor: '#2E6BFF',
-          '&:hover': { bgcolor: '#2258db' },
-        }}
+        {caption(playText(t, 'timeControl', 'TIME CONTROL'))}
+        {timeGroup({ mb: 2 })}
+
+        {caption(playText(t, 'yourColor', 'YOUR COLOR'))}
+        {colorGroup({ mb: 2 })}
+
+        {errorEl}
+        {createButton({ width: '100%' })}
+      </Box>
+    );
+  }
+
+  // ── Horizontal bar (above the bot grid) ──────────────────────────────────
+  const title = (
+    <Typography
+      component="h2"
+      sx={{ m: 0, fontWeight: 800, fontSize: '18px', color: '#1E2A44', display: 'flex', alignItems: 'center', gap: 0.75 }}
+    >
+      <Box component="span" aria-hidden="true">🤝</Box>
+      {playText(t, 'sectionFriend', 'Play a friend')}
+    </Typography>
+  );
+
+  // Mobile: collapsed pill that expands the options inline. Sane defaults let a
+  // user create a game straight from the pill without ever expanding.
+  if (isMobile) {
+    const tc = TIME_CONTROLS.find((x) => x.key === tcKey) ?? TIME_CONTROLS[1];
+    const tcLabel = tc.untimedKey ? playText(t, 'untimed', tc.label) : tc.label;
+    const summary = `${tcLabel} · ${playText(t, color, color)}`;
+    return (
+      <Box
+        data-testid="play-friend-bar"
+        sx={{ p: 1, borderRadius: expanded ? '20px' : '999px', ...SURFACE_SX }}
       >
-        {creating ? playText(t, 'creating', 'Creating…') : playText(t, 'createGameLink', 'Create game link')}
-      </Button>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box
+            component="button"
+            type="button"
+            onClick={() => setExpanded((e) => !e)}
+            aria-expanded={expanded}
+            data-testid="play-friend-toggle"
+            sx={{
+              flex: 1,
+              minWidth: 0,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              px: 1.5,
+              py: 1,
+              border: 'none',
+              borderRadius: '999px',
+              bgcolor: 'transparent',
+              cursor: 'pointer',
+              textAlign: 'left',
+              color: '#1E2A44',
+            }}
+          >
+            <Box component="span" aria-hidden="true" sx={{ fontSize: 18 }}>🤝</Box>
+            <Box component="span" sx={{ fontWeight: 800, fontSize: '15px', whiteSpace: 'nowrap' }}>
+              {playText(t, 'sectionFriend', 'Play a friend')}
+            </Box>
+            {!expanded && (
+              <Box
+                component="span"
+                sx={{
+                  color: '#5C6B85',
+                  fontSize: '13px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {summary}
+              </Box>
+            )}
+            <Box component="span" aria-hidden="true" sx={{ ml: 'auto', color: '#5C6B85' }}>
+              {expanded ? '▴' : '▾'}
+            </Box>
+          </Box>
+          {!expanded && createButton({ py: 1, px: 2, fontSize: '14px' })}
+        </Box>
+
+        {expanded && (
+          <Box sx={{ px: 1, pt: 2, pb: 1 }}>
+            {caption(playText(t, 'timeControl', 'TIME CONTROL'))}
+            {timeGroup({ mb: 2 })}
+            {caption(playText(t, 'yourColor', 'YOUR COLOR'))}
+            {colorGroup({ mb: 2 })}
+            {errorEl}
+            {createButton({ width: '100%' })}
+          </Box>
+        )}
+      </Box>
+    );
+  }
+
+  // Desktop: single wrapping row — title/subtitle · time · color · button.
+  return (
+    <Box
+      data-testid="play-friend-bar"
+      sx={{
+        p: { xs: 2, sm: 2.5 },
+        borderRadius: '20px',
+        ...SURFACE_SX,
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'center',
+        gap: 3,
+      }}
+    >
+      <Box sx={{ flex: '1 1 220px', minWidth: 200 }}>
+        {title}
+        <Typography variant="body2" sx={{ color: '#5C6B85', mt: 0.25 }}>
+          {playText(t, 'friendSubtitle', 'Create a game and share the link — it opens live for both of you.')}
+        </Typography>
+      </Box>
+
+      <Box>
+        {caption(playText(t, 'timeControl', 'TIME CONTROL'))}
+        {timeGroup()}
+      </Box>
+
+      <Box>
+        {caption(playText(t, 'yourColor', 'YOUR COLOR'))}
+        {colorGroup()}
+      </Box>
+
+      <Box sx={{ ml: { md: 'auto' } }}>{createButton()}</Box>
+
+      {error && <Box sx={{ flexBasis: '100%' }}>{errorEl}</Box>}
     </Box>
   );
 }

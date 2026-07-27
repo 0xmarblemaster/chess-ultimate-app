@@ -469,40 +469,28 @@ export default function PlayPage() {
             p: { xs: 2, sm: 3, md: 4 },
           }}
         >
-          {/* Two labeled sections: bots (primary) and, when online play is on,
-              a friend challenge card beside the grid on desktop so it's visible
-              without scrolling past the whole grid. */}
-          <Box
-            sx={{
-              display: 'grid',
-              gap: { xs: 4, md: 4 },
-              alignItems: 'start',
-              gridTemplateColumns: {
-                xs: '1fr',
-                md: ONLINE_PLAY_ENABLED ? 'minmax(0, 1fr) 340px' : '1fr',
-              },
-            }}
-          >
-            {/* Play the bots */}
-            <Box component="section" aria-labelledby="play-bots-heading">
-              <SectionHeading id="play-bots-heading">
-                {playText(t, 'sectionBots', 'Play the bots')}
-              </SectionHeading>
-              <BotGrid
-                selectedBotId={selectedBot?.id || null}
-                onSelectBot={handleBotSelect}
-              />
+          {/* Play a friend — online play (phase 3), gated by ONLINE_PLAY_ENABLED.
+              Rendered as a full-width bar above the bot grid so it's visible on
+              both desktop and mobile without stealing width from the bots. */}
+          {ONLINE_PLAY_ENABLED && (
+            <Box
+              component="section"
+              aria-label={playText(t, 'sectionFriend', 'Play a friend')}
+              sx={{ mb: 4 }}
+            >
+              <PlayFriendCard variant="horizontal" />
             </Box>
+          )}
 
-            {/* Play a friend — online play (phase 3), gated by ONLINE_PLAY_ENABLED. */}
-            {ONLINE_PLAY_ENABLED && (
-              <Box component="section" aria-labelledby="play-friend-heading">
-                <SectionHeading id="play-friend-heading">
-                  {playText(t, 'sectionFriend', 'Play a friend')}
-                </SectionHeading>
-                <PlayFriendCard />
-              </Box>
-            )}
+          {/* Play the bots — full container width. */}
+          <Box component="section" aria-labelledby="play-bots-heading">
+            <SectionHeading id="play-bots-heading">
+              {playText(t, 'sectionBots', 'Play the bots')}
+            </SectionHeading>
+            <BotGrid
+              selectedBotId={selectedBot?.id || null}
+              onSelectBot={handleBotSelect}
+            />
           </Box>
         </Box>
       )}
