@@ -85,13 +85,13 @@ describe('PlayPage sections', () => {
     const { getByText, getByTestId } = await renderWithFlag(true);
     expect(getByText('Play the bots')).toBeTruthy();
     expect(getByText('Play a friend')).toBeTruthy();
-    expect(getByTestId('play-friend-card')).toBeTruthy();
+    expect(getByTestId('play-friend-bar')).toBeTruthy();
   });
 
   it('flag OFF: shows the bots section but no friend section at all', async () => {
     const { getByText, queryByText, queryByTestId } = await renderWithFlag(false);
     expect(getByText('Play the bots')).toBeTruthy();
     expect(queryByText('Play a friend')).toBeNull();
-    expect(queryByTestId('play-friend-card')).toBeNull();
+    expect(queryByTestId('play-friend-bar')).toBeNull();
   });
 });
