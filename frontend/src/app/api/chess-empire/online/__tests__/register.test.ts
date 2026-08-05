@@ -4,8 +4,10 @@
  * The online-students flow skips the CE roster search entirely: it resolves an
  * `kind='online'` invite token and mints a synthetic-student invite JWT that
  * carries `external_source='online'` + the token's `access_ttl_hours`. Covers:
- * missing fields (400), non-online / invalid tokens (401), and the happy path
- * (200 → JWT verifies with the online marker + TTL + a synthetic student id).
+ * missing branchToken (400), non-online / invalid tokens (401), and the happy
+ * path (200 → JWT verifies with the online marker + TTL + a synthetic student
+ * id). `name` is optional: present → JWT carries a `first_name` claim; absent →
+ * no `first_name` claim (no placeholder).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -73,9 +75,8 @@ beforeEach(() => {
 });
 
 describe('POST /api/chess-empire/online/register', () => {
-  it('400 on missing fields', async () => {
+  it('400 when branchToken is missing (name alone is not enough)', async () => {
     expect((await POST(makeReq({}))).status).toBe(400);
-    expect((await POST(makeReq({ branchToken: 't' }))).status).toBe(400);
     expect((await POST(makeReq({ name: 'Sam' }))).status).toBe(400);
   });
 
@@ -119,6 +120,31 @@ describe('POST /api/chess-empire/online/register', () => {
     expect(claims.branch_token_id).toBe('token-online-1');
     // Synthetic student id — a non-empty UUID, not a real CE record.
     expect(claims.student_id).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it('mints without a first_name claim when no name is provided', async () => {
+    scripts['branch_invite_tokens.maybeSingle'] = [
+      { data: ONLINE_TOKEN, error: null },
+    ];
+    const res = await POST(makeReq({ branchToken: 't' }));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { inviteJwt: string };
+    const claims = verifyInviteJwt(body.inviteJwt);
+    expect(claims.first_name).toBeUndefined();
+    // Still a valid online token otherwise.
+    expect(claims.external_source).toBe('online');
+    expect(claims.access_ttl_hours).toBe(72);
+  });
+
+  it('carries the provided name as the first_name claim', async () => {
+    scripts['branch_invite_tokens.maybeSingle'] = [
+      { data: ONLINE_TOKEN, error: null },
+    ];
+    const res = await POST(makeReq({ branchToken: 't', name: '  Sam  ' }));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { inviteJwt: string };
+    const claims = verifyInviteJwt(body.inviteJwt);
+    expect(claims.first_name).toBe('Sam');
   });
 
   it('gives each online sign-up a distinct synthetic student id', async () => {

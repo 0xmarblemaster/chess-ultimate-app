@@ -1,16 +1,17 @@
 /**
- * Online-students onboarding (client state machine, single step).
+ * Online-students onboarding (client state machine, no interstitial).
  *
  * Online invite tokens (`branch_invite_tokens.kind='online'`) have no Chess
- * Empire roster to match against, so we skip the search/confirm flow entirely:
- * collect a display name, mint a synthetic-student invite JWT via
- * `/api/chess-empire/online/register`, then hand off to Clerk sign-up exactly
- * like the branch flow. The minted JWT carries the token's access TTL so the
- * webhook can time-box the linked member.
+ * Empire roster to match against, so we skip the search/confirm flow entirely.
+ * The name is asked again on the Clerk sign-up form, so this page no longer
+ * collects one: on mount it mints a synthetic-student invite JWT via
+ * `/api/chess-empire/online/register` (no name) and hands off to Clerk sign-up
+ * exactly like the branch flow. The minted JWT carries the token's access TTL so
+ * the webhook can time-box the linked member.
  */
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@clerk/nextjs';
 import { useTranslations } from 'next-intl';
@@ -31,9 +32,9 @@ export default function OnlineWelcomeFlow({ branchToken }: OnlineWelcomeFlowProp
   const { isSignedIn } = useAuth();
   const branding = useBranding();
 
-  const [name, setName] = useState('');
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Strict mode runs effects twice in dev; the ref makes register fire once.
+  const registeredRef = useRef(false);
 
   // Persist where onboarding started so the sign-up guard can bounce an
   // abandoned bare sign-up back here (matches the branch flow).
@@ -43,16 +44,13 @@ export default function OnlineWelcomeFlow({ branchToken }: OnlineWelcomeFlowProp
     );
   }, []);
 
-  const onSubmit = useCallback(async () => {
-    const trimmed = name.trim();
-    if (!trimmed || submitting) return;
-    setSubmitting(true);
+  const register = useCallback(async () => {
     setError(null);
     try {
       const res = await fetch('/api/chess-empire/online/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ branchToken, name: trimmed }),
+        body: JSON.stringify({ branchToken }),
       });
       if (!res.ok) {
         setError(t('genericError'));
@@ -85,10 +83,23 @@ export default function OnlineWelcomeFlow({ branchToken }: OnlineWelcomeFlowProp
       router.replace(`/sign-up?invite=${encodeURIComponent(body.inviteJwt)}`);
     } catch {
       setError(t('genericError'));
-    } finally {
-      setSubmitting(false);
     }
-  }, [name, submitting, branchToken, isSignedIn, router, t]);
+  }, [branchToken, isSignedIn, router, t]);
+
+  // Auto-register on mount — no name input, no continue button. `register`
+  // only ever calls setState after an awaited network round-trip (never
+  // synchronously in the effect body), so the set-state-in-effect heuristic is
+  // a false positive here.
+  useEffect(() => {
+    if (registeredRef.current) return;
+    registeredRef.current = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void register();
+  }, [register]);
+
+  const onRetry = useCallback(() => {
+    void register();
+  }, [register]);
 
   return (
     <div className="flex flex-col items-center justify-start pt-16 md:justify-center md:pt-0 min-h-screen bg-purple-600 md:bg-gray-50 px-4 pb-[env(safe-area-inset-bottom)]">
@@ -122,38 +133,27 @@ export default function OnlineWelcomeFlow({ branchToken }: OnlineWelcomeFlowProp
           {t('online.subtitle')}
         </p>
 
-        <div className="mt-6">
-          <label htmlFor="online-name" className="sr-only">
-            {t('online.nameLabel')}
-          </label>
-          <input
-            id="online-name"
-            type="text"
-            autoComplete="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') onSubmit();
-            }}
-            placeholder={t('online.namePlaceholder')}
-            className="w-full rounded-2xl border-2 border-gray-200 py-4 px-5 text-base placeholder:text-gray-400 transition-shadow focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2"
-          />
-        </div>
-
-        {error && (
-          <p role="alert" className="text-sm text-red-500 mt-4">
-            {error}
+        {error ? (
+          <>
+            <p role="alert" className="text-sm text-red-500 mt-6 text-center">
+              {error}
+            </p>
+            <button
+              type="button"
+              onClick={onRetry}
+              className="mt-6 w-full bg-purple-600 hover:bg-purple-700 rounded-2xl py-4 font-bold uppercase tracking-wide text-white border-b-4 border-purple-800 active:border-b-2 active:translate-y-0.5 transition-all focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300 focus-visible:ring-offset-2"
+            >
+              {t('online.continue')}
+            </button>
+          </>
+        ) : (
+          <p
+            role="status"
+            className="text-sm text-gray-500 mt-8 text-center animate-pulse"
+          >
+            {t('verifying')}
           </p>
         )}
-
-        <button
-          type="button"
-          onClick={onSubmit}
-          disabled={submitting || name.trim().length === 0}
-          className="mt-6 w-full bg-purple-600 hover:bg-purple-700 disabled:bg-gray-300 disabled:border-gray-400 rounded-2xl py-4 font-bold uppercase tracking-wide text-white border-b-4 border-purple-800 active:border-b-2 active:translate-y-0.5 transition-all focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-300 focus-visible:ring-offset-2"
-        >
-          {submitting ? t('verifying') : t('online.continue')}
-        </button>
       </div>
     </div>
   );

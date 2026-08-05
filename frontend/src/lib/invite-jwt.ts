@@ -63,6 +63,12 @@ export interface InviteJwtPayload {
    * no expiry (branch students never expire).
    */
   access_ttl_hours?: number;
+  /**
+   * Display name captured at invite time. Optional and absent when the student
+   * never typed one (the online flow no longer asks). The webhook uses it as the
+   * first-choice source for the member's display name, ahead of the Clerk field.
+   */
+  first_name?: string;
 }
 
 interface InviteJwtClaims extends InviteJwtPayload {

@@ -7,6 +7,7 @@ import { supabaseAdmin } from '@/lib/supabase-admin';
 import { findCoachesByEmail } from '@/lib/chess-empire-client';
 import { getMembershipStateForUser } from '@/lib/chess-empire-member';
 import { logLinkAttempt, upsertMemberLink, linkMemberViaInviteJwt } from '@/lib/chess-empire-jwt-link';
+import { verifyInviteJwt } from '@/lib/invite-jwt';
 
 type ClerkWebhookEvent = {
   type: string;
@@ -48,13 +49,35 @@ function extractName(data: ClerkUserData): string | null {
   return full || null;
 }
 
+/**
+ * Display name carried on the invite JWT (online invites only). Online tokens
+ * mint the student's typed name as the JWT's `first_name` claim; branch tokens
+ * never set it. Legacy online JWTs still in flight are the reason this stays the
+ * first-choice source. Any verification failure (expired / bad signature /
+ * absent) yields null so the caller falls through to the Clerk field / email.
+ */
+function extractInviteName(data: ClerkUserData): string | null {
+  const rawJwt = (data.unsafe_metadata || {})['inviteJwt'];
+  if (typeof rawJwt !== 'string' || !rawJwt) return null;
+  try {
+    const claims = verifyInviteJwt(rawJwt);
+    const first = (claims.first_name || '').trim();
+    return first || null;
+  } catch {
+    return null;
+  }
+}
+
 async function syncListmonkUserCreated(data: ClerkUserData): Promise<void> {
   const primaryEmail = extractPrimaryEmail(data);
   if (!primaryEmail) {
     console.warn('[clerk-webhook] user.created with no email, skipping listmonk');
     return;
   }
-  const name = extractName(data) || primaryEmail.split('@')[0];
+  // Prefer the invite JWT's name (online members) → Clerk profile name → email
+  // local-part. Never an empty name.
+  const name =
+    extractInviteName(data) || extractName(data) || primaryEmail.split('@')[0];
   const result = await createSubscriber(
     primaryEmail,
     name,

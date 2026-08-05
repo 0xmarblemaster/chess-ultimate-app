@@ -712,6 +712,56 @@ describe('POST /api/webhooks/clerk — session.created (sign-in backstop)', () =
   });
 });
 
+describe('POST /api/webhooks/clerk — user.created — subscriber display name fallback', () => {
+  it('prefers the invite JWT first_name over the Clerk profile name', async () => {
+    // Event carries Clerk first/last 'Kirill Ivanov' AND an invite JWT whose
+    // first_name claim is 'Sam' → the JWT wins.
+    const jwt = signValidInvite({ first_name: 'Sam' });
+    resetState({
+      tokenRow: { id: 'tok-uuid', revoked_at: null },
+      orgRow: { id: 'org-uuid', clerk_org_id: 'clerk-org-abc' },
+    });
+    createMembership.mockResolvedValue({});
+
+    const res = await POST(makeRequest(makeEvent({ inviteJwt: jwt })));
+    expect(res.status).toBe(200);
+    expect(createSubscriber).toHaveBeenCalledTimes(1);
+    expect(createSubscriber.mock.calls[0][1]).toBe('Sam');
+  });
+
+  it('falls back to the Clerk first/last name when the JWT has no name', async () => {
+    // Valid JWT but no first_name claim → Clerk 'Kirill Ivanov'.
+    const jwt = signValidInvite();
+    resetState({
+      tokenRow: { id: 'tok-uuid', revoked_at: null },
+      orgRow: { id: 'org-uuid', clerk_org_id: 'clerk-org-abc' },
+    });
+    createMembership.mockResolvedValue({});
+
+    const res = await POST(makeRequest(makeEvent({ inviteJwt: jwt })));
+    expect(res.status).toBe(200);
+    expect(createSubscriber.mock.calls[0][1]).toBe('Kirill Ivanov');
+  });
+
+  it('falls back to the email local-part when neither JWT nor Clerk name exist', async () => {
+    resetState();
+    const event = {
+      type: 'user.created',
+      data: {
+        id: 'user_noname',
+        email_addresses: [{ id: 'em_1', email_address: 'nameless@example.com' }],
+        primary_email_address_id: 'em_1',
+        first_name: null,
+        last_name: null,
+        unsafe_metadata: {},
+      },
+    };
+    const res = await POST(makeRequest(event));
+    expect(res.status).toBe(200);
+    expect(createSubscriber.mock.calls[0][1]).toBe('nameless');
+  });
+});
+
 describe('POST /api/webhooks/clerk — user.deleted', () => {
   it('blocklists subscriber by email', async () => {
     const event = {

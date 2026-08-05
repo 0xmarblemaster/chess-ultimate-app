@@ -1,7 +1,7 @@
 /**
  * Online-students claim → invite JWT.
  *
- * POST with `{ branchToken, name }`. Online invite tokens
+ * POST with `{ branchToken }` (optional `name`). Online invite tokens
  * (`branch_invite_tokens.kind='online'`) have no Chess Empire roster to match
  * against, so — unlike the branch `students/verify` route — we skip the search /
  * confirm / DOB gate entirely. We mint a short-lived HS256 invite JWT carrying a
@@ -9,6 +9,11 @@
  * `external_source='online'`, and the token's `access_ttl_hours`. The webhook /
  * claim path then writes a time-boxed `organization_members` row
  * (`access_expires_at = now() + access_ttl_hours`).
+ *
+ * `name` is optional: the Clerk sign-up form asks for it again, so the welcome
+ * interstitial no longer collects one. When present it rides along as the JWT's
+ * `first_name` claim (the webhook's preferred display-name source); when absent
+ * the claim is simply omitted — we never invent a placeholder.
  *
  * Rate-limited per IP consistent with the other invite endpoints.
  */
@@ -77,7 +82,7 @@ export async function POST(req: NextRequest) {
 
   const branchToken = body.branchToken?.trim() ?? '';
   const name = body.name?.trim() ?? '';
-  if (!branchToken || !name) {
+  if (!branchToken) {
     return NextResponse.json({ error: 'missing_fields' }, { status: 400 });
   }
 
@@ -101,6 +106,8 @@ export async function POST(req: NextRequest) {
     ...(typeof token.access_ttl_hours === 'number'
       ? { access_ttl_hours: token.access_ttl_hours }
       : {}),
+    // Only carry a name when one was actually provided — no placeholder.
+    ...(name ? { first_name: name } : {}),
   });
 
   return NextResponse.json({ inviteJwt });

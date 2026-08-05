@@ -73,7 +73,7 @@ export default async function WelcomePage({ params }: PageProps) {
     return <LinkInvalid title={t('linkInvalidTitle')} body={t('linkInvalidBody')} />;
   }
 
-  // Online tokens have no CE roster to search — go straight to a name + sign-up.
+  // Online tokens have no CE roster to search — go straight to Clerk sign-up.
   if (resolved.kind === 'online') {
     return <OnlineWelcomeFlow branchToken={branchToken} />;
   }
