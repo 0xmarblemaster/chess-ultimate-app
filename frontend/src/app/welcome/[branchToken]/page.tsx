@@ -11,12 +11,14 @@ import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 import { supabaseAdmin } from '@/lib/supabase-admin';
 import WelcomeFlow from './WelcomeFlow';
+import OnlineWelcomeFlow from './OnlineWelcomeFlow';
 import LinkInvalid from './LinkInvalid';
 
 interface BranchTokenRow {
   organization_id: string;
   external_branch_id: string;
   branch_name: string;
+  kind: string | null;
   expires_at: string | null;
   revoked_at: string | null;
 }
@@ -25,13 +27,15 @@ interface ResolvedToken {
   branchName: string;
   organizationId: string;
   externalBranchId: string;
+  /** 'online' skips the CE student-search flow; 'branch' (default) keeps it. */
+  kind: 'branch' | 'online';
 }
 
 async function resolveBranchToken(token: string): Promise<ResolvedToken | null> {
   if (!token) return null;
   const { data, error } = await supabaseAdmin
     .from('branch_invite_tokens')
-    .select('organization_id, external_branch_id, branch_name, expires_at, revoked_at')
+    .select('organization_id, external_branch_id, branch_name, kind, expires_at, revoked_at')
     .eq('token', token)
     .maybeSingle();
   if (error || !data) return null;
@@ -42,6 +46,7 @@ async function resolveBranchToken(token: string): Promise<ResolvedToken | null> 
     branchName: row.branch_name,
     organizationId: row.organization_id,
     externalBranchId: row.external_branch_id,
+    kind: row.kind === 'online' ? 'online' : 'branch',
   };
 }
 
@@ -66,6 +71,11 @@ export default async function WelcomePage({ params }: PageProps) {
   if (!resolved) {
     const t = await getTranslations('welcome');
     return <LinkInvalid title={t('linkInvalidTitle')} body={t('linkInvalidBody')} />;
+  }
+
+  // Online tokens have no CE roster to search — go straight to a name + sign-up.
+  if (resolved.kind === 'online') {
+    return <OnlineWelcomeFlow branchToken={branchToken} />;
   }
 
   return (

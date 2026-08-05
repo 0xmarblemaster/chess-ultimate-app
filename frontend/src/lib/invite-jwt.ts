@@ -34,9 +34,10 @@ export const INVITE_JWT_TTL_SECONDS = 15 * 60;
 export const INVITE_JWT_CLAIM_GRACE_SECONDS = 7 * 24 * 60 * 60;
 
 export type MemberType = 'student' | 'coach';
+export type ExternalSource = 'chess_empire' | 'online';
 
 export interface InviteJwtPayload {
-  /** Chess Empire student (or coach) UUID. */
+  /** Chess Empire student (or coach) UUID; a synthetic UUID for online tokens. */
   student_id: string;
   /** Chess Empire branch UUID (mirrors the token's branch). */
   branch_id: string;
@@ -50,11 +51,25 @@ export interface InviteJwtPayload {
    * `'student'` so pre-existing tokens stay valid (back-compat).
    */
   member_type?: MemberType;
+  /**
+   * Onboarding track written to `organization_members.external_source`. Absent
+   * for legacy branch tokens — verify normalizes a missing claim to
+   * `'chess_empire'`. `'online'` marks a synthetic-student online invite.
+   */
+  external_source?: ExternalSource;
+  /**
+   * Access window (hours) granted to the member on link. Only present on online
+   * tokens; the webhook stamps `access_expires_at = now() + this`. Absent means
+   * no expiry (branch students never expire).
+   */
+  access_ttl_hours?: number;
 }
 
 interface InviteJwtClaims extends InviteJwtPayload {
   /** Always populated after verify — normalized to `'student'` when absent. */
   member_type: MemberType;
+  /** Always populated after verify — normalized to `'chess_empire'` when absent. */
+  external_source: ExternalSource;
   iat: number;
   exp: number;
 }
@@ -142,6 +157,8 @@ export function verifyInviteJwt(
   }
   // Back-compat: legacy tokens carry no member_type — treat them as students.
   claims.member_type = claims.member_type === 'coach' ? 'coach' : 'student';
+  // Back-compat: legacy tokens carry no external_source — treat as chess_empire.
+  claims.external_source = claims.external_source === 'online' ? 'online' : 'chess_empire';
   return claims;
 }
 

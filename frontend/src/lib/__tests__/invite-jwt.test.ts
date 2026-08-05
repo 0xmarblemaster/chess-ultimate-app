@@ -107,6 +107,24 @@ describe('invite-jwt', () => {
     expect(claims.member_type).toBe('student');
   });
 
+  it('carries external_source=online + access_ttl_hours through a round-trip', () => {
+    const token = signInviteJwt({
+      ...payload,
+      external_source: 'online',
+      access_ttl_hours: 72,
+    });
+    const claims = verifyInviteJwt(token);
+    expect(claims.external_source).toBe('online');
+    expect(claims.access_ttl_hours).toBe(72);
+  });
+
+  it('defaults external_source to chess_empire when the claim is absent (back-compat)', () => {
+    const token = signInviteJwt(payload);
+    const claims = verifyInviteJwt(token);
+    expect(claims.external_source).toBe('chess_empire');
+    expect(claims.access_ttl_hours).toBeUndefined();
+  });
+
   describe('grace window', () => {
     const now = 1_700_000_000;
 

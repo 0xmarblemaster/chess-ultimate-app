@@ -11,11 +11,12 @@ interface MaybeSingleResponse<T> {
 
 type Recorded = {
   eq: Array<[string, unknown]>;
+  in: Array<[string, unknown]>;
   table: string | null;
   select: string | null;
 };
 
-const recorded: Recorded = { eq: [], table: null, select: null };
+const recorded: Recorded = { eq: [], in: [], table: null, select: null };
 let nextResponse: MaybeSingleResponse<unknown> = { data: null, error: null };
 
 vi.mock('@supabase/supabase-js', () => {
@@ -26,6 +27,10 @@ vi.mock('@supabase/supabase-js', () => {
     },
     eq(column: string, value: unknown) {
       recorded.eq.push([column, value]);
+      return builder;
+    },
+    in(column: string, value: unknown) {
+      recorded.in.push([column, value]);
       return builder;
     },
     limit() {
@@ -49,6 +54,7 @@ import { getLinkedStudentId, getMembershipState } from '../chess-empire-member';
 
 beforeEach(() => {
   recorded.eq = [];
+  recorded.in = [];
   recorded.table = null;
   recorded.select = null;
   nextResponse = { data: null, error: null };
@@ -76,7 +82,9 @@ describe('getLinkedStudentId', () => {
     const eqMap = Object.fromEntries(recorded.eq);
     expect(eqMap.organization_id).toBe('org-1');
     expect(eqMap.user_id).toBe('user-1');
-    expect(eqMap.external_source).toBe('chess_empire');
+    // Both onboarding tracks (branch + online) are matched via an IN filter.
+    const inMap = Object.fromEntries(recorded.in);
+    expect(inMap.external_source).toEqual(['chess_empire', 'online']);
   });
 
   it('returns null when no row matches', async () => {
@@ -120,11 +128,11 @@ describe('getLinkedStudentId', () => {
     expect(id).toBeNull();
   });
 
-  it('excludes rows with a different external_source', async () => {
+  it('scopes the lookup to the chess_empire + online tracks only', async () => {
     nextResponse = { data: null, error: null };
     await getLinkedStudentId({ orgId: 'org-1', clerkUserId: 'user-1' });
-    const eqMap = Object.fromEntries(recorded.eq);
-    expect(eqMap.external_source).toBe('chess_empire');
+    const inMap = Object.fromEntries(recorded.in);
+    expect(inMap.external_source).toEqual(['chess_empire', 'online']);
   });
 
   it('throws on Supabase error', async () => {
@@ -226,5 +234,106 @@ describe('getMembershipState', () => {
     const b = await getMembershipState({ orgId: 'o', clerkUserId: '' });
     expect(a.state).toBe('no_link');
     expect(b.state).toBe('no_link');
+  });
+
+  describe('access expiry (online invites)', () => {
+    it('null access_expires_at never expires → verified', async () => {
+      nextResponse = {
+        data: {
+          id: 'mem-online-1',
+          external_student_id: 'stu-online-1',
+          link_status: 'verified',
+          external_source: 'online',
+          access_expires_at: null,
+        },
+        error: null,
+      };
+      const result = await getMembershipState({
+        orgId: 'org-1',
+        clerkUserId: 'user-online-1',
+      });
+      expect(result.state).toBe('verified');
+      expect(result.source).toBe('online');
+      expect(result.studentId).toBe('stu-online-1');
+    });
+
+    it('future access_expires_at is still active → verified', async () => {
+      const oneHourAhead = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+      nextResponse = {
+        data: {
+          id: 'mem-online-2',
+          external_student_id: 'stu-online-2',
+          link_status: 'verified',
+          external_source: 'online',
+          access_expires_at: oneHourAhead,
+        },
+        error: null,
+      };
+      const result = await getMembershipState({
+        orgId: 'org-1',
+        clerkUserId: 'user-online-2',
+      });
+      expect(result.state).toBe('verified');
+      expect(result.source).toBe('online');
+    });
+
+    it('past access_expires_at → expired (studentId preserved, not surfaced as verified)', async () => {
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      nextResponse = {
+        data: {
+          id: 'mem-online-3',
+          external_student_id: 'stu-online-3',
+          link_status: 'verified',
+          external_source: 'online',
+          access_expires_at: oneHourAgo,
+        },
+        error: null,
+      };
+      const result = await getMembershipState({
+        orgId: 'org-1',
+        clerkUserId: 'user-online-3',
+      });
+      expect(result.state).toBe('expired');
+      expect(result.source).toBe('online');
+      expect(result.memberId).toBe('mem-online-3');
+    });
+
+    it('branch members (chess_empire, null expiry) are untouched → verified', async () => {
+      nextResponse = {
+        data: {
+          id: 'mem-branch',
+          external_student_id: 'stu-branch',
+          link_status: 'verified',
+          external_source: 'chess_empire',
+          access_expires_at: null,
+        },
+        error: null,
+      };
+      const result = await getMembershipState({
+        orgId: 'org-1',
+        clerkUserId: 'user-branch',
+      });
+      expect(result.state).toBe('verified');
+      expect(result.source).toBe('chess_empire');
+    });
+
+    it('getLinkedStudentId returns null for an expired member (never verified)', async () => {
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      nextResponse = {
+        data: {
+          id: 'mem-online-4',
+          external_student_id: 'stu-online-4',
+          link_status: 'verified',
+          external_source: 'online',
+          access_expires_at: oneHourAgo,
+        },
+        error: null,
+      };
+      const id = await getLinkedStudentId({
+        orgId: 'org-1',
+        clerkUserId: 'user-online-4',
+      });
+      expect(id).toBeNull();
+    });
   });
 });

@@ -28,8 +28,13 @@ export interface GetLinkedStudentIdArgs {
   clerkUserId: string;
 }
 
-export type MembershipState = 'no_link' | 'pending_confirm' | 'verified';
+export type MembershipState =
+  | 'no_link'
+  | 'pending_confirm'
+  | 'verified'
+  | 'expired';
 export type MemberRole = 'student' | 'coach';
+export type MemberSource = 'chess_empire' | 'online';
 
 export interface MembershipStateResult {
   state: MembershipState;
@@ -37,6 +42,8 @@ export interface MembershipStateResult {
   memberId: string | null;
   /** Member role — 'coach' rows must not be fed to the student profile API. */
   role: MemberRole;
+  /** Onboarding track — 'online' members have no CE profile to render. */
+  source: MemberSource;
 }
 
 interface MemberRow {
@@ -44,7 +51,16 @@ interface MemberRow {
   external_student_id: string | null;
   link_status: string | null;
   role: string | null;
+  external_source: string | null;
+  /** Absolute access expiry; NULL means never expires. */
+  access_expires_at: string | null;
 }
+
+const SELECT_COLUMNS =
+  'id, external_student_id, link_status, role, external_source, access_expires_at';
+
+/** Both onboarding tracks funnel through the same member lookup. */
+const MEMBER_SOURCES = ['chess_empire', 'online'] as const;
 
 function serviceClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -65,16 +81,26 @@ function rowToState(row: MemberRow | null): MembershipStateResult {
     studentId: null,
     memberId: null,
     role: 'student',
+    source: 'chess_empire',
   };
   if (!row || !row.external_student_id) return noLink;
 
   const role: MemberRole = row.role === 'coach' ? 'coach' : 'student';
+  const source: MemberSource =
+    row.external_source === 'online' ? 'online' : 'chess_empire';
   if (row.link_status === 'verified') {
+    // Time-boxed access (online invites): a verified row whose window has
+    // elapsed downgrades to `expired` on every read — no cron, checked live.
+    // A null/absent `access_expires_at` means the access never expires.
+    const expired = row.access_expires_at
+      ? new Date(row.access_expires_at).getTime() < Date.now()
+      : false;
     return {
-      state: 'verified',
+      state: expired ? 'expired' : 'verified',
       studentId: row.external_student_id,
       memberId: row.id,
       role,
+      source,
     };
   }
   if (row.link_status === 'pending_confirm') {
@@ -83,6 +109,7 @@ function rowToState(row: MemberRow | null): MembershipStateResult {
       studentId: row.external_student_id,
       memberId: row.id,
       role,
+      source,
     };
   }
   return noLink;
@@ -97,10 +124,10 @@ async function fetchMembershipState({
   const supabase = serviceClient();
   const { data, error } = await supabase
     .from('organization_members')
-    .select('id, external_student_id, link_status, role')
+    .select(SELECT_COLUMNS)
     .eq('organization_id', orgId)
     .eq('user_id', clerkUserId)
-    .eq('external_source', 'chess_empire')
+    .in('external_source', MEMBER_SOURCES)
     .limit(1)
     .maybeSingle();
   if (error) {
@@ -125,9 +152,9 @@ async function fetchMembershipStateForUser(
   const supabase = serviceClient();
   const { data, error } = await supabase
     .from('organization_members')
-    .select('id, external_student_id, link_status, role')
+    .select(SELECT_COLUMNS)
     .eq('user_id', clerkUserId)
-    .eq('external_source', 'chess_empire')
+    .in('external_source', MEMBER_SOURCES)
     .limit(1)
     .maybeSingle();
   if (error) {

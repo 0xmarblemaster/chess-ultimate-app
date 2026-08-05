@@ -20,6 +20,8 @@ import { auth } from '@clerk/nextjs/server';
 import EmpireHomePage from '@/components/empire/EmpireHomePage';
 import EmpireCoachHome from '@/components/empire/EmpireCoachHome';
 import EmpireNoLinkClient from '@/components/empire/EmpireNoLinkClient';
+import EmpireAccessExpired from '@/components/empire/EmpireAccessExpired';
+import ChessterDashboard from '@/app/dashboard/ChessterDashboard';
 import { getMembershipState } from '@/lib/chess-empire-member';
 import { autoClaimPendingCookie } from '@/lib/pending-registration';
 import { resolveStudentDisplayName } from '@/lib/student-name';
@@ -91,6 +93,19 @@ export async function renderEmpireHomepage(
         </EmpireNoLinkClient>
       ),
     };
+  }
+
+  // Time-boxed access ran out (online invite past its window). Show the
+  // access-expired screen instead of the app — no profile fetch needed.
+  if (membership.state === 'expired') {
+    return { status: 'ok', node: <EmpireAccessExpired /> };
+  }
+
+  // Online-track members have no Chess Empire roster profile to personalize
+  // against, so serve them the standard Chesster app rather than the CE
+  // player-card homepage (which would 404 on the synthetic student id).
+  if (membership.source === 'online') {
+    return { status: 'ok', node: <ChessterDashboard /> };
   }
 
   const studentId = membership.studentId;

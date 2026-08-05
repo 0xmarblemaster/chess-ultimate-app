@@ -123,6 +123,14 @@ export interface UpsertLinkArgs {
   linkSource: AttemptSource;
   /** Member role written to the row. Defaults to 'student'. */
   memberType?: 'student' | 'coach';
+  /** Onboarding track written to `external_source`. Defaults to 'chess_empire'. */
+  externalSource?: 'chess_empire' | 'online';
+  /**
+   * Online-track access window in hours. When set (with `externalSource='online'`)
+   * the row is stamped `access_expires_at = now() + accessTtlHours`. Omitted /
+   * null means the access never expires.
+   */
+  accessTtlHours?: number | null;
 }
 
 export async function upsertMemberLink({
@@ -132,6 +140,8 @@ export async function upsertMemberLink({
   linkStatus,
   linkSource,
   memberType = 'student',
+  externalSource = 'chess_empire',
+  accessTtlHours = null,
 }: UpsertLinkArgs): Promise<void> {
   const nowIso = new Date().toISOString();
   const payload: Record<string, unknown> = {
@@ -141,12 +151,19 @@ export async function upsertMemberLink({
     role: memberType === 'coach' ? 'coach' : 'student',
     joined_at: nowIso,
     external_student_id: studentId,
-    external_source: 'chess_empire',
+    external_source: externalSource,
     link_status: linkStatus,
     link_source: linkSource,
   };
   if (linkStatus === 'verified') {
     payload.link_verified_at = nowIso;
+  }
+  // Online invites carry a bounded access window; stamp the absolute expiry at
+  // link time so enforcement is a plain timestamp comparison on every access.
+  if (externalSource === 'online' && typeof accessTtlHours === 'number') {
+    payload.access_expires_at = new Date(
+      Date.now() + accessTtlHours * 60 * 60 * 1000,
+    ).toISOString();
   }
   const { error } = await supabaseAdmin
     .from('organization_members')
@@ -263,6 +280,10 @@ export async function linkMemberViaInviteJwt(
       linkStatus: 'verified',
       linkSource: 'jwt',
       memberType: claims.member_type,
+      // Online tokens carry the separate-track marker + access window; branch
+      // tokens omit both, so this defaults back to the legacy chess_empire path.
+      externalSource: claims.external_source,
+      accessTtlHours: claims.access_ttl_hours ?? null,
     });
   } catch (err) {
     await logLinkAttempt({
