@@ -23,7 +23,7 @@ import SyncIndicator from "@/components/SyncIndicator"
 const MuiProvider = lazy(() => import("@/components/providers/MuiProvider"))
 
 // Pages where the navigation should be hidden
-const HIDE_NAV_PATHS = ['/sign-in', '/sign-up', '/', '/onboarding', '/admin', '/for-schools/start']
+const HIDE_NAV_PATHS = ['/sign-in', '/sign-up', '/', '/onboarding', '/admin', '/for-schools/start', '/landing-test']
 
 // Routes that use MUI components and need ThemeProvider
 const MUI_ROUTES = ['/database', '/game', '/position', '/puzzle', '/practice', '/courses']
@@ -84,9 +84,12 @@ export default function ClientShell({ children }: { children: ReactNode }) {
             {/* Main content area */}
             <main className={`flex-1 min-w-0 ${hideNav ? '' : 'pb-16 md:pb-0'}`}>
               <Suspense fallback={<PageSkeleton />}>
-                <SyncBoundary>
-                  {hideNav ? children : <PageTransition>{children}</PageTransition>}
-                </SyncBoundary>
+                {/* Static marketing test page — no user data, skip the sync gate */}
+                {pathname?.startsWith('/landing-test') ? children : (
+                  <SyncBoundary>
+                    {hideNav ? children : <PageTransition>{children}</PageTransition>}
+                  </SyncBoundary>
+                )}
               </Suspense>
             </main>
 

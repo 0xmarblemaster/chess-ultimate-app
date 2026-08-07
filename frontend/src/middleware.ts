@@ -21,6 +21,7 @@ const isPublicRoute = createRouteMatcher([
   '/leaderboard(.*)',
   '/preview(.*)',
   '/for-schools',  // Marketing landing (auth-gated wizard lives under /for-schools/start/*)
+  '/landing-test',  // Design test page (Linear DNA study) — noindex, not linked anywhere
   '/api/(.*)',  // Allow all API routes without auth
 ])
 
