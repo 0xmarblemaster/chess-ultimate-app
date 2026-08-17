@@ -1052,3 +1052,66 @@ export async function listActiveStudentsByCoach(
   }
   return [];
 }
+
+// ---------------------------------------------------------------------------
+// Gamification sync — tournament results ingestion (read-only).
+// ---------------------------------------------------------------------------
+
+/** One CE tournament result joined to its upload (kind + date). */
+export interface CETournamentResultRow {
+  id: string;
+  student_id: string;
+  score: number | null;
+  created_at: string;
+  upload: { kind: string | null; tournament_date: string | null } | null;
+}
+
+/**
+ * Fetch tournament results created strictly after `sinceIso`, oldest-first,
+ * joined to their upload for `kind` + `tournament_date`. Drives the zero-start
+ * gamification sync cursor. Read-only; never writes to CE.
+ */
+export async function getTournamentResultsSince(
+  sinceIso: string,
+  limit = 500,
+): Promise<CETournamentResultRow[]> {
+  const key = getServiceKey();
+  const safeLimit = Math.min(Math.max(1, limit), 1000);
+  const params = new URLSearchParams({
+    select: 'id,student_id,score,created_at,upload:tournaments_uploads(kind,tournament_date)',
+    created_at: `gt.${sinceIso}`,
+    order: 'created_at.asc',
+    limit: String(safeLimit),
+  });
+  const resp = await ceFetch(`${ceRestBase()}/tournament_results?${params.toString()}`, {
+    headers: { apikey: key, Authorization: `Bearer ${key}`, Accept: 'application/json' },
+  });
+  const rows = await expectJson<CETournamentResultRow[]>(resp);
+  return Array.isArray(rows) ? rows : [];
+}
+
+/**
+ * Fetch the set of tournament_results ids that currently exist for the given
+ * upload ids — used to detect deleted/re-uploaded results for reversal.
+ */
+export async function getExistingResultIds(resultIds: string[]): Promise<Set<string>> {
+  if (resultIds.length === 0) return new Set();
+  const key = getServiceKey();
+  const found = new Set<string>();
+  // Chunk to keep the `in.(...)` filter within URL limits.
+  const CHUNK = 100;
+  for (let i = 0; i < resultIds.length; i += CHUNK) {
+    const chunk = resultIds.slice(i, i + CHUNK);
+    const params = new URLSearchParams({
+      select: 'id',
+      id: `in.(${chunk.join(',')})`,
+      limit: String(chunk.length),
+    });
+    const resp = await ceFetch(`${ceRestBase()}/tournament_results?${params.toString()}`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}`, Accept: 'application/json' },
+    });
+    const rows = await expectJson<Array<{ id: string }>>(resp);
+    for (const r of rows) found.add(r.id);
+  }
+  return found;
+}
