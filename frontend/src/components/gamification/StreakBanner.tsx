@@ -7,15 +7,48 @@ interface StreakBannerProps {
   streakDays: number;
   lastActivityDate?: string;
   showCalendar?: boolean;
+  /** 'days' (default, legacy) or 'weeks' for tournament-week streaks (§5.5). */
+  unit?: 'days' | 'weeks';
+  /** Next streak milestone to earn, shown in weeks mode. */
+  nextMilestone?: { weeks: number; reward: number } | null;
 }
 
-export function StreakBanner({ streakDays, lastActivityDate, showCalendar = false }: StreakBannerProps) {
+export function StreakBanner({
+  streakDays,
+  lastActivityDate,
+  showCalendar = false,
+  unit = 'days',
+  nextMilestone = null,
+}: StreakBannerProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const t = useTranslations('gamification');
 
   const isActiveToday = lastActivityDate
     ? new Date(lastActivityDate).toDateString() === new Date().toDateString()
     : false;
+
+  // Tournament-week streak variant (CE surface / profile): weeks + next reward.
+  if (unit === 'weeks') {
+    return (
+      <div className="bg-gradient-to-r from-orange-500 to-amber-500 rounded-2xl p-4 text-white shadow-lg">
+        <div className="flex items-center gap-3">
+          <div className={`text-3xl ${streakDays > 0 ? 'animate-pulse' : 'opacity-50'}`}>🔥</div>
+          <div className="text-left">
+            <div className="text-2xl font-bold">
+              {streakDays} {t('weekStreak')}!
+            </div>
+            <div className="text-sm text-orange-100">
+              {nextMilestone
+                ? t('nextReward', { weeks: nextMilestone.weeks })
+                : streakDays > 0
+                  ? t('keepItGoing')
+                  : t('practiceToKeepStreak')}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const getWeekDays = () => {
     const days = [];

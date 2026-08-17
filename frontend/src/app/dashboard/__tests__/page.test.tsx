@@ -41,6 +41,10 @@ const memberStore: {
   state: 'no_link' | 'pending_confirm' | 'verified';
   throws: boolean;
 } = { studentId: null, state: 'no_link', throws: false };
+vi.mock('@/lib/gamification/store', () => ({
+  loadGamificationProfile: vi.fn(async () => null),
+}));
+
 vi.mock('@/lib/chess-empire-member', () => ({
   getMembershipState: vi.fn(async () => {
     if (memberStore.throws) throw new Error('membership db down');

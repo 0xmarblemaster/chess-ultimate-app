@@ -14,13 +14,16 @@
  *    restyled to the dark-slate palette.
  */
 import Link from 'next/link';
-import { getTranslations } from 'next-intl/server';
+import { getLocale, getTranslations } from 'next-intl/server';
 import type {
+  CEAchievement,
   CEBestBot,
   CERatingPoint,
   CEStudentProfile,
   CEStudentRank,
 } from '@/lib/chess-empire-client';
+import type { GamificationProfile } from '@/lib/gamification/profile';
+import Achievements from './Achievements';
 import PendingConfirmBanner from './PendingConfirmBanner';
 
 export type EmpireHomeState = 'verified' | 'pending_confirm' | 'no_link';
@@ -35,6 +38,10 @@ interface VerifiedProps {
   bestSurvivalScore?: number | null;
   /** Highest-rated bot the student has beaten; null when no bot wins yet. */
   bestDefeatedBot?: CEBestBot | null;
+  /** Gamification read model (xp/rank/coins/streak); null until synced/linked. */
+  gamification?: GamificationProfile | null;
+  /** Seeded CE achievements for the populated strip. */
+  achievements?: CEAchievement[];
 }
 
 interface PendingConfirmProps {
@@ -120,6 +127,8 @@ function computeDelta(ratings: CERatingPoint[]): number | null {
 
 export default async function EmpireHomePage(props: EmpireHomePageProps) {
   const t = await getTranslations('empire');
+  const tg = await getTranslations('gamification');
+  const locale = await getLocale();
 
   if (props.state === 'no_link') {
     return (
@@ -186,7 +195,18 @@ export default async function EmpireHomePage(props: EmpireHomePageProps) {
     rank,
     bestSurvivalScore = null,
     bestDefeatedBot = null,
+    gamification = null,
+    achievements = [],
   } = props;
+
+  const gam = gamification && gamification.linked ? gamification : null;
+  const gamRankName = gam?.rank
+    ? locale === 'ru'
+      ? gam.rank.name_ru
+      : locale === 'kz'
+        ? gam.rank.name_kk
+        : gam.rank.name_en
+    : null;
 
   const survivorSubtitle =
     bestSurvivalScore != null ? String(bestSurvivalScore) : '—';
@@ -644,6 +664,37 @@ export default async function EmpireHomePage(props: EmpireHomePageProps) {
           </div>
         </section>
 
+        {/* Gamification chips — rank+XP, coins, tournament-week streak */}
+        {gam && (
+          <section data-testid="empire-gamification-chips" className="grid grid-cols-3 gap-3">
+            <div className="rounded-xl border border-slate-200 bg-white p-3">
+              <div className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+                {tg('rankLabel')}
+              </div>
+              <div className="text-sm font-semibold text-slate-800 mt-0.5 truncate">
+                {gamRankName ?? '—'}
+              </div>
+              <div className="text-xs text-slate-500 mt-0.5">
+                {gam.xp} {tg('xp')}
+              </div>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-3">
+              <div className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+                {tg('coins')}
+              </div>
+              <div className="text-lg font-bold text-amber-500 mt-0.5">🪙 {gam.coins}</div>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-white p-3">
+              <div className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+                {tg('streak')}
+              </div>
+              <div className="text-sm font-semibold text-orange-500 mt-0.5">
+                🔥 {gam.streak.current_weeks} {tg('weekStreak')}
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* Achievements strip */}
         <section data-testid="empire-achievements">
           <div className="flex items-center justify-between mb-3">
@@ -727,6 +778,7 @@ export default async function EmpireHomePage(props: EmpireHomePageProps) {
               </div>
             </li>
           </ul>
+          {achievements.length > 0 && <Achievements achievements={achievements} />}
         </section>
 
         {/* Rating trend */}

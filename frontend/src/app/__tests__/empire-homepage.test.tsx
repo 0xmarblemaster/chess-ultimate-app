@@ -99,6 +99,12 @@ vi.mock('@/lib/chess-empire-client', () => ({
   getStudentRank: vi.fn(async () => ceStore.rank),
 }));
 
+// Gamification profile is loaded alongside CE data in the verified branch —
+// stub it so the render pipeline doesn't reach Supabase.
+vi.mock('@/lib/gamification/store', () => ({
+  loadGamificationProfile: vi.fn(async () => null),
+}));
+
 // Stub the actual visual children so the test focuses on which top-level
 // shell renders rather than re-asserting child markup.
 vi.mock('@/components/empire/EmpireHomePage', () => ({

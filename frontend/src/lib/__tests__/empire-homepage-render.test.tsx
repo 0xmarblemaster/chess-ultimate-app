@@ -25,6 +25,10 @@ const memberStore: { state: string; role: string; studentId: string | null } = {
   role: 'coach',
   studentId: 'coach-uuid',
 };
+vi.mock('@/lib/gamification/store', () => ({
+  loadGamificationProfile: vi.fn(async () => null),
+}));
+
 vi.mock('@/lib/chess-empire-member', () => ({
   getMembershipState: vi.fn(async () => ({
     state: memberStore.state,
@@ -63,6 +67,7 @@ vi.mock('@/lib/chess-empire-client', () => ({
   getStudentProfile: (...a: unknown[]) => getStudentProfile(...(a as [])),
   getCoachProfile: (...a: unknown[]) => getCoachProfile(...(a as [])),
   getStudentRatings: vi.fn(async () => []),
+  getStudentAchievements: vi.fn(async () => []),
   getStudentRank: vi.fn(async () => ({
     branch_rank: null,
     school_rank: null,

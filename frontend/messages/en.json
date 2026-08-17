@@ -204,7 +204,19 @@
       "amazing": "Amazing!",
       "perfect": "Perfect!",
       "xpEarned": "XP earned"
-    }
+    },
+    "rankLabel": "Rank",
+    "coins": "Coins",
+    "weekStreak": "week streak",
+    "tournaments": "Tournaments",
+    "wins": "Wins",
+    "nextRank": "Next: {rank}",
+    "maxRank": "Max rank reached",
+    "nextReward": "Next reward at {weeks} wk",
+    "toNextRank": "{xp} XP to next rank",
+    "sinceLaunch": "since launch",
+    "notLinkedTitle": "Link your Chess Empire account",
+    "notLinkedBody": "Your XP, rank and coins will appear here once your account is linked."
   },
   "mascot": {
     "greeting": {

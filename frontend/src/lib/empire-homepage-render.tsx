@@ -29,10 +29,12 @@ import {
   getStudentProfile,
   getStudentRank,
   getStudentRatings,
+  getStudentAchievements,
   getCoachProfile,
   listBranches,
   listActiveStudentsByCoach,
 } from '@/lib/chess-empire-client';
+import { loadGamificationProfile } from '@/lib/gamification/store';
 import type { CECoachProfile } from '@/lib/chess-empire-client';
 import { computeCoachStats } from '@/lib/empire-coach-stats';
 
@@ -192,7 +194,7 @@ export async function renderEmpireHomepage(
     };
   }
 
-  const [ratings, rank] = await Promise.all([
+  const [ratings, rank, gamification, achievements] = await Promise.all([
     getStudentRatings(studentId, 30).catch((err) => {
       console.error('[empire-home] ratings fetch failed', err);
       return [];
@@ -205,6 +207,14 @@ export async function renderEmpireHomepage(
         branch_size: null,
         school_size: null,
       };
+    }),
+    loadGamificationProfile(orgId, studentId).catch((err) => {
+      console.error('[empire-home] gamification fetch failed', err);
+      return null;
+    }),
+    getStudentAchievements(studentId).catch((err) => {
+      console.error('[empire-home] achievements fetch failed', err);
+      return [];
     }),
   ]);
 
@@ -225,6 +235,8 @@ export async function renderEmpireHomepage(
         rank={rank}
         bestSurvivalScore={profile.best_survival_score ?? null}
         bestDefeatedBot={profile.best_defeated_bot ?? null}
+        gamification={gamification}
+        achievements={achievements}
       />
     ),
   };

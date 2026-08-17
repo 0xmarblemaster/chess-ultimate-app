@@ -204,7 +204,19 @@
       "amazing": "Потрясающе!",
       "perfect": "Превосходно!",
       "xpEarned": "Получено XP"
-    }
+    },
+    "rankLabel": "Ранг",
+    "coins": "Монеты",
+    "weekStreak": "недель подряд",
+    "tournaments": "Турниры",
+    "wins": "Победы",
+    "nextRank": "Далее: {rank}",
+    "maxRank": "Максимальный ранг",
+    "nextReward": "Награда на {weeks}-й неделе",
+    "toNextRank": "{xp} XP до следующего ранга",
+    "sinceLaunch": "с запуска",
+    "notLinkedTitle": "Привяжите аккаунт Chess Empire",
+    "notLinkedBody": "Ваш опыт, ранг и монеты появятся здесь после привязки аккаунта."
   },
   "mascot": {
     "greeting": {

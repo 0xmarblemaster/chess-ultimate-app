@@ -11,6 +11,7 @@ import React from 'react';
 import { cleanup, render } from '@testing-library/react';
 
 vi.mock('next-intl/server', () => ({
+  getLocale: async () => 'en',
   getTranslations: async () => (key: string, values?: Record<string, unknown>) => {
     if (!values) return key;
     return `${key}(${JSON.stringify(values)})`;

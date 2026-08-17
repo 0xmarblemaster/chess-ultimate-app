@@ -30,6 +30,7 @@ vi.mock('@/lib/supabase-admin', () => ({
 }));
 
 vi.mock('next-intl/server', () => ({
+  getLocale: async () => 'en',
   getTranslations: async () => (key: string, opts?: Record<string, unknown>) =>
     opts ? `${key}:${JSON.stringify(opts)}` : key,
 }));

@@ -16,6 +16,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 vi.mock('next-intl/server', () => ({
+  getLocale: async () => 'en',
   getTranslations: async () => (key: string, values?: Record<string, unknown>) => {
     if (!values) return key;
     const parts = Object.entries(values)

@@ -12,6 +12,7 @@ import type { CEActiveStudent } from '@/lib/chess-empire-client';
 import type { CoachHomeStats } from '@/lib/empire-coach-stats';
 
 vi.mock('next-intl/server', () => ({
+  getLocale: async () => 'en',
   getTranslations: async () => (key: string, values?: Record<string, unknown>) => {
     if (!values) return key;
     return `${key}(${JSON.stringify(values)})`;

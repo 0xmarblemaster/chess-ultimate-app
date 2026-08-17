@@ -204,7 +204,19 @@
       "amazing": "Тамаша!",
       "perfect": "Мінсіз!",
       "xpEarned": "Алынған XP"
-    }
+    },
+    "rankLabel": "Ранг",
+    "coins": "Монеталар",
+    "weekStreak": "апта қатарынан",
+    "tournaments": "Турнирлер",
+    "wins": "Жеңістер",
+    "nextRank": "Келесі: {rank}",
+    "maxRank": "Ең жоғары ранг",
+    "nextReward": "{weeks}-аптада сыйлық",
+    "toNextRank": "келесі рангқа {xp} XP",
+    "sinceLaunch": "іске қосылғаннан бері",
+    "notLinkedTitle": "Chess Empire аккаунтын байланыстырыңыз",
+    "notLinkedBody": "Аккаунт байланыстырылғаннан кейін XP, ранг және монеталар осында көрінеді."
   },
   "mascot": {
     "greeting": {
