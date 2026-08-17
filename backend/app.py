@@ -210,6 +210,13 @@ except ImportError as e:
     logger.warning(f"⚠️  Could not import admin API: {e}")
 
 try:
+    from routes.gamification import gamification_bp
+    app.register_blueprint(gamification_bp)
+    logger.info("✅ Gamification admin API registered (rules + ranks)")
+except ImportError as e:
+    logger.warning(f"⚠️  Could not import gamification API: {e}")
+
+try:
     from routes.tiers import tiers_bp
     app.register_blueprint(tiers_bp)
     logger.info("✅ Tiers API registered (canonical pricing/seat config)")

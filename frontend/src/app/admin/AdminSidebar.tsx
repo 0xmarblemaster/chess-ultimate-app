@@ -26,6 +26,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/admin/analytics', label: 'Analytics', icon: '📈', roles: ['owner', 'admin', 'teacher'] },
   { href: '/admin/billing', label: 'Billing', icon: '💳', roles: ['owner'] },
   { href: '/admin/tournaments', label: 'Tournaments', icon: '🏆', roles: ['owner', 'admin'] },
+  { href: '/admin/gamification', label: 'Gamification', icon: '🎮', roles: ['owner', 'admin'] },
 ];
 
 interface AdminSidebarProps {
