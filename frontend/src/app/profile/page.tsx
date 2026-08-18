@@ -4,10 +4,13 @@ import { useUser, useClerk } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
 import { useTranslations, useLocale } from 'next-intl'
 import { useEffect, useState } from 'react'
+import { Avatar } from '@/components/gamification/Avatar'
 import { StreakBanner } from '@/components/gamification/StreakBanner'
 import { XPDisplay } from '@/components/gamification/XPDisplay'
 import LoadingScreen from '@/components/LoadingScreen'
+import type { CEAchievement } from '@/lib/chess-empire-client'
 import type { GamificationProfile } from '@/lib/gamification/profile'
+import type { ItemRow } from '@/lib/gamification/items'
 
 /** Pick the rank name for the active locale (kz → Kazakh column). */
 function rankName(
@@ -28,6 +31,8 @@ export default function ProfilePage() {
 
   const [profile, setProfile] = useState<GamificationProfile | null>(null)
   const [loadingProfile, setLoadingProfile] = useState(true)
+  const [equipped, setEquipped] = useState<Partial<Record<string, ItemRow>>>({})
+  const [achievements, setAchievements] = useState<CEAchievement[]>([])
 
   useEffect(() => {
     if (!isLoaded || !user) return
@@ -43,6 +48,30 @@ export default function ProfilePage() {
       .finally(() => {
         if (!cancelled) setLoadingProfile(false)
       })
+
+    // Composited avatar loadout (§9.1) — resolve the equipped item per slot.
+    fetch('/api/gamification/inventory')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { items: ItemRow[]; loadout: Record<string, string> } | null) => {
+        if (cancelled || !data) return
+        const byId = new Map(data.items.map((it) => [it.id, it]))
+        const eq: Partial<Record<string, ItemRow>> = {}
+        for (const [slot, itemId] of Object.entries(data.loadout ?? {})) {
+          const it = byId.get(itemId)
+          if (it) eq[slot] = it
+        }
+        setEquipped(eq)
+      })
+      .catch(() => {})
+
+    // Achievements strip (§9.1, repaired §3).
+    fetch('/api/gamification/achievements')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { achievements: CEAchievement[] } | null) => {
+        if (!cancelled && data) setAchievements(data.achievements ?? [])
+      })
+      .catch(() => {})
+
     return () => {
       cancelled = true
     }
@@ -70,13 +99,18 @@ export default function ProfilePage() {
       <div className="bg-gradient-to-br from-purple-600 to-purple-800 text-white">
         <div className="container mx-auto px-4 py-8">
           <div className="flex items-center gap-4">
-            <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center overflow-hidden">
-              {user.imageUrl ? (
-                <img src={user.imageUrl} alt={user.firstName || 'Profile'} className="w-full h-full object-cover" />
-              ) : (
-                <span className="text-4xl">👤</span>
-              )}
-            </div>
+            {linked ? (
+              <Avatar equipped={equipped} photoUrl={user.imageUrl} size={80} className="shrink-0" />
+            ) : (
+              <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center overflow-hidden">
+                {user.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={user.imageUrl} alt={user.firstName || 'Profile'} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-4xl">👤</span>
+                )}
+              </div>
+            )}
             <div className="flex-1">
               <h1 className="text-2xl font-bold">{user.firstName || 'Chess Player'}</h1>
               <p className="text-purple-200">{user.emailAddresses[0]?.emailAddress}</p>
@@ -239,6 +273,36 @@ export default function ProfilePage() {
                       </div>
                       {tr.acquisition_note && (
                         <div className="text-xs text-amber-700 mt-1">{tr.acquisition_note}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Achievements strip (§9.1) */}
+            <div className="bg-white rounded-2xl shadow-md p-6">
+              <h2 className="text-lg font-bold text-gray-900 mb-4">
+                🏅 {t('empire.achievementsTitle')}
+              </h2>
+              {achievements.length === 0 ? (
+                <p className="text-sm text-gray-400">{t('empire.achievementsEmpty')}</p>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {achievements.slice(0, 9).map((a) => (
+                    <div
+                      key={a.id}
+                      className="rounded-xl border border-gray-100 bg-gray-50 p-3 flex flex-col items-center text-center"
+                    >
+                      {a.icon_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={a.icon_url} alt="" className="w-12 h-12 mb-2" />
+                      ) : (
+                        <div className="text-3xl mb-2">🏅</div>
+                      )}
+                      <div className="text-sm font-semibold text-gray-900">{a.name}</div>
+                      {a.description && (
+                        <div className="text-xs text-gray-500 mt-0.5">{a.description}</div>
                       )}
                     </div>
                   ))}
