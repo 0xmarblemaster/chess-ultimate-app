@@ -35,6 +35,20 @@ describe('buildProfile', () => {
     expect(p.stats).toEqual({ tournaments_played: 8, wins_total: 21.5 });
   });
 
+  it('surfaces the rank icon so the profile/ladder can render it (§6, §9.1)', () => {
+    const ranksWithIcons = [
+      { ...RANKS[0], icon_url: '/gamification/ranks/pawn.svg' },
+      { ...RANKS[1], icon_url: '/gamification/ranks/knight.svg' },
+      RANKS[2],
+    ];
+    const withIcon = buildProfile('s1', { xp_total: 15, coin_balance: 0, rank_code: 'knight', tournaments_played: 0, wins_total: 0 }, null, ranksWithIcons, DEFAULT_CONFIG);
+    expect(withIcon.rank?.icon_url).toBe('/gamification/ranks/knight.svg');
+
+    // Falls back to null when the current rank has no icon configured.
+    const noIcon = buildProfile('s1', { xp_total: 35, coin_balance: 0, rank_code: 'bishop', tournaments_played: 0, wins_total: 0 }, null, ranksWithIcons, DEFAULT_CONFIG);
+    expect(noIcon.rank?.icon_url).toBeNull();
+  });
+
   it('handles a fresh player with no rows (zero-start)', () => {
     const p = buildProfile('s2', null, null, RANKS, DEFAULT_CONFIG);
     expect(p.xp).toBe(0);

@@ -13,6 +13,7 @@ import { StreakBanner, StreakMini } from '@/components/gamification/StreakBanner
 import { XPDisplay } from '@/components/gamification/XPDisplay'
 import { LessonPath } from '@/components/gamification/LessonPath'
 import { SpeechBubble } from '@/components/mascot/SpeechBubble'
+import type { GamificationProfile } from '@/lib/gamification/profile'
 
 interface Course {
   id: string
@@ -51,9 +52,8 @@ export default function ChessterDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Gamification state (mock data for now - will be from API later)
-  const [userXP, setUserXP] = useState(450)
-  const [streakDays, setStreakDays] = useState(5)
+  // Real gamification profile (XP + tournament-week streak), fed like EmpireHomePage.
+  const [profile, setProfile] = useState<GamificationProfile | null>(null)
   const [courseProgress, setCourseProgress] = useState<Record<string, CourseProgress>>({})
 
   useEffect(() => {
@@ -96,6 +96,29 @@ export default function ChessterDashboard() {
 
     fetchCourses()
   }, [getToken, showToast])
+
+  // Real XP + streak from the gamification profile (§9). Unlinked/non-CE users
+  // resolve to a hidden profile — we simply show zeros rather than mock values.
+  useEffect(() => {
+    if (!isSignedIn) return
+    let cancelled = false
+    fetch('/api/gamification/profile')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: GamificationProfile | null) => {
+        if (!cancelled) setProfile(data)
+      })
+      .catch(() => {
+        if (!cancelled) setProfile(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isSignedIn])
+
+  const linked = profile?.linked === true
+  const userXP = linked ? profile!.xp : 0
+  const streakWeeks = linked ? profile!.streak.current_weeks : 0
+  const nextMilestone = linked ? profile!.streak.next_milestone : null
 
   // Transform courses for LessonPath component
   const lessonPathCourses = useMemo(() => {
@@ -178,11 +201,11 @@ export default function ChessterDashboard() {
   }, [user?.firstName, t])
 
   const mascotMessage = useMemo(() => {
-    if (streakDays >= 7) return t('mascot.messages.onFire')
-    if (streakDays >= 3) return t('mascot.messages.greatConsistency')
+    if (streakWeeks >= 7) return t('mascot.messages.onFire')
+    if (streakWeeks >= 3) return t('mascot.messages.greatConsistency')
     if (currentCourse?.progress === 0) return t('mascot.messages.readyToStart')
     return t('mascot.messages.welcomeBack')
-  }, [streakDays, currentCourse?.progress, t])
+  }, [streakWeeks, currentCourse?.progress, t])
 
   if (loading || !isLoaded) {
     return <LoadingScreen isVisible={true} />
@@ -195,7 +218,7 @@ export default function ChessterDashboard() {
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
-              <StreakMini streakDays={streakDays} />
+              <StreakMini streakDays={streakWeeks} />
               <XPDisplay xp={userXP} size="md" />
             </div>
           </div>
@@ -218,7 +241,7 @@ export default function ChessterDashboard() {
 
         {/* Mascot greeting */}
         <div className="mb-6 md:col-span-2 lg:col-span-3">
-          <SpeechBubble mood={streakDays >= 3 ? 'celebrating' : 'happy'} mascotSize="sm">
+          <SpeechBubble mood={streakWeeks >= 3 ? 'celebrating' : 'happy'} mascotSize="sm">
             {mascotMessage}
           </SpeechBubble>
         </div>
@@ -290,9 +313,9 @@ export default function ChessterDashboard() {
         {/* Streak Banner (expandable) */}
         <div className="mb-8 md:col-span-1 lg:col-span-1">
           <StreakBanner
-            streakDays={streakDays}
-            lastActivityDate={new Date().toISOString()}
-            showCalendar
+            streakDays={streakWeeks}
+            unit="weeks"
+            nextMilestone={nextMilestone}
           />
         </div>
 
@@ -325,7 +348,7 @@ export default function ChessterDashboard() {
             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                  {streakDays > 0 ? '✅' : '⏳'}
+                  {streakWeeks > 0 ? '✅' : '⏳'}
                 </div>
                 <div>
                   <div className="font-medium text-gray-900">{t('dashboard.practiceToday')}</div>

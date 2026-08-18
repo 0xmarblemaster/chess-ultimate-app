@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { AssetUpload } from './AssetUpload';
 
 // Config shape (subset edited in the Rules tab — mirrors gamification_settings.config).
 interface StreakConfig {
@@ -26,6 +27,7 @@ interface Rank {
   name_kk: string;
   name_en: string;
   min_xp: number;
+  icon_url?: string | null;
   sort_order: number;
 }
 interface Item {
@@ -62,6 +64,19 @@ interface Season {
   top_n: number;
   trophy_item_id: string | null;
   winner_legion_id?: string | null;
+}
+
+interface StandingsPreviewLegion {
+  legion: { id: string; name: string; crest_url?: string | null };
+  points: number;
+  place: number;
+  gap_to_first: number;
+  member_count: number;
+}
+interface StandingsPreview {
+  top_n: number;
+  frozen?: boolean;
+  legions: StandingsPreviewLegion[];
 }
 
 interface SyncStatus {
@@ -107,6 +122,10 @@ export default function AdminGamificationPage() {
   const [items, setItems] = useState<Item[]>([]);
   const [legions, setLegions] = useState<Legion[]>([]);
   const [seasons, setSeasons] = useState<Season[]>([]);
+  // Live standings preview per season id (§9.4) — 'loading' while fetching.
+  const [standingsPreview, setStandingsPreview] = useState<
+    Record<string, StandingsPreview | 'loading'>
+  >({});
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -342,6 +361,31 @@ export default function AdminGamificationPage() {
       loadSeasons();
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Live standings preview (§9.4) — read-only, reuses the standings API/store.
+  const previewStandings = async (season: Season) => {
+    if (!org?.id || !season.id) return;
+    const id = season.id;
+    setStandingsPreview((prev) => ({ ...prev, [id]: 'loading' }));
+    try {
+      const res = await fetch(
+        `/api/admin/organizations/${org.id}/gamification/seasons/${id}/standings`,
+      );
+      if (!res.ok) throw new Error();
+      const d = await res.json();
+      setStandingsPreview((prev) => ({
+        ...prev,
+        [id]: { top_n: d.top_n, frozen: d.season?.frozen, legions: d.legions ?? [] },
+      }));
+    } catch {
+      setStandingsPreview((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      setError('Failed to load standings');
     }
   };
 
@@ -708,7 +752,8 @@ export default function AdminGamificationPage() {
       {tab === 'ranks' && (
         <div className="space-y-4">
           <section className="bg-white rounded-xl border border-gray-200 p-5">
-            <div className="grid grid-cols-[1fr_1fr_1fr_1fr_100px] gap-2 text-xs font-semibold text-gray-500 mb-2">
+            <div className="grid grid-cols-[72px_1fr_1fr_1fr_1fr_100px] gap-2 text-xs font-semibold text-gray-500 mb-2">
+              <span>Icon</span>
               <span>Code</span>
               <span>RU</span>
               <span>KK</span>
@@ -716,7 +761,18 @@ export default function AdminGamificationPage() {
               <span>Min XP</span>
             </div>
             {ranks.map((rank, i) => (
-              <div key={rank.code} className="grid grid-cols-[1fr_1fr_1fr_1fr_100px] gap-2 mb-2">
+              <div key={rank.code} className="grid grid-cols-[72px_1fr_1fr_1fr_1fr_100px] gap-2 mb-2 items-start">
+                <AssetUpload
+                  orgId={org?.id ?? ''}
+                  kind="rank_icon"
+                  compact
+                  value={rank.icon_url ?? ''}
+                  onChange={(url) => {
+                    const next = [...ranks];
+                    next[i] = { ...rank, icon_url: url };
+                    setRanks(next);
+                  }}
+                />
                 <input
                   value={rank.code}
                   onChange={(e) => {
@@ -754,7 +810,7 @@ export default function AdminGamificationPage() {
               onClick={() =>
                 setRanks([
                   ...ranks,
-                  { code: `rank_${ranks.length + 1}`, name_ru: '', name_kk: '', name_en: '', min_xp: 0, sort_order: ranks.length + 1 },
+                  { code: `rank_${ranks.length + 1}`, name_ru: '', name_kk: '', name_en: '', min_xp: 0, icon_url: '', sort_order: ranks.length + 1 },
                 ])
               }
               className="mt-2 text-sm text-purple-600"
@@ -853,11 +909,13 @@ export default function AdminGamificationPage() {
                       }
                       className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
                     />
-                    <input
+                    <AssetUpload
+                      orgId={org?.id ?? ''}
+                      kind="item_art"
                       value={item.art_url}
+                      onChange={(url) => set({ art_url: url })}
                       placeholder="/gamification/items/....svg"
-                      onChange={(e) => set({ art_url: e.target.value })}
-                      className="col-span-2 md:col-span-4 rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                      className="col-span-2 md:col-span-4"
                     />
                   </div>
                 </div>
@@ -942,11 +1000,13 @@ export default function AdminGamificationPage() {
                       onChange={(e) => set({ ce_branch_id: e.target.value || null })}
                       className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
                     />
-                    <input
+                    <AssetUpload
+                      orgId={org?.id ?? ''}
+                      kind="legion_crest"
                       value={legion.crest_url ?? ''}
+                      onChange={(url) => set({ crest_url: url })}
                       placeholder="/gamification/crests/....svg"
-                      onChange={(e) => set({ crest_url: e.target.value })}
-                      className="col-span-2 md:col-span-3 rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                      className="col-span-2 md:col-span-3"
                     />
                     <div className="flex items-center gap-2">
                       <input
@@ -1014,6 +1074,7 @@ export default function AdminGamificationPage() {
               setSeasons(next);
             };
             const frozen = season.ends_at ? new Date(season.ends_at).getTime() <= Date.now() : false;
+            const preview = season.id ? standingsPreview[season.id] : undefined;
             return (
               <section key={season.id ?? `new-${i}`} className="bg-white rounded-xl border border-gray-200 p-4">
                 <div className="flex items-center justify-between mb-2">
@@ -1116,6 +1177,60 @@ export default function AdminGamificationPage() {
                     >
                       Save
                     </button>
+                  </div>
+                )}
+
+                {season.id && (
+                  <div className="mt-3 border-t border-gray-100 pt-3">
+                    <button
+                      type="button"
+                      onClick={() => previewStandings(season)}
+                      disabled={preview === 'loading'}
+                      className="text-sm text-purple-600 font-medium disabled:opacity-50"
+                    >
+                      {preview === 'loading'
+                        ? 'Loading standings…'
+                        : preview
+                          ? 'Refresh standings'
+                          : 'Preview standings'}
+                    </button>
+                    {preview && preview !== 'loading' && (
+                      <div className="mt-3">
+                        <div className="text-xs text-gray-400 mb-2">
+                          Read-only · Top-{preview.top_n} scored per legion
+                          {preview.frozen ? ' · ❄️ frozen' : ''}
+                        </div>
+                        {preview.legions.length === 0 ? (
+                          <p className="text-sm text-gray-400">No standings yet.</p>
+                        ) : (
+                          <div className="space-y-1">
+                            {preview.legions.map((row) => (
+                              <div
+                                key={row.legion.id}
+                                className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2"
+                              >
+                                <span className="w-6 text-center font-bold text-gray-400">
+                                  {row.place}
+                                </span>
+                                {row.legion.crest_url && (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={row.legion.crest_url} alt="" className="w-7 h-7" />
+                                )}
+                                <span className="flex-1 text-sm font-medium text-gray-800">
+                                  {row.legion.name}
+                                </span>
+                                <span className="text-xs text-gray-400">
+                                  {row.member_count} members
+                                </span>
+                                <span className="w-16 text-right font-bold text-purple-600">
+                                  {row.points}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </section>

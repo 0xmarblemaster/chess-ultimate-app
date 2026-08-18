@@ -151,7 +151,12 @@ export default function ProfilePage() {
               <div className="bg-white rounded-2xl shadow-md p-6">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <span className="text-3xl">♟️</span>
+                    {profile.rank.icon_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={profile.rank.icon_url} alt="" className="w-9 h-9 object-contain" />
+                    ) : (
+                      <span className="text-3xl">♟️</span>
+                    )}
                     <div>
                       <div className="text-xs uppercase tracking-wide text-gray-400">
                         {t('gamification.rankLabel')}

@@ -10,6 +10,7 @@ header; every handler re-checks admin role for the org and scopes all queries by
 Nothing here is hardcoded economy — the frontend/sync read these rows (D-6).
 """
 import logging
+import uuid
 
 from flask import Blueprint, jsonify, request
 
@@ -20,6 +21,19 @@ logger = logging.getLogger(__name__)
 gamification_bp = Blueprint('gamification', __name__, url_prefix='/api/admin')
 
 ADMIN_ROLES = ('owner', 'admin', 'teacher')
+
+# Asset upload (Items art, Legion crests, Rank icons — §7.2, §8.1, §9.4). Reuses
+# the org-branding bucket + public-URL contract of the branding upload so art can
+# be swapped without touching schema (D-9).
+_ASSET_BUCKET = 'org-branding'
+_ASSET_ALLOWED_MIME = {
+    'image/png': 'png',
+    'image/jpeg': 'jpg',
+    'image/webp': 'webp',
+    'image/svg+xml': 'svg',
+}
+_ASSET_MAX_BYTES = 1 * 1024 * 1024  # 1 MiB
+_ASSET_KINDS = {'item_art', 'legion_crest', 'rank_icon'}
 
 # Whitelisted top-level keys in gamification_settings.config (Rules tab).
 ALLOWED_CONFIG_KEYS = {
@@ -472,3 +486,62 @@ def delete_season(org_id: str, season_id: str):
     ).eq('id', season_id).execute()
     logger.info('Gamification season deleted: org=%s id=%s', org_id, season_id)
     return jsonify({'status': 'deleted'})
+
+
+# --- Asset upload: item art / legion crest / rank icon -------------------
+
+@gamification_bp.route('/organizations/<org_id>/gamification/upload', methods=['POST'])
+def upload_asset(org_id: str):
+    """Upload a cosmetic asset (item art, legion crest, or rank icon).
+
+    Body: multipart/form-data with:
+      * file — the image bytes (PNG/JPEG/WebP/SVG, ≤1 MiB)
+      * kind — 'item_art', 'legion_crest', or 'rank_icon'
+
+    Each upload gets a unique object key so many assets coexist; the returned
+    `{ url }` is written into the catalog row's art_url/crest_url/icon_url. Art is
+    swappable without schema impact (D-9), mirroring the branding upload contract.
+    """
+    error = _require_admin(org_id)
+    if error:
+        return error
+
+    kind = (request.form.get('kind') or '').strip().lower()
+    if kind not in _ASSET_KINDS:
+        return jsonify({'error': 'kind must be item_art, legion_crest, or rank_icon'}), 400
+
+    upload = request.files.get('file')
+    if upload is None or upload.filename == '':
+        return jsonify({'error': 'file is required'}), 400
+
+    mime = (upload.mimetype or '').lower()
+    if mime not in _ASSET_ALLOWED_MIME:
+        return jsonify({'error': f'Unsupported MIME type: {mime or "unknown"}'}), 415
+
+    payload = upload.read()
+    if len(payload) > _ASSET_MAX_BYTES:
+        return jsonify({'error': 'File exceeds 1 MiB limit'}), 413
+    if not payload:
+        return jsonify({'error': 'Empty file'}), 400
+
+    ext = _ASSET_ALLOWED_MIME[mime]
+    object_key = f'{org_id}/gamification/{kind}/{uuid.uuid4().hex}.{ext}'
+
+    supabase = _get_supabase()
+    bucket = supabase.storage.from_(_ASSET_BUCKET)
+    try:
+        bucket.upload(
+            path=object_key,
+            file=payload,
+            file_options={'content-type': mime, 'upsert': 'true', 'cache-control': '3600'},
+        )
+    except Exception as e:  # noqa: BLE001 — surface storage errors as 502
+        logger.exception('Gamification asset upload failed: org=%s kind=%s: %s', org_id, kind, e)
+        return jsonify({'error': 'Upload failed', 'detail': str(e)}), 502
+
+    public_url = bucket.get_public_url(object_key)
+    if isinstance(public_url, str):
+        public_url = public_url.rstrip('?')
+
+    logger.info('Gamification asset uploaded: org=%s kind=%s key=%s', org_id, kind, object_key)
+    return jsonify({'url': public_url, 'key': object_key, 'kind': kind}), 201

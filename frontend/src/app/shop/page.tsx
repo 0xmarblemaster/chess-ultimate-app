@@ -134,7 +134,13 @@ export default function ShopPage() {
                 </div>
 
                 {item.owned ? (
-                  <span className="text-xs font-semibold text-green-600">✓ {t('shop.owned')}</span>
+                  item.equipped ? (
+                    <span className="rounded-full bg-purple-100 text-purple-700 px-2 py-0.5 text-xs font-semibold">
+                      ✓ {t('shop.equipped')}
+                    </span>
+                  ) : (
+                    <span className="text-xs font-semibold text-green-600">✓ {t('shop.owned')}</span>
+                  )
                 ) : (
                   <button
                     onClick={() => buy(item)}
