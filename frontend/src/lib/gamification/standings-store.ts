@@ -274,6 +274,3 @@ export async function closeSeason(
     trophies_granted: granted,
   };
 }
-
-// Re-export so routes import assembly + math from one place.
-export { getSeasons, getCurrentSeason } from './store';
