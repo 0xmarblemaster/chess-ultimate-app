@@ -252,6 +252,34 @@
         "epic": "Epic",
         "legendary": "Legendary"
       }
+    },
+    "legion": {
+      "title": "My Legion",
+      "members": "Members",
+      "place": "Place",
+      "points": "pts",
+      "myPosition": "My position",
+      "toTopN": "To Top-{n}: {points} pts",
+      "inTopN": "You're in the Top-{n}!",
+      "none": "You're not in a legion yet.",
+      "noSeason": "No active season yet.",
+      "season": "Season",
+      "top": "Top {n}"
+    },
+    "cup": {
+      "title": "Legion Cup",
+      "gapToFirst": "To 1st place: {points} pts",
+      "frozen": "Season frozen — awaiting results",
+      "comingSoon": "A new season is coming soon",
+      "archive": "Past seasons",
+      "winner": "Winner",
+      "noSeason": "No season is running yet.",
+      "myLine": "You: #{place} · {points} pts",
+      "standings": "Standings"
+    },
+    "trophies": {
+      "title": "Hall of Fame",
+      "empty": "No trophies yet — win a Legion Cup!"
     }
   },
   "mascot": {

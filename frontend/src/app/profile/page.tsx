@@ -188,6 +188,63 @@ export default function ProfilePage() {
                 <div className="font-semibold text-gray-900">{t('gamification.shop.title')}</div>
               </button>
             </div>
+
+            {/* Legion & Cup */}
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                onClick={() => router.push('/legion')}
+                className="bg-white rounded-2xl shadow-md p-6 text-center hover:bg-gray-50 transition-colors"
+              >
+                <div className="text-3xl mb-1">
+                  {profile.legion?.crest_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={profile.legion.crest_url} alt="" className="w-10 h-10 mx-auto" />
+                  ) : (
+                    '🛡️'
+                  )}
+                </div>
+                <div className="font-semibold text-gray-900">
+                  {profile.legion?.name || t('gamification.legion.title')}
+                </div>
+              </button>
+              <button
+                onClick={() => router.push('/cup')}
+                className="bg-white rounded-2xl shadow-md p-6 text-center hover:bg-gray-50 transition-colors"
+              >
+                <div className="text-3xl mb-1">🏆</div>
+                <div className="font-semibold text-gray-900">{t('gamification.cup.title')}</div>
+              </button>
+            </div>
+
+            {/* Trophy case — «Зал славы» (§7.4) */}
+            <div className="bg-white rounded-2xl shadow-md p-6">
+              <h2 className="text-lg font-bold text-gray-900 mb-4">
+                🏆 {t('gamification.trophies.title')}
+              </h2>
+              {profile.trophies.length === 0 ? (
+                <p className="text-sm text-gray-400">{t('gamification.trophies.empty')}</p>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {profile.trophies.map((tr) => (
+                    <div
+                      key={tr.item_id}
+                      className="rounded-xl border border-amber-200 bg-amber-50 p-3 flex flex-col items-center text-center"
+                    >
+                      {tr.art_url && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={tr.art_url} alt="" className="w-16 h-16 mb-2" />
+                      )}
+                      <div className="text-sm font-semibold text-gray-900">
+                        {locale === 'ru' ? tr.name_ru : locale === 'kz' ? tr.name_kk : tr.name_en}
+                      </div>
+                      {tr.acquisition_note && (
+                        <div className="text-xs text-amber-700 mt-1">{tr.acquisition_note}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </>
         ) : (
           /* Unlinked (D-8): gamification hidden until the account is linked. */
