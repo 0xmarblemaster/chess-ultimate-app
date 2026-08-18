@@ -159,10 +159,10 @@ export async function getItems(orgId: string): Promise<ItemRow[]> {
     .select(ITEM_COLS)
     .eq('organization_id', orgId)
     .order('sort_order', { ascending: true });
-  return (data ?? []).map((r) => ({
+  return ((data ?? []) as unknown as ItemRow[]).map((r) => ({
     ...r,
     price_coins: r.price_coins == null ? null : num(r.price_coins),
-  })) as ItemRow[];
+  }));
 }
 
 export interface Inventory {
