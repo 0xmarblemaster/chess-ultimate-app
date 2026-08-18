@@ -281,6 +281,36 @@
     "trophies": {
       "title": "Hall of Fame",
       "empty": "No trophies yet — win a Legion Cup!"
+    },
+    "purchase": {
+      "title": "Get coins",
+      "subtitle": "Buy coins for the cosmetics shop.",
+      "parentNote": "This page is for parents. An adult makes the payment; coins are cosmetic only and give no in-game advantage.",
+      "selectPackage": "Choose a package",
+      "coinsLabel": "coins",
+      "chooseMethod": "Payment method",
+      "payKaspi": "Pay with Kaspi",
+      "scanQr": "Scan the QR in the Kaspi app",
+      "reference": "Payment reference",
+      "referenceHint": "Add this to the transfer note so the manager can match your payment.",
+      "iPaid": "I paid",
+      "claimed": "Thanks! We'll verify the payment and credit your coins.",
+      "statusTitle": "My purchases",
+      "noPackages": "No packages configured yet.",
+      "noPurchases": "No purchases yet.",
+      "providerUnavailable": "Payment method unavailable.",
+      "claimError": "Could not submit. Please try again.",
+      "back": "Back",
+      "status": {
+        "pending": "Pending verification",
+        "paid": "Paid",
+        "failed": "Declined",
+        "refunded": "Refunded"
+      },
+      "provider": {
+        "kaspi": "Kaspi",
+        "bank_transfer": "Bank transfer"
+      }
     }
   },
   "mascot": {

@@ -66,6 +66,26 @@ interface Season {
   winner_legion_id?: string | null;
 }
 
+interface CoinPackage {
+  id?: string;
+  coins: number;
+  price_kzt: number;
+  active: boolean;
+  sort_order: number;
+}
+interface Purchase {
+  id: string;
+  student_id: string;
+  package_id: string | null;
+  coins: number;
+  amount_kzt: number;
+  provider: string;
+  provider_ref: string | null;
+  status: 'pending' | 'paid' | 'failed' | 'refunded';
+  created_at: string;
+  paid_at: string | null;
+}
+
 interface StandingsPreviewLegion {
   legion: { id: string; name: string; crest_url?: string | null };
   points: number;
@@ -116,7 +136,9 @@ function fmt(iso: string | null): string {
 
 export default function AdminGamificationPage() {
   const { org } = useOrganization();
-  const [tab, setTab] = useState<'rules' | 'ranks' | 'items' | 'legions' | 'seasons' | 'ops'>('rules');
+  const [tab, setTab] = useState<
+    'rules' | 'ranks' | 'items' | 'legions' | 'seasons' | 'coins' | 'ops'
+  >('rules');
   const [config, setConfig] = useState<Config | null>(null);
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [items, setItems] = useState<Item[]>([]);
@@ -126,6 +148,9 @@ export default function AdminGamificationPage() {
   const [standingsPreview, setStandingsPreview] = useState<
     Record<string, StandingsPreview | 'loading'>
   >({});
+  const [packages, setPackages] = useState<CoinPackage[]>([]);
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [purchaseFilter, setPurchaseFilter] = useState<'pending' | 'all'>('pending');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -488,6 +513,101 @@ export default function AdminGamificationPage() {
     }
   };
 
+  // --- Coins tab: package CRUD + manual-confirm purchase queue (§10) --------
+
+  const loadPackages = () => {
+    if (!org?.id) return;
+    fetch(`/api/admin/organizations/${org.id}/gamification/coin-packages`)
+      .then((r) => r.json())
+      .then((d) => setPackages(d.packages ?? []))
+      .catch(() => setError('Failed to load packages'));
+  };
+
+  const loadPurchases = () => {
+    if (!org?.id) return;
+    const qs = purchaseFilter === 'pending' ? '?status=pending' : '';
+    fetch(`/api/admin/organizations/${org.id}/gamification/coin-purchases${qs}`)
+      .then((r) => r.json())
+      .then((d) => setPurchases(d.purchases ?? []))
+      .catch(() => setError('Failed to load purchases'));
+  };
+
+  useEffect(() => {
+    if (tab === 'coins' && org?.id) {
+      loadPackages();
+      loadPurchases();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, org?.id, purchaseFilter]);
+
+  const savePackage = async (pkg: CoinPackage) => {
+    if (!org?.id) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const base = `/api/admin/organizations/${org.id}/gamification/coin-packages`;
+      const res = await fetch(pkg.id ? `${base}/${pkg.id}` : base, {
+        method: pkg.id ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(pkg),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Save failed');
+      }
+      loadPackages();
+      flash();
+    } catch (e) {
+      setError((e as Error).message || 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deletePackage = async (pkg: CoinPackage) => {
+    if (!org?.id || !pkg.id) {
+      setPackages((prev) => prev.filter((p) => p !== pkg));
+      return;
+    }
+    setSaving(true);
+    try {
+      await fetch(`/api/admin/organizations/${org.id}/gamification/coin-packages/${pkg.id}`, {
+        method: 'DELETE',
+      });
+      loadPackages();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const purchaseAction = async (p: Purchase, action: 'confirm' | 'refund' | 'reject') => {
+    if (!org?.id) return;
+    const prompts: Record<typeof action, string> = {
+      confirm: `Mark this purchase paid and credit ${p.coins} coins? Idempotent — safe to click once.`,
+      refund: `Refund this purchase? A compensating ledger entry is added; items are not revoked.`,
+      reject: `Reject this claim? No coins are credited.`,
+    };
+    if (!confirm(prompts[action])) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/admin/organizations/${org.id}/gamification/coin-purchases/${p.id}/${action}`,
+        { method: 'POST' },
+      );
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || d.current || d.status || 'Action failed');
+      }
+      loadPurchases();
+      flash();
+    } catch (e) {
+      setError((e as Error).message || 'Action failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const numInput = (value: number, onChange: (n: number) => void) => (
     <input
       type="number"
@@ -507,7 +627,7 @@ export default function AdminGamificationPage() {
       </p>
 
       <div className="flex gap-2 mb-6 flex-wrap">
-        {(['rules', 'ranks', 'items', 'legions', 'seasons', 'ops'] as const).map((tabKey) => (
+        {(['rules', 'ranks', 'items', 'legions', 'seasons', 'coins', 'ops'] as const).map((tabKey) => (
           <button
             key={tabKey}
             onClick={() => setTab(tabKey)}
@@ -1254,6 +1374,192 @@ export default function AdminGamificationPage() {
           >
             + Add season
           </button>
+        </div>
+      )}
+
+      {tab === 'coins' && (
+        <div className="space-y-6">
+          {/* Base rate + packages (all pricing is admin-created — D-6) */}
+          <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold text-gray-900">Coin packages</h2>
+              <span className="text-xs text-gray-400">
+                Base rate: 1 earned XP = {config?.coin_per_xp ?? 1} coin
+              </span>
+            </div>
+            <p className="text-sm text-gray-500">
+              Parents buy coins for the cosmetics shop. Prices are in ₸ and set entirely here —
+              nothing is hardcoded. Toggle <b>active</b> to hide a package without deleting it.
+            </p>
+            <div className="grid grid-cols-[1fr_1fr_1fr_auto_auto_auto] gap-2 text-xs font-semibold text-gray-500">
+              <span>Coins</span>
+              <span>Price ₸</span>
+              <span>₸ / coin</span>
+              <span>Order</span>
+              <span>Active</span>
+              <span></span>
+            </div>
+            {packages.map((pkg, i) => {
+              const set = (patch: Partial<CoinPackage>) => {
+                const next = [...packages];
+                next[i] = { ...pkg, ...patch };
+                setPackages(next);
+              };
+              const perCoin = pkg.coins > 0 ? (pkg.price_kzt / pkg.coins).toFixed(1) : '—';
+              return (
+                <div
+                  key={pkg.id ?? `new-${i}`}
+                  className="grid grid-cols-[1fr_1fr_1fr_auto_auto_auto] gap-2 items-center"
+                >
+                  <input
+                    type="number"
+                    value={pkg.coins}
+                    onChange={(e) => set({ coins: parseInt(e.target.value, 10) || 0 })}
+                    className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                  />
+                  <input
+                    type="number"
+                    value={pkg.price_kzt}
+                    onChange={(e) => set({ price_kzt: parseInt(e.target.value, 10) || 0 })}
+                    className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                  />
+                  <span className="text-sm text-gray-500">{perCoin}</span>
+                  <input
+                    type="number"
+                    value={pkg.sort_order}
+                    onChange={(e) => set({ sort_order: parseInt(e.target.value, 10) || 0 })}
+                    className="w-16 rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                  />
+                  <input
+                    type="checkbox"
+                    checked={pkg.active}
+                    onChange={(e) => set({ active: e.target.checked })}
+                    className="h-4 w-4 rounded border-gray-300 text-purple-600"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => savePackage(pkg)}
+                      disabled={saving}
+                      className="rounded-lg bg-purple-600 text-white px-3 py-1 text-sm font-medium disabled:opacity-50"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => deletePackage(pkg)}
+                      className="text-sm text-red-500 px-1"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+            <button
+              onClick={() =>
+                setPackages([
+                  ...packages,
+                  { coins: 100, price_kzt: 500, active: true, sort_order: packages.length + 1 },
+                ])
+              }
+              className="text-sm text-purple-600"
+            >
+              + Add package
+            </button>
+          </section>
+
+          {/* Manual-confirm queue */}
+          <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold text-gray-900">Purchase queue</h2>
+              <select
+                value={purchaseFilter}
+                onChange={(e) => setPurchaseFilter(e.target.value as 'pending' | 'all')}
+                className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+              >
+                <option value="pending">Pending</option>
+                <option value="all">All</option>
+              </select>
+            </div>
+            <p className="text-sm text-gray-500">
+              A parent taps «Я оплатил(а)» → a pending row lands here. Confirm to credit coins
+              (idempotent — double-clicks can&apos;t double-credit). Refund adds a compensating
+              ledger entry; balance floors at 0.
+            </p>
+            {purchases.length === 0 ? (
+              <p className="text-sm text-gray-400">No purchases.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-gray-500">
+                      <th className="py-1 pr-2 font-medium">When</th>
+                      <th className="pr-2 font-medium">Student</th>
+                      <th className="pr-2 font-medium">Coins</th>
+                      <th className="pr-2 font-medium">₸</th>
+                      <th className="pr-2 font-medium">Provider</th>
+                      <th className="pr-2 font-medium">Status</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {purchases.map((p) => (
+                      <tr key={p.id} className="border-t border-gray-100">
+                        <td className="py-1 pr-2 text-gray-500 whitespace-nowrap">{fmt(p.created_at)}</td>
+                        <td className="pr-2 text-gray-600 font-mono text-xs break-all">{p.student_id}</td>
+                        <td className="pr-2 font-medium text-gray-900">{p.coins}</td>
+                        <td className="pr-2 text-gray-500">{p.amount_kzt}</td>
+                        <td className="pr-2 text-gray-500">{p.provider}</td>
+                        <td className="pr-2">
+                          <span
+                            className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                              p.status === 'paid'
+                                ? 'bg-green-100 text-green-700'
+                                : p.status === 'pending'
+                                  ? 'bg-amber-100 text-amber-700'
+                                  : p.status === 'refunded'
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : 'bg-gray-200 text-gray-600'
+                            }`}
+                          >
+                            {p.status}
+                          </span>
+                        </td>
+                        <td className="text-right whitespace-nowrap">
+                          {p.status === 'pending' && (
+                            <>
+                              <button
+                                onClick={() => purchaseAction(p, 'confirm')}
+                                disabled={saving}
+                                className="text-xs text-green-600 font-medium disabled:opacity-50 mr-2"
+                              >
+                                Confirm
+                              </button>
+                              <button
+                                onClick={() => purchaseAction(p, 'reject')}
+                                disabled={saving}
+                                className="text-xs text-gray-500 disabled:opacity-50"
+                              >
+                                Reject
+                              </button>
+                            </>
+                          )}
+                          {p.status === 'paid' && (
+                            <button
+                              onClick={() => purchaseAction(p, 'refund')}
+                              disabled={saving}
+                              className="text-xs text-red-500 disabled:opacity-50"
+                            >
+                              Refund
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
         </div>
       )}
 

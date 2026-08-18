@@ -488,6 +488,95 @@ def delete_season(org_id: str, season_id: str):
     return jsonify({'status': 'deleted'})
 
 
+# --- Coins tab: coin package CRUD (Phase 4, §10, §11, D-6) --------------------
+# All coin pricing is admin-created here — nothing is hardcoded. The purchase
+# manual-confirm queue (pending → paid credit / refund) is handled Next-side
+# because it writes the coin_ledger (mirrors the Ops ledger-reversal path).
+
+ALLOWED_COIN_PACKAGE_FIELDS = {
+    'coins',
+    'price_kzt',
+    'active',
+    'sort_order',
+}
+
+COIN_PACKAGE_SELECT = 'id,coins,price_kzt,active,sort_order'
+
+
+def _clean_coin_package(payload: dict) -> dict:
+    """Whitelist coin-package fields; coerce numerics from JSON strings."""
+    row = {k: v for k, v in payload.items() if k in ALLOWED_COIN_PACKAGE_FIELDS}
+    for col in ('coins', 'price_kzt', 'sort_order'):
+        if col in row and row[col] is not None:
+            try:
+                row[col] = int(row[col])
+            except (TypeError, ValueError):
+                row[col] = 0
+    return row
+
+
+@gamification_bp.route('/organizations/<org_id>/gamification/coin-packages', methods=['GET'])
+def get_coin_packages(org_id: str):
+    error = _require_admin(org_id)
+    if error:
+        return error
+    supabase = _get_supabase()
+    rows = (
+        supabase.table('coin_packages').select(COIN_PACKAGE_SELECT)
+        .eq('organization_id', org_id).order('sort_order').execute()
+    )
+    return jsonify({'packages': rows.data or []})
+
+
+@gamification_bp.route('/organizations/<org_id>/gamification/coin-packages', methods=['POST'])
+def create_coin_package(org_id: str):
+    error = _require_admin(org_id)
+    if error:
+        return error
+    row = _clean_coin_package(request.get_json() or {})
+    if not row.get('coins') or row['coins'] <= 0 or not row.get('price_kzt') or row['price_kzt'] <= 0:
+        return jsonify({'error': 'coins and price_kzt must be positive integers'}), 400
+    row.setdefault('active', True)
+    row['organization_id'] = org_id
+    supabase = _get_supabase()
+    res = supabase.table('coin_packages').insert(row).execute()
+    created = res.data[0] if res.data else row
+    logger.info('Coin package created: org=%s coins=%s kzt=%s', org_id, row['coins'], row['price_kzt'])
+    return jsonify({'package': created}), 201
+
+
+@gamification_bp.route('/organizations/<org_id>/gamification/coin-packages/<package_id>', methods=['PUT'])
+def update_coin_package(org_id: str, package_id: str):
+    error = _require_admin(org_id)
+    if error:
+        return error
+    row = _clean_coin_package(request.get_json() or {})
+    if not row:
+        return jsonify({'error': 'No valid package fields'}), 400
+    supabase = _get_supabase()
+    res = (
+        supabase.table('coin_packages').update(row)
+        .eq('organization_id', org_id).eq('id', package_id).execute()
+    )
+    if not res.data:
+        return jsonify({'error': 'Package not found'}), 404
+    logger.info('Coin package updated: org=%s id=%s', org_id, package_id)
+    return jsonify({'package': res.data[0]})
+
+
+@gamification_bp.route('/organizations/<org_id>/gamification/coin-packages/<package_id>', methods=['DELETE'])
+def delete_coin_package(org_id: str, package_id: str):
+    error = _require_admin(org_id)
+    if error:
+        return error
+    supabase = _get_supabase()
+    supabase.table('coin_packages').delete().eq(
+        'organization_id', org_id
+    ).eq('id', package_id).execute()
+    logger.info('Coin package deleted: org=%s id=%s', org_id, package_id)
+    return jsonify({'status': 'deleted'})
+
+
 # --- Asset upload: item art / legion crest / rank icon -------------------
 
 @gamification_bp.route('/organizations/<org_id>/gamification/upload', methods=['POST'])

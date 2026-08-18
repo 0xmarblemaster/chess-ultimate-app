@@ -198,7 +198,9 @@ export async function recomputePlayers(
 
     const agg: PlayerAggregate = {
       xp_total: roundHalf(xpTotal),
-      coin_balance: roundHalf(coinBalance),
+      // Balance floors at 0 (§10): a refund after spending never shows negative,
+      // and items are never auto-revoked.
+      coin_balance: Math.max(0, roundHalf(coinBalance)),
       rank_code: rankForXp(ranks, roundHalf(xpTotal))?.code ?? null,
       tournaments_played: Math.max(0, tournaments),
       wins_total: roundHalf(winsTotal),

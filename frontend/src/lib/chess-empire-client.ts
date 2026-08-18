@@ -1123,6 +1123,32 @@ export async function getStudentBranches(
 }
 
 /**
+ * Fetch a student's display name («first last») directly from CE `students` —
+ * a lightweight single-row read (vs. the heavier profile edge fn). Best-effort:
+ * returns null on any failure so callers can degrade to a generic label.
+ */
+export async function getStudentDisplayName(studentId: string): Promise<string | null> {
+  try {
+    const key = getServiceKey();
+    const params = new URLSearchParams({
+      select: 'first_name,last_name',
+      id: `eq.${studentId}`,
+      limit: '1',
+    });
+    const resp = await ceFetch(`${ceRestBase()}/students?${params.toString()}`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}`, Accept: 'application/json' },
+    });
+    const rows = await expectJson<Array<{ first_name?: string | null; last_name?: string | null }>>(resp);
+    const row = rows[0];
+    if (!row) return null;
+    const name = `${row.first_name ?? ''} ${row.last_name ?? ''}`.trim();
+    return name || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Fetch the set of tournament_results ids that currently exist for the given
  * upload ids — used to detect deleted/re-uploaded results for reversal.
  */

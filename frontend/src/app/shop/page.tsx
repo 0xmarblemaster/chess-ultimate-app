@@ -141,22 +141,22 @@ export default function ShopPage() {
                   ) : (
                     <span className="text-xs font-semibold text-green-600">✓ {t('shop.owned')}</span>
                   )
-                ) : (
+                ) : item.affordable ? (
                   <button
                     onClick={() => buy(item)}
-                    disabled={!item.affordable || busy === item.id}
-                    className={`w-full rounded-lg px-3 py-1.5 text-sm font-medium ${
-                      item.affordable
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                    }`}
+                    disabled={busy === item.id}
+                    className="w-full rounded-lg px-3 py-1.5 text-sm font-medium bg-purple-600 text-white"
                   >
-                    {busy === item.id
-                      ? '…'
-                      : item.affordable
-                        ? `🪙 ${item.price_coins} · ${t('shop.buy')}`
-                        : t('shop.notEnough')}
+                    {busy === item.id ? '…' : `🪙 ${item.price_coins} · ${t('shop.buy')}`}
                   </button>
+                ) : (
+                  // Insufficient balance deep-links to the coin-purchase page (§10).
+                  <Link
+                    href="/coins"
+                    className="w-full text-center rounded-lg px-3 py-1.5 text-sm font-medium bg-amber-100 text-amber-700 hover:bg-amber-200"
+                  >
+                    {t('shop.getCoins')}
+                  </Link>
                 )}
                 {flash?.id === item.id && (
                   <span
