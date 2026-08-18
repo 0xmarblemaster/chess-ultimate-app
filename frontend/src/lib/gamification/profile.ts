@@ -53,6 +53,36 @@ export interface GamificationProfile {
     next_milestone: { weeks: number; reward: number } | null;
   };
   stats: { tournaments_played: number; wins_total: number };
+  /** Current legion (crest + name) — null while unmapped/unknown (Phase 3). */
+  legion: ProfileLegion | null;
+  /** Permanent trophy items with provenance — «Зал славы» (Phase 3, §7.4). */
+  trophies: ProfileTrophy[];
+}
+
+export interface ProfileLegion {
+  id: string;
+  name: string;
+  totem?: string | null;
+  crest_url?: string | null;
+  color_primary?: string | null;
+  color_secondary?: string | null;
+}
+
+export interface ProfileTrophy {
+  item_id: string;
+  name_ru: string;
+  name_kk: string;
+  name_en: string;
+  art_url: string | null;
+  acquisition_note: string | null;
+  season_id: string | null;
+  acquired_at: string | null;
+}
+
+/** Optional Phase 3 additions layered onto the base profile (legion + trophies). */
+export interface ProfileExtras {
+  legion?: ProfileLegion | null;
+  trophies?: ProfileTrophy[];
 }
 
 function num(v: unknown): number {
@@ -81,6 +111,7 @@ export function buildProfile(
   streak: StreakRow | null,
   ranks: RankRow[],
   config: GamificationConfig,
+  extras: ProfileExtras = {},
 ): GamificationProfile {
   const xp = roundHalf(num(player?.xp_total));
   const coins = roundHalf(num(player?.coin_balance));
@@ -118,5 +149,7 @@ export function buildProfile(
       tournaments_played: player?.tournaments_played ?? 0,
       wins_total: roundHalf(num(player?.wins_total)),
     },
+    legion: extras.legion ?? null,
+    trophies: extras.trophies ?? [],
   };
 }

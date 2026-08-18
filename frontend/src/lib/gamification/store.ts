@@ -17,9 +17,12 @@ import {
 import {
   type GamificationProfile,
   type PlayerRow,
+  type ProfileLegion,
+  type ProfileTrophy,
   type StreakRow,
   buildProfile,
 } from './profile';
+import { getStudentBranches } from '@/lib/chess-empire-client';
 import { type ItemRow } from './items';
 
 const ITEM_COLS =
@@ -60,7 +63,7 @@ export async function loadGamificationProfile(
   orgId: string,
   studentId: string,
 ): Promise<GamificationProfile> {
-  const [{ data: player }, { data: streak }, ranks, config] = await Promise.all([
+  const [{ data: player }, { data: streak }, ranks, config, trophies, legion] = await Promise.all([
     supabaseAdmin
       .from('player_gamification')
       .select('xp_total,coin_balance,rank_code,tournaments_played,wins_total')
@@ -75,6 +78,8 @@ export async function loadGamificationProfile(
       .maybeSingle(),
     getRanks(orgId),
     getOrgConfig(orgId),
+    getTrophies(orgId, studentId),
+    getStudentLegion(orgId, studentId),
   ]);
   return buildProfile(
     studentId,
@@ -82,7 +87,68 @@ export async function loadGamificationProfile(
     (streak as StreakRow | null) ?? null,
     ranks,
     config,
+    { trophies, legion },
   );
+}
+
+/**
+ * A student's permanent trophy items with provenance («Зал славы», §7.4).
+ * Trophies are player_items acquired_via='trophy', newest first.
+ */
+export async function getTrophies(orgId: string, studentId: string): Promise<ProfileTrophy[]> {
+  const { data } = await supabaseAdmin
+    .from('player_items')
+    .select(
+      'item_id,season_id,acquired_at,items(name_ru,name_kk,name_en,art_url,acquisition_note)',
+    )
+    .eq('organization_id', orgId)
+    .eq('student_id', studentId)
+    .eq('acquired_via', 'trophy')
+    .order('acquired_at', { ascending: false });
+  return (data ?? []).map((r) => {
+    const item = (r.items ?? {}) as {
+      name_ru?: string;
+      name_kk?: string;
+      name_en?: string;
+      art_url?: string | null;
+      acquisition_note?: string | null;
+    };
+    return {
+      item_id: r.item_id as string,
+      name_ru: item.name_ru ?? '',
+      name_kk: item.name_kk ?? '',
+      name_en: item.name_en ?? '',
+      art_url: item.art_url ?? null,
+      acquisition_note: item.acquisition_note ?? null,
+      season_id: (r.season_id as string | null) ?? null,
+      acquired_at: (r.acquired_at as string | null) ?? null,
+    };
+  });
+}
+
+/**
+ * Resolve a student's CURRENT legion from their CE branch (D-11). Best-effort:
+ * a missing branch / unmapped legion / CE hiccup yields null so the profile
+ * degrades to a legion-less card rather than failing.
+ */
+export async function getStudentLegion(
+  orgId: string,
+  studentId: string,
+): Promise<ProfileLegion | null> {
+  try {
+    const branches = await getStudentBranches([studentId]);
+    const branchId = branches.get(studentId) ?? null;
+    if (!branchId) return null;
+    const { data } = await supabaseAdmin
+      .from('legions')
+      .select('id,name,totem,crest_url,color_primary,color_secondary')
+      .eq('organization_id', orgId)
+      .eq('ce_branch_id', branchId)
+      .maybeSingle();
+    return (data as ProfileLegion | null) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export interface PlayerAggregate {
@@ -253,4 +319,89 @@ export async function unequipSlot(
     .eq('organization_id', orgId)
     .eq('student_id', studentId)
     .eq('slot', slot);
+}
+
+// ---------------------------------------------------------------------------
+// Legions & seasons IO (Phase 3, §8) — read model for standings + archive.
+// ---------------------------------------------------------------------------
+
+export interface LegionRow {
+  id: string;
+  ce_branch_id: string | null;
+  name: string;
+  totem: string | null;
+  crest_url: string | null;
+  color_primary: string | null;
+  color_secondary: string | null;
+  sort_order: number;
+}
+
+export interface SeasonRow {
+  id: string;
+  name: string;
+  starts_at: string;
+  ends_at: string;
+  status: 'draft' | 'active' | 'closed';
+  top_n: number;
+  trophy_item_id: string | null;
+  winner_legion_id: string | null;
+  closed_at: string | null;
+}
+
+const LEGION_COLS =
+  'id,ce_branch_id,name,totem,crest_url,color_primary,color_secondary,sort_order';
+const SEASON_COLS =
+  'id,name,starts_at,ends_at,status,top_n,trophy_item_id,winner_legion_id,closed_at';
+
+/** Org legions, ascending by sort_order. */
+export async function getLegions(orgId: string): Promise<LegionRow[]> {
+  const { data } = await supabaseAdmin
+    .from('legions')
+    .select(LEGION_COLS)
+    .eq('organization_id', orgId)
+    .order('sort_order', { ascending: true });
+  return (data ?? []) as unknown as LegionRow[];
+}
+
+/** All org seasons, newest first (drives the archive). */
+export async function getSeasons(orgId: string): Promise<SeasonRow[]> {
+  const { data } = await supabaseAdmin
+    .from('seasons')
+    .select(SEASON_COLS)
+    .eq('organization_id', orgId)
+    .order('starts_at', { ascending: false });
+  return (data ?? []) as unknown as SeasonRow[];
+}
+
+/**
+ * The season the cup surfaces should show: the single active season if one
+ * exists, else the most recently closed season (for the between-seasons archive
+ * view). null when the org has no non-draft season yet.
+ */
+export async function getCurrentSeason(orgId: string): Promise<SeasonRow | null> {
+  const seasons = await getSeasons(orgId);
+  return (
+    seasons.find((s) => s.status === 'active') ??
+    seasons.find((s) => s.status === 'closed') ??
+    null
+  );
+}
+
+/**
+ * CE student ids of this org's verified-linked members (D-8). Unlinked students
+ * accrue XP silently but are hidden from standings until they link, so the
+ * standings assembler needs this set to mark inclusion.
+ */
+export async function getLinkedStudentIds(orgId: string): Promise<Set<string>> {
+  const { data } = await supabaseAdmin
+    .from('organization_members')
+    .select('external_student_id')
+    .eq('organization_id', orgId)
+    .eq('link_status', 'verified')
+    .in('external_source', ['chess_empire', 'online']);
+  const set = new Set<string>();
+  for (const r of data ?? []) {
+    if (r.external_student_id) set.add(r.external_student_id as string);
+  }
+  return set;
 }

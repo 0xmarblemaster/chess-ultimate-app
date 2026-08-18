@@ -1091,6 +1091,38 @@ export async function getTournamentResultsSince(
 }
 
 /**
+ * Fetch each student's CURRENT branch id (CE `students.branch_id`).
+ *
+ * Drives legion-standings scoring: a student's season score is grouped under
+ * their current branch→legion mapping (D-11), refreshed live on every standings
+ * read so a mid-season transfer moves the whole score. Read-only; chunked to
+ * keep the `in.(...)` filter within URL limits. Missing/unknown ids are simply
+ * absent from the returned map.
+ */
+export async function getStudentBranches(
+  studentIds: string[],
+): Promise<Map<string, string | null>> {
+  const out = new Map<string, string | null>();
+  if (studentIds.length === 0) return out;
+  const key = getServiceKey();
+  const CHUNK = 100;
+  for (let i = 0; i < studentIds.length; i += CHUNK) {
+    const chunk = studentIds.slice(i, i + CHUNK);
+    const params = new URLSearchParams({
+      select: 'id,branch_id',
+      id: `in.(${chunk.join(',')})`,
+      limit: String(chunk.length),
+    });
+    const resp = await ceFetch(`${ceRestBase()}/students?${params.toString()}`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}`, Accept: 'application/json' },
+    });
+    const rows = await expectJson<Array<{ id: string; branch_id: string | null }>>(resp);
+    for (const r of rows) out.set(String(r.id), r.branch_id ?? null);
+  }
+  return out;
+}
+
+/**
  * Fetch the set of tournament_results ids that currently exist for the given
  * upload ids — used to detect deleted/re-uploaded results for reversal.
  */
