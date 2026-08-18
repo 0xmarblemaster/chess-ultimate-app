@@ -44,6 +44,36 @@ ALLOWED_RANK_FIELDS = {
     'sort_order',
 }
 
+# Whitelisted columns for a legion row (Legions tab).
+ALLOWED_LEGION_FIELDS = {
+    'name',
+    'ce_branch_id',
+    'totem',
+    'crest_url',
+    'color_primary',
+    'color_secondary',
+    'sort_order',
+}
+
+LEGION_SELECT = (
+    'id,name,ce_branch_id,totem,crest_url,color_primary,color_secondary,sort_order'
+)
+
+# Whitelisted columns for a season row (Seasons tab). status transitions to
+# 'closed' go through the Next.js close job (freeze + trophy grant), not here.
+ALLOWED_SEASON_FIELDS = {
+    'name',
+    'starts_at',
+    'ends_at',
+    'status',
+    'top_n',
+    'trophy_item_id',
+}
+
+SEASON_SELECT = (
+    'id,name,starts_at,ends_at,status,top_n,trophy_item_id,winner_legion_id,closed_at'
+)
+
 # Whitelisted columns for an item row (Items tab).
 ALLOWED_ITEM_FIELDS = {
     'sku',
@@ -275,4 +305,170 @@ def delete_item(org_id: str, item_id: str):
         'organization_id', org_id
     ).eq('id', item_id).execute()
     logger.info('Gamification item deleted: org=%s id=%s', org_id, item_id)
+    return jsonify({'status': 'deleted'})
+
+
+# --- Legions tab: legion CRUD + CE-branch mapping -----------------------------
+
+def _clean_legion(payload: dict) -> dict:
+    """Whitelist legion fields; blank optional strings become NULL."""
+    row = {k: v for k, v in payload.items() if k in ALLOWED_LEGION_FIELDS}
+    if row.get('ce_branch_id') == '':
+        row['ce_branch_id'] = None
+    return row
+
+
+@gamification_bp.route('/organizations/<org_id>/gamification/legions', methods=['GET'])
+def get_legions(org_id: str):
+    error = _require_admin(org_id)
+    if error:
+        return error
+    supabase = _get_supabase()
+    rows = (
+        supabase.table('legions').select(LEGION_SELECT)
+        .eq('organization_id', org_id).order('sort_order').execute()
+    )
+    return jsonify({'legions': rows.data or []})
+
+
+@gamification_bp.route('/organizations/<org_id>/gamification/legions', methods=['POST'])
+def create_legion(org_id: str):
+    error = _require_admin(org_id)
+    if error:
+        return error
+    row = _clean_legion(request.get_json() or {})
+    if not row.get('name'):
+        return jsonify({'error': 'name is required'}), 400
+    row['organization_id'] = org_id
+    supabase = _get_supabase()
+    res = supabase.table('legions').insert(row).execute()
+    created = res.data[0] if res.data else row
+    logger.info('Gamification legion created: org=%s name=%s', org_id, row['name'])
+    return jsonify({'legion': created}), 201
+
+
+@gamification_bp.route('/organizations/<org_id>/gamification/legions/<legion_id>', methods=['PUT'])
+def update_legion(org_id: str, legion_id: str):
+    error = _require_admin(org_id)
+    if error:
+        return error
+    row = _clean_legion(request.get_json() or {})
+    if not row:
+        return jsonify({'error': 'No valid legion fields'}), 400
+    supabase = _get_supabase()
+    res = (
+        supabase.table('legions').update(row)
+        .eq('organization_id', org_id).eq('id', legion_id).execute()
+    )
+    if not res.data:
+        return jsonify({'error': 'Legion not found'}), 404
+    logger.info('Gamification legion updated: org=%s id=%s', org_id, legion_id)
+    return jsonify({'legion': res.data[0]})
+
+
+@gamification_bp.route('/organizations/<org_id>/gamification/legions/<legion_id>', methods=['DELETE'])
+def delete_legion(org_id: str, legion_id: str):
+    error = _require_admin(org_id)
+    if error:
+        return error
+    supabase = _get_supabase()
+    supabase.table('legions').delete().eq(
+        'organization_id', org_id
+    ).eq('id', legion_id).execute()
+    logger.info('Gamification legion deleted: org=%s id=%s', org_id, legion_id)
+    return jsonify({'status': 'deleted'})
+
+
+# --- Seasons tab: season CRUD (close is the Next.js job, §8.4) -----------------
+
+def _clean_season(payload: dict) -> dict:
+    """Whitelist season fields; blank optional refs become NULL."""
+    row = {k: v for k, v in payload.items() if k in ALLOWED_SEASON_FIELDS}
+    if row.get('trophy_item_id') == '':
+        row['trophy_item_id'] = None
+    return row
+
+
+@gamification_bp.route('/organizations/<org_id>/gamification/seasons', methods=['GET'])
+def get_seasons(org_id: str):
+    error = _require_admin(org_id)
+    if error:
+        return error
+    supabase = _get_supabase()
+    rows = (
+        supabase.table('seasons').select(SEASON_SELECT)
+        .eq('organization_id', org_id).order('starts_at', desc=True).execute()
+    )
+    return jsonify({'seasons': rows.data or []})
+
+
+@gamification_bp.route('/organizations/<org_id>/gamification/seasons', methods=['POST'])
+def create_season(org_id: str):
+    error = _require_admin(org_id)
+    if error:
+        return error
+    row = _clean_season(request.get_json() or {})
+    if not row.get('name') or not row.get('starts_at') or not row.get('ends_at'):
+        return jsonify({'error': 'name, starts_at and ends_at are required'}), 400
+    # New seasons default to draft; activation is a separate explicit action.
+    row.setdefault('status', 'draft')
+    row['organization_id'] = org_id
+    supabase = _get_supabase()
+    res = supabase.table('seasons').insert(row).execute()
+    created = res.data[0] if res.data else row
+    logger.info('Gamification season created: org=%s name=%s', org_id, row['name'])
+    return jsonify({'season': created}), 201
+
+
+@gamification_bp.route('/organizations/<org_id>/gamification/seasons/<season_id>', methods=['PUT'])
+def update_season(org_id: str, season_id: str):
+    error = _require_admin(org_id)
+    if error:
+        return error
+    row = _clean_season(request.get_json() or {})
+    if not row:
+        return jsonify({'error': 'No valid season fields'}), 400
+    # Closing is the freeze+trophy job (Next.js), never a bare status flip.
+    if row.get('status') == 'closed':
+        return jsonify({'error': 'Use the close endpoint to close a season'}), 400
+
+    supabase = _get_supabase()
+    # Enforce "one active season per org" before flipping to active.
+    if row.get('status') == 'active':
+        existing = (
+            supabase.table('seasons').select('id')
+            .eq('organization_id', org_id).eq('status', 'active').execute()
+        )
+        clash = [r for r in (existing.data or []) if r.get('id') != season_id]
+        if clash:
+            return jsonify({'error': 'Another season is already active'}), 409
+
+    res = (
+        supabase.table('seasons').update(row)
+        .eq('organization_id', org_id).eq('id', season_id).execute()
+    )
+    if not res.data:
+        return jsonify({'error': 'Season not found'}), 404
+    logger.info('Gamification season updated: org=%s id=%s', org_id, season_id)
+    return jsonify({'season': res.data[0]})
+
+
+@gamification_bp.route('/organizations/<org_id>/gamification/seasons/<season_id>', methods=['DELETE'])
+def delete_season(org_id: str, season_id: str):
+    """Delete a season. Closed seasons are history — only draft/active removable."""
+    error = _require_admin(org_id)
+    if error:
+        return error
+    supabase = _get_supabase()
+    existing = (
+        supabase.table('seasons').select('status')
+        .eq('organization_id', org_id).eq('id', season_id).single().execute()
+    )
+    status = existing.data.get('status') if existing.data else None
+    if status == 'closed':
+        return jsonify({'error': 'Closed seasons cannot be deleted'}), 400
+    supabase.table('seasons').delete().eq(
+        'organization_id', org_id
+    ).eq('id', season_id).execute()
+    logger.info('Gamification season deleted: org=%s id=%s', org_id, season_id)
     return jsonify({'status': 'deleted'})

@@ -43,18 +43,45 @@ interface Item {
   available?: boolean;
   sort_order: number;
 }
+interface Legion {
+  id?: string;
+  name: string;
+  ce_branch_id: string | null;
+  totem: string;
+  crest_url: string;
+  color_primary: string;
+  color_secondary: string;
+  sort_order: number;
+}
+interface Season {
+  id?: string;
+  name: string;
+  starts_at: string;
+  ends_at: string;
+  status: string;
+  top_n: number;
+  trophy_item_id: string | null;
+  winner_legion_id?: string | null;
+}
 
 const WIN_KINDS = ['league_c', 'league_b', 'razryad_4', 'razryad_3', 'rated', 'pro'];
 const ITEM_SLOTS = ['shield', 'armor', 'cloak', 'helmet', 'weapon', 'pet', 'background', 'frame', 'effect'];
 const ITEM_RARITIES = ['common', 'rare', 'epic', 'legendary'];
 const ITEM_KINDS = ['purchasable', 'trophy', 'default'];
 
+/** Trim an ISO/tz timestamp to the `datetime-local` input's `YYYY-MM-DDTHH:mm`. */
+function toLocalInput(v: string): string {
+  return v ? v.slice(0, 16) : '';
+}
+
 export default function AdminGamificationPage() {
   const { org } = useOrganization();
-  const [tab, setTab] = useState<'rules' | 'ranks' | 'items'>('rules');
+  const [tab, setTab] = useState<'rules' | 'ranks' | 'items' | 'legions' | 'seasons'>('rules');
   const [config, setConfig] = useState<Config | null>(null);
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [items, setItems] = useState<Item[]>([]);
+  const [legions, setLegions] = useState<Legion[]>([]);
+  const [seasons, setSeasons] = useState<Season[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +92,22 @@ export default function AdminGamificationPage() {
       .then((r) => r.json())
       .then((d) => setItems(d.items ?? []))
       .catch(() => setError('Failed to load items'));
+  };
+
+  const loadLegions = () => {
+    if (!org?.id) return;
+    fetch(`/api/admin/organizations/${org.id}/gamification/legions`)
+      .then((r) => r.json())
+      .then((d) => setLegions(d.legions ?? []))
+      .catch(() => setError('Failed to load legions'));
+  };
+
+  const loadSeasons = () => {
+    if (!org?.id) return;
+    fetch(`/api/admin/organizations/${org.id}/gamification/seasons`)
+      .then((r) => r.json())
+      .then((d) => setSeasons(d.seasons ?? []))
+      .catch(() => setError('Failed to load seasons'));
   };
 
   useEffect(() => {
@@ -78,6 +121,8 @@ export default function AdminGamificationPage() {
       .then((d) => setRanks(d.ranks ?? []))
       .catch(() => setError('Failed to load ranks'));
     loadItems();
+    loadLegions();
+    loadSeasons();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [org?.id]);
 
@@ -161,6 +206,108 @@ export default function AdminGamificationPage() {
     }
   };
 
+  const saveLegion = async (legion: Legion) => {
+    if (!org?.id) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const base = `/api/admin/organizations/${org.id}/gamification/legions`;
+      const res = await fetch(legion.id ? `${base}/${legion.id}` : base, {
+        method: legion.id ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(legion),
+      });
+      if (!res.ok) throw new Error();
+      loadLegions();
+      flash();
+    } catch {
+      setError('Save failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteLegion = async (legion: Legion) => {
+    if (!org?.id || !legion.id) {
+      setLegions((prev) => prev.filter((l) => l !== legion));
+      return;
+    }
+    setSaving(true);
+    try {
+      await fetch(`/api/admin/organizations/${org.id}/gamification/legions/${legion.id}`, {
+        method: 'DELETE',
+      });
+      loadLegions();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveSeason = async (season: Season) => {
+    if (!org?.id) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const base = `/api/admin/organizations/${org.id}/gamification/seasons`;
+      const res = await fetch(season.id ? `${base}/${season.id}` : base, {
+        method: season.id ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(season),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Save failed');
+      }
+      loadSeasons();
+      flash();
+    } catch (e) {
+      setError((e as Error).message || 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const setSeasonStatus = async (season: Season, status: string) => {
+    await saveSeason({ ...season, status });
+  };
+
+  const closeSeason = async (season: Season) => {
+    if (!org?.id || !season.id) return;
+    if (!confirm(`Close «${season.name}»? Standings freeze and trophies are granted. This cannot be undone.`)) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/admin/organizations/${org.id}/gamification/seasons/${season.id}/close`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) },
+      );
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || d.status || 'Close failed');
+      loadSeasons();
+      flash();
+    } catch (e) {
+      setError((e as Error).message || 'Close failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteSeason = async (season: Season) => {
+    if (!org?.id || !season.id) {
+      setSeasons((prev) => prev.filter((s) => s !== season));
+      return;
+    }
+    setSaving(true);
+    try {
+      await fetch(`/api/admin/organizations/${org.id}/gamification/seasons/${season.id}`, {
+        method: 'DELETE',
+      });
+      loadSeasons();
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const numInput = (value: number, onChange: (n: number) => void) => (
     <input
       type="number"
@@ -179,8 +326,8 @@ export default function AdminGamificationPage() {
         drive the sync engine and profiles.
       </p>
 
-      <div className="flex gap-2 mb-6">
-        {(['rules', 'ranks', 'items'] as const).map((tabKey) => (
+      <div className="flex gap-2 mb-6 flex-wrap">
+        {(['rules', 'ranks', 'items', 'legions', 'seasons'] as const).map((tabKey) => (
           <button
             key={tabKey}
             onClick={() => setTab(tabKey)}
@@ -463,6 +610,244 @@ export default function AdminGamificationPage() {
             className="text-sm text-purple-600"
           >
             + Add item
+          </button>
+        </div>
+      )}
+
+      {tab === 'legions' && (
+        <div className="space-y-4">
+          <p className="text-sm text-gray-500">
+            Each legion maps to a Chess Empire branch. Season points are scored by each
+            legion&apos;s Top-N linked players. Crests can be swapped later.
+          </p>
+          {legions.map((legion, i) => {
+            const set = (patch: Partial<Legion>) => {
+              const next = [...legions];
+              next[i] = { ...legion, ...patch };
+              setLegions(next);
+            };
+            return (
+              <section key={legion.id ?? `new-${i}`} className="bg-white rounded-xl border border-gray-200 p-4">
+                <div className="flex items-start gap-3">
+                  {legion.crest_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={legion.crest_url} alt="" className="w-14 h-14" />
+                  )}
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2 flex-1">
+                    <input
+                      value={legion.name}
+                      placeholder="Name"
+                      onChange={(e) => set({ name: e.target.value })}
+                      className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                    />
+                    <input
+                      value={legion.totem ?? ''}
+                      placeholder="Totem"
+                      onChange={(e) => set({ totem: e.target.value })}
+                      className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                    />
+                    <input
+                      value={legion.ce_branch_id ?? ''}
+                      placeholder="CE branch id"
+                      onChange={(e) => set({ ce_branch_id: e.target.value || null })}
+                      className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                    />
+                    <input
+                      value={legion.crest_url ?? ''}
+                      placeholder="/gamification/crests/....svg"
+                      onChange={(e) => set({ crest_url: e.target.value })}
+                      className="col-span-2 md:col-span-3 rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                    />
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={legion.color_primary || '#38bdf8'}
+                        onChange={(e) => set({ color_primary: e.target.value })}
+                        className="h-8 w-10 rounded border border-gray-300"
+                      />
+                      <input
+                        type="color"
+                        value={legion.color_secondary || '#0369a1'}
+                        onChange={(e) => set({ color_secondary: e.target.value })}
+                        className="h-8 w-10 rounded border border-gray-300"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 mt-3">
+                  <button onClick={() => deleteLegion(legion)} className="text-sm text-red-500 px-3 py-1">
+                    Delete
+                  </button>
+                  <button
+                    onClick={() => saveLegion(legion)}
+                    disabled={saving}
+                    className="rounded-lg bg-purple-600 text-white px-4 py-1 text-sm font-medium disabled:opacity-50"
+                  >
+                    Save
+                  </button>
+                </div>
+              </section>
+            );
+          })}
+          <button
+            onClick={() =>
+              setLegions([
+                ...legions,
+                {
+                  name: '',
+                  ce_branch_id: null,
+                  totem: '',
+                  crest_url: '',
+                  color_primary: '#38bdf8',
+                  color_secondary: '#0369a1',
+                  sort_order: legions.length + 1,
+                },
+              ])
+            }
+            className="text-sm text-purple-600"
+          >
+            + Add legion
+          </button>
+        </div>
+      )}
+
+      {tab === 'seasons' && (
+        <div className="space-y-4">
+          <p className="text-sm text-gray-500">
+            One season is active at a time. A season auto-freezes at its end date; confirm
+            <b> Close</b> to finalize standings and grant trophies. Closed seasons are history.
+          </p>
+          {seasons.map((season, i) => {
+            const set = (patch: Partial<Season>) => {
+              const next = [...seasons];
+              next[i] = { ...season, ...patch };
+              setSeasons(next);
+            };
+            const frozen = season.ends_at ? new Date(season.ends_at).getTime() <= Date.now() : false;
+            return (
+              <section key={season.id ?? `new-${i}`} className="bg-white rounded-xl border border-gray-200 p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <input
+                    value={season.name}
+                    placeholder="Season name"
+                    onChange={(e) => set({ name: e.target.value })}
+                    className="rounded-lg border border-gray-300 px-2 py-1 text-sm font-medium flex-1 mr-3"
+                  />
+                  <span
+                    className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                      season.status === 'active'
+                        ? 'bg-green-100 text-green-700'
+                        : season.status === 'closed'
+                          ? 'bg-gray-200 text-gray-600'
+                          : 'bg-amber-100 text-amber-700'
+                    }`}
+                  >
+                    {season.status}
+                    {season.status === 'active' && frozen ? ' · frozen' : ''}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  <label className="text-xs text-gray-500">
+                    Starts
+                    <input
+                      type="datetime-local"
+                      value={toLocalInput(season.starts_at)}
+                      disabled={season.status === 'closed'}
+                      onChange={(e) => set({ starts_at: e.target.value })}
+                      className="w-full rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                    />
+                  </label>
+                  <label className="text-xs text-gray-500">
+                    Ends
+                    <input
+                      type="datetime-local"
+                      value={toLocalInput(season.ends_at)}
+                      disabled={season.status === 'closed'}
+                      onChange={(e) => set({ ends_at: e.target.value })}
+                      className="w-full rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                    />
+                  </label>
+                  <label className="text-xs text-gray-500">
+                    Top-N
+                    <input
+                      type="number"
+                      value={season.top_n ?? 5}
+                      disabled={season.status === 'closed'}
+                      onChange={(e) => set({ top_n: parseInt(e.target.value, 10) || 5 })}
+                      className="w-full rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                    />
+                  </label>
+                  <label className="text-xs text-gray-500 md:col-span-3">
+                    Trophy item
+                    <select
+                      value={season.trophy_item_id ?? ''}
+                      disabled={season.status === 'closed'}
+                      onChange={(e) => set({ trophy_item_id: e.target.value || null })}
+                      className="w-full rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                    >
+                      <option value="">— none —</option>
+                      {items
+                        .filter((it) => it.kind === 'trophy' && it.id)
+                        .map((it) => (
+                          <option key={it.id} value={it.id}>
+                            {it.name_en || it.sku}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                </div>
+                {season.status !== 'closed' && (
+                  <div className="flex flex-wrap justify-end gap-2 mt-3">
+                    <button onClick={() => deleteSeason(season)} className="text-sm text-red-500 px-3 py-1">
+                      Delete
+                    </button>
+                    {season.status === 'draft' && season.id && (
+                      <button
+                        onClick={() => setSeasonStatus(season, 'active')}
+                        disabled={saving}
+                        className="rounded-lg bg-green-600 text-white px-4 py-1 text-sm font-medium disabled:opacity-50"
+                      >
+                        Activate
+                      </button>
+                    )}
+                    {season.status === 'active' && season.id && (
+                      <button
+                        onClick={() => closeSeason(season)}
+                        disabled={saving}
+                        className="rounded-lg bg-amber-600 text-white px-4 py-1 text-sm font-medium disabled:opacity-50"
+                      >
+                        Close & award
+                      </button>
+                    )}
+                    <button
+                      onClick={() => saveSeason(season)}
+                      disabled={saving}
+                      className="rounded-lg bg-purple-600 text-white px-4 py-1 text-sm font-medium disabled:opacity-50"
+                    >
+                      Save
+                    </button>
+                  </div>
+                )}
+              </section>
+            );
+          })}
+          <button
+            onClick={() =>
+              setSeasons([
+                {
+                  name: '',
+                  starts_at: '',
+                  ends_at: '',
+                  status: 'draft',
+                  top_n: 5,
+                  trophy_item_id: null,
+                },
+                ...seasons,
+              ])
+            }
+            className="text-sm text-purple-600"
+          >
+            + Add season
           </button>
         </div>
       )}
