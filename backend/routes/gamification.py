@@ -44,6 +44,36 @@ ALLOWED_RANK_FIELDS = {
     'sort_order',
 }
 
+# Whitelisted columns for an item row (Items tab).
+ALLOWED_ITEM_FIELDS = {
+    'sku',
+    'slot',
+    'rarity',
+    'kind',
+    'price_coins',
+    'name_ru',
+    'name_kk',
+    'name_en',
+    'description_ru',
+    'description_kk',
+    'description_en',
+    'art_url',
+    'anim_url',
+    'is_placeholder_art',
+    'available',
+    'available_from',
+    'available_until',
+    'acquisition_note',
+    'sort_order',
+}
+
+ITEM_SELECT = (
+    'id,sku,slot,rarity,kind,price_coins,'
+    'name_ru,name_kk,name_en,description_ru,description_kk,description_en,'
+    'art_url,anim_url,is_placeholder_art,available,available_from,available_until,'
+    'acquisition_note,sort_order'
+)
+
 DEFAULT_CONFIG = {
     'participation_xp': 1,
     'win_xp': {
@@ -174,3 +204,75 @@ def replace_ranks(org_id: str):
 
     logger.info('Gamification ranks replaced: org=%s count=%d', org_id, len(cleaned))
     return jsonify({'status': 'updated', 'count': len(cleaned)})
+
+
+# --- Items tab: cosmetic catalog (per-row CRUD) --------------------------
+
+def _clean_item(payload: dict) -> dict:
+    """Whitelist item fields; normalize empty strings on optional cols to NULL."""
+    row = {k: v for k, v in payload.items() if k in ALLOWED_ITEM_FIELDS}
+    for col in ('available_from', 'available_until'):
+        if row.get(col) == '':
+            row[col] = None
+    return row
+
+
+@gamification_bp.route('/organizations/<org_id>/gamification/items', methods=['GET'])
+def get_items(org_id: str):
+    error = _require_admin(org_id)
+    if error:
+        return error
+    supabase = _get_supabase()
+    rows = (
+        supabase.table('items').select(ITEM_SELECT)
+        .eq('organization_id', org_id).order('sort_order').execute()
+    )
+    return jsonify({'items': rows.data or []})
+
+
+@gamification_bp.route('/organizations/<org_id>/gamification/items', methods=['POST'])
+def create_item(org_id: str):
+    error = _require_admin(org_id)
+    if error:
+        return error
+    row = _clean_item(request.get_json() or {})
+    if not row.get('sku') or not row.get('slot'):
+        return jsonify({'error': 'sku and slot are required'}), 400
+    row['organization_id'] = org_id
+    supabase = _get_supabase()
+    res = supabase.table('items').insert(row).execute()
+    created = res.data[0] if res.data else row
+    logger.info('Gamification item created: org=%s sku=%s', org_id, row['sku'])
+    return jsonify({'item': created}), 201
+
+
+@gamification_bp.route('/organizations/<org_id>/gamification/items/<item_id>', methods=['PUT'])
+def update_item(org_id: str, item_id: str):
+    error = _require_admin(org_id)
+    if error:
+        return error
+    row = _clean_item(request.get_json() or {})
+    if not row:
+        return jsonify({'error': 'No valid item fields'}), 400
+    supabase = _get_supabase()
+    res = (
+        supabase.table('items').update(row)
+        .eq('organization_id', org_id).eq('id', item_id).execute()
+    )
+    if not res.data:
+        return jsonify({'error': 'Item not found'}), 404
+    logger.info('Gamification item updated: org=%s id=%s', org_id, item_id)
+    return jsonify({'item': res.data[0]})
+
+
+@gamification_bp.route('/organizations/<org_id>/gamification/items/<item_id>', methods=['DELETE'])
+def delete_item(org_id: str, item_id: str):
+    error = _require_admin(org_id)
+    if error:
+        return error
+    supabase = _get_supabase()
+    supabase.table('items').delete().eq(
+        'organization_id', org_id
+    ).eq('id', item_id).execute()
+    logger.info('Gamification item deleted: org=%s id=%s', org_id, item_id)
+    return jsonify({'status': 'deleted'})
