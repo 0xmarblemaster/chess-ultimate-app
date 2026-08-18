@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="bear crest">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#94a3b8"/>
+      <stop offset="1" stop-color="#334155"/>
+    </linearGradient>
+  </defs>
+  <path d="M64 8 L112 24 V64 C112 96 90 114 64 122 C38 114 16 96 16 64 V24 Z" fill="url(#bg)"/>
+  <path d="M64 8 L112 24 V64 C112 96 90 114 64 122 C38 114 16 96 16 64 V24 Z" fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="3"/>
+  <path d="M64 42 C50 42 40 54 40 70 C40 86 51 96 64 96 C77 96 88 86 88 70 C88 54 78 42 64 42 Z M46 40 A9 9 0 1 0 46 58 A9 9 0 0 0 46 40 Z M82 40 A9 9 0 1 0 82 58 A9 9 0 0 0 82 40 Z M64 72 A5 5 0 1 0 64 82 A5 5 0 0 0 64 72 Z" fill="#ffffff" fill-opacity="0.92"/>
+</svg>

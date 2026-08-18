@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="leopard crest">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#0369a1"/>
+    </linearGradient>
+  </defs>
+  <path d="M64 8 L112 24 V64 C112 96 90 114 64 122 C38 114 16 96 16 64 V24 Z" fill="url(#bg)"/>
+  <path d="M64 8 L112 24 V64 C112 96 90 114 64 122 C38 114 16 96 16 64 V24 Z" fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="3"/>
+  <path d="M64 40 C50 40 42 52 42 66 C42 84 52 94 64 94 C76 94 86 84 86 66 C86 52 78 40 64 40 Z M52 60 A5 5 0 1 0 52 70 A5 5 0 0 0 52 60 Z M76 60 A5 5 0 1 0 76 70 A5 5 0 0 0 76 60 Z M58 78 H70 L64 86 Z" fill="#ffffff" fill-opacity="0.92"/>
+</svg>

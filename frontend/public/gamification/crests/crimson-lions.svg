@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="lion crest">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ef4444"/>
+      <stop offset="1" stop-color="#991b1b"/>
+    </linearGradient>
+  </defs>
+  <path d="M64 8 L112 24 V64 C112 96 90 114 64 122 C38 114 16 96 16 64 V24 Z" fill="url(#bg)"/>
+  <path d="M64 8 L112 24 V64 C112 96 90 114 64 122 C38 114 16 96 16 64 V24 Z" fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="3"/>
+  <path d="M64 40 C48 40 36 54 36 72 C36 90 48 98 64 98 C80 98 92 90 92 72 C92 54 80 40 64 40 Z M64 40 L58 26 L64 32 L70 26 Z M54 66 A5 5 0 1 0 54 76 A5 5 0 0 0 54 66 Z M74 66 A5 5 0 1 0 74 76 A5 5 0 0 0 74 66 Z" fill="#ffffff" fill-opacity="0.92"/>
+</svg>

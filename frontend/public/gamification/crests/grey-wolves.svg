@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="wolf crest">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#64748b"/>
+      <stop offset="1" stop-color="#1e293b"/>
+    </linearGradient>
+  </defs>
+  <path d="M64 8 L112 24 V64 C112 96 90 114 64 122 C38 114 16 96 16 64 V24 Z" fill="url(#bg)"/>
+  <path d="M64 8 L112 24 V64 C112 96 90 114 64 122 C38 114 16 96 16 64 V24 Z" fill="none" stroke="#ffffff" stroke-opacity="0.4" stroke-width="3"/>
+  <path d="M40 40 L52 58 L64 44 L76 58 L88 40 L84 74 C84 90 74 98 64 98 C54 98 44 90 44 74 Z M56 66 A4 4 0 1 0 56 74 A4 4 0 0 0 56 66 Z M72 66 A4 4 0 1 0 72 74 A4 4 0 0 0 72 66 Z" fill="#ffffff" fill-opacity="0.92"/>
+</svg>
