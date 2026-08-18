@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="armor common">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#94a3b8"/>
+      <stop offset="1" stop-color="#475569"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="120" height="120" rx="22" fill="url(#bg)"/>
+  <rect x="4" y="4" width="120" height="120" rx="22" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="2"/>
+  <path d="M40 30 L64 40 L88 30 V70 C88 96 64 108 64 108 C64 108 40 96 40 70 Z" fill="#ffffff" fill-opacity="0.92"/>
+  <circle cx="108" cy="20" r="7" fill="#475569" stroke="#ffffff" stroke-opacity="0.7" stroke-width="1.5"/>
+</svg>
