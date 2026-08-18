@@ -96,19 +96,19 @@ export default function AdminSidebar({ currentRole, mobileOpen = false, onClose 
             </Link>
           );
         })}
-      </nav>
 
-      <div className="px-3 py-4 border-t border-gray-200 dark:border-gray-700 space-y-1">
-        <LanguageSwitcher currentLocale={locale} variant="minimal" dropUp />
-        <Link
-          href="/dashboard"
-          onClick={onClose}
-          className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-        >
-          <span className="text-base">←</span>
-          <span>{t('backToApp')}</span>
-        </Link>
-      </div>
+        <div className="pt-3 mt-3 border-t border-gray-200 dark:border-gray-700 space-y-1">
+          <LanguageSwitcher currentLocale={locale} variant="minimal" />
+          <Link
+            href="/dashboard"
+            onClick={onClose}
+            className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <span className="text-base">←</span>
+            <span>{t('backToApp')}</span>
+          </Link>
+        </div>
+      </nav>
     </>
   );
 
