@@ -170,6 +170,24 @@ export default function ProfilePage() {
                 </div>
               </div>
             </div>
+
+            {/* Cosmetics: customize avatar + shop */}
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                onClick={() => router.push('/avatar')}
+                className="bg-white rounded-2xl shadow-md p-6 text-center hover:bg-gray-50 transition-colors"
+              >
+                <div className="text-3xl mb-1">🎨</div>
+                <div className="font-semibold text-gray-900">{t('gamification.shop.customize')}</div>
+              </button>
+              <button
+                onClick={() => router.push('/shop')}
+                className="bg-white rounded-2xl shadow-md p-6 text-center hover:bg-gray-50 transition-colors"
+              >
+                <div className="text-3xl mb-1">🛍️</div>
+                <div className="font-semibold text-gray-900">{t('gamification.shop.title')}</div>
+              </button>
+            </div>
           </>
         ) : (
           /* Unlinked (D-8): gamification hidden until the account is linked. */

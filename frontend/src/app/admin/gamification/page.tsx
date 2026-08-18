@@ -28,17 +28,44 @@ interface Rank {
   min_xp: number;
   sort_order: number;
 }
+interface Item {
+  id?: string;
+  sku: string;
+  slot: string;
+  rarity: string;
+  kind: string;
+  price_coins: number | null;
+  name_ru: string;
+  name_kk: string;
+  name_en: string;
+  art_url: string;
+  is_placeholder_art?: boolean;
+  available?: boolean;
+  sort_order: number;
+}
 
 const WIN_KINDS = ['league_c', 'league_b', 'razryad_4', 'razryad_3', 'rated', 'pro'];
+const ITEM_SLOTS = ['shield', 'armor', 'cloak', 'helmet', 'weapon', 'pet', 'background', 'frame', 'effect'];
+const ITEM_RARITIES = ['common', 'rare', 'epic', 'legendary'];
+const ITEM_KINDS = ['purchasable', 'trophy', 'default'];
 
 export default function AdminGamificationPage() {
   const { org } = useOrganization();
-  const [tab, setTab] = useState<'rules' | 'ranks'>('rules');
+  const [tab, setTab] = useState<'rules' | 'ranks' | 'items'>('rules');
   const [config, setConfig] = useState<Config | null>(null);
   const [ranks, setRanks] = useState<Rank[]>([]);
+  const [items, setItems] = useState<Item[]>([]);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const loadItems = () => {
+    if (!org?.id) return;
+    fetch(`/api/admin/organizations/${org.id}/gamification/items`)
+      .then((r) => r.json())
+      .then((d) => setItems(d.items ?? []))
+      .catch(() => setError('Failed to load items'));
+  };
 
   useEffect(() => {
     if (!org?.id) return;
@@ -50,6 +77,8 @@ export default function AdminGamificationPage() {
       .then((r) => r.json())
       .then((d) => setRanks(d.ranks ?? []))
       .catch(() => setError('Failed to load ranks'));
+    loadItems();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [org?.id]);
 
   const flash = () => {
@@ -95,6 +124,43 @@ export default function AdminGamificationPage() {
     }
   };
 
+  const saveItem = async (item: Item) => {
+    if (!org?.id) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const base = `/api/admin/organizations/${org.id}/gamification/items`;
+      const res = await fetch(item.id ? `${base}/${item.id}` : base, {
+        method: item.id ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(item),
+      });
+      if (!res.ok) throw new Error();
+      loadItems();
+      flash();
+    } catch {
+      setError('Save failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteItem = async (item: Item) => {
+    if (!org?.id || !item.id) {
+      setItems((prev) => prev.filter((i) => i !== item));
+      return;
+    }
+    setSaving(true);
+    try {
+      await fetch(`/api/admin/organizations/${org.id}/gamification/items/${item.id}`, {
+        method: 'DELETE',
+      });
+      loadItems();
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const numInput = (value: number, onChange: (n: number) => void) => (
     <input
       type="number"
@@ -114,7 +180,7 @@ export default function AdminGamificationPage() {
       </p>
 
       <div className="flex gap-2 mb-6">
-        {(['rules', 'ranks'] as const).map((tabKey) => (
+        {(['rules', 'ranks', 'items'] as const).map((tabKey) => (
           <button
             key={tabKey}
             onClick={() => setTab(tabKey)}
@@ -266,6 +332,137 @@ export default function AdminGamificationPage() {
             className="px-5 py-2 rounded-lg bg-purple-600 text-white font-medium disabled:opacity-50"
           >
             {saving ? 'Saving…' : 'Save ranks'}
+          </button>
+        </div>
+      )}
+
+      {tab === 'items' && (
+        <div className="space-y-4">
+          <p className="text-sm text-gray-500">
+            Cosmetic catalog. Prices are in coins; leave price empty for trophy/default items.
+            Art can be swapped later without touching the shop.
+          </p>
+          {items.map((item, i) => {
+            const set = (patch: Partial<Item>) => {
+              const next = [...items];
+              next[i] = { ...item, ...patch };
+              setItems(next);
+            };
+            return (
+              <section key={item.id ?? `new-${i}`} className="bg-white rounded-xl border border-gray-200 p-4">
+                <div className="flex items-start gap-3">
+                  {item.art_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={item.art_url} alt="" className="w-14 h-14 rounded-lg border border-gray-100" />
+                  )}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 flex-1">
+                    <input
+                      value={item.sku}
+                      placeholder="sku"
+                      onChange={(e) => set({ sku: e.target.value })}
+                      className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                    />
+                    <select
+                      value={item.slot}
+                      onChange={(e) => set({ slot: e.target.value })}
+                      className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                    >
+                      {ITEM_SLOTS.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={item.rarity}
+                      onChange={(e) => set({ rarity: e.target.value })}
+                      className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                    >
+                      {ITEM_RARITIES.map((r) => (
+                        <option key={r} value={r}>{r}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={item.kind}
+                      onChange={(e) => set({ kind: e.target.value })}
+                      className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                    >
+                      {ITEM_KINDS.map((k) => (
+                        <option key={k} value={k}>{k}</option>
+                      ))}
+                    </select>
+                    <input
+                      value={item.name_en}
+                      placeholder="Name EN"
+                      onChange={(e) => set({ name_en: e.target.value })}
+                      className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                    />
+                    <input
+                      value={item.name_ru}
+                      placeholder="Name RU"
+                      onChange={(e) => set({ name_ru: e.target.value })}
+                      className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                    />
+                    <input
+                      value={item.name_kk}
+                      placeholder="Name KK"
+                      onChange={(e) => set({ name_kk: e.target.value })}
+                      className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                    />
+                    <input
+                      type="number"
+                      value={item.price_coins ?? ''}
+                      placeholder="price"
+                      onChange={(e) =>
+                        set({ price_coins: e.target.value === '' ? null : parseInt(e.target.value, 10) })
+                      }
+                      className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                    />
+                    <input
+                      value={item.art_url}
+                      placeholder="/gamification/items/....svg"
+                      onChange={(e) => set({ art_url: e.target.value })}
+                      className="col-span-2 md:col-span-4 rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 mt-3">
+                  <button
+                    onClick={() => deleteItem(item)}
+                    className="text-sm text-red-500 px-3 py-1"
+                  >
+                    Delete
+                  </button>
+                  <button
+                    onClick={() => saveItem(item)}
+                    disabled={saving}
+                    className="rounded-lg bg-purple-600 text-white px-4 py-1 text-sm font-medium disabled:opacity-50"
+                  >
+                    Save
+                  </button>
+                </div>
+              </section>
+            );
+          })}
+          <button
+            onClick={() =>
+              setItems([
+                ...items,
+                {
+                  sku: '',
+                  slot: 'shield',
+                  rarity: 'common',
+                  kind: 'purchasable',
+                  price_coins: 10,
+                  name_ru: '',
+                  name_kk: '',
+                  name_en: '',
+                  art_url: '',
+                  sort_order: items.length + 1,
+                },
+              ])
+            }
+            className="text-sm text-purple-600"
+          >
+            + Add item
           </button>
         </div>
       )}

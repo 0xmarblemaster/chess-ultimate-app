@@ -216,7 +216,43 @@
     "toNextRank": "{xp} XP to next rank",
     "sinceLaunch": "since launch",
     "notLinkedTitle": "Link your Chess Empire account",
-    "notLinkedBody": "Your XP, rank and coins will appear here once your account is linked."
+    "notLinkedBody": "Your XP, rank and coins will appear here once your account is linked.",
+    "shop": {
+      "title": "Shop",
+      "subtitle": "Spend your earned coins on cosmetics.",
+      "avatar": "Avatar",
+      "customize": "Customize",
+      "myItems": "My items",
+      "buy": "Buy",
+      "owned": "Owned",
+      "equip": "Equip",
+      "equipped": "Equipped",
+      "unequip": "Unequip",
+      "notEnough": "Not enough coins",
+      "getCoins": "Get coins",
+      "purchased": "Purchased!",
+      "buyFailed": "Purchase failed",
+      "emptySlot": "None",
+      "balance": "Balance",
+      "empty": "No items yet — visit the shop.",
+      "slots": {
+        "shield": "Shield",
+        "armor": "Armor",
+        "cloak": "Cloak",
+        "helmet": "Helmet",
+        "weapon": "Weapon",
+        "pet": "Pet",
+        "background": "Background",
+        "frame": "Frame",
+        "effect": "Effect"
+      },
+      "rarity": {
+        "common": "Common",
+        "rare": "Rare",
+        "epic": "Epic",
+        "legendary": "Legendary"
+      }
+    }
   },
   "mascot": {
     "greeting": {
