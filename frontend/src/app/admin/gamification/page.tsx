@@ -64,6 +64,24 @@ interface Season {
   winner_legion_id?: string | null;
 }
 
+interface SyncStatus {
+  last_result_created_at: string | null;
+  cursor_initialized_at: string | null;
+  last_run_at: string | null;
+  last_status: string | null;
+  last_error: string | null;
+}
+interface LedgerEntry {
+  ledger: 'xp' | 'coin';
+  id: string;
+  student_id: string;
+  amount: number;
+  reason?: string | null;
+  source?: string | null;
+  occurred_at: string;
+  created_at: string;
+}
+
 const WIN_KINDS = ['league_c', 'league_b', 'razryad_4', 'razryad_3', 'rated', 'pro'];
 const ITEM_SLOTS = ['shield', 'armor', 'cloak', 'helmet', 'weapon', 'pet', 'background', 'frame', 'effect'];
 const ITEM_RARITIES = ['common', 'rare', 'epic', 'legendary'];
@@ -74,9 +92,16 @@ function toLocalInput(v: string): string {
   return v ? v.slice(0, 16) : '';
 }
 
+/** Human-readable local timestamp for the Ops tab; em-dash on empty/invalid. */
+function fmt(iso: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString();
+}
+
 export default function AdminGamificationPage() {
   const { org } = useOrganization();
-  const [tab, setTab] = useState<'rules' | 'ranks' | 'items' | 'legions' | 'seasons'>('rules');
+  const [tab, setTab] = useState<'rules' | 'ranks' | 'items' | 'legions' | 'seasons' | 'ops'>('rules');
   const [config, setConfig] = useState<Config | null>(null);
   const [ranks, setRanks] = useState<Rank[]>([]);
   const [items, setItems] = useState<Item[]>([]);
@@ -86,6 +111,17 @@ export default function AdminGamificationPage() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [newMilestoneWeeks, setNewMilestoneWeeks] = useState('');
+  // Ops tab state
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [ledgerStudent, setLedgerStudent] = useState('');
+  const [ledgerKind, setLedgerKind] = useState<'all' | 'xp' | 'coin'>('all');
+  const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
+  const [grant, setGrant] = useState<{ student_id: string; item_id: string; season_id: string }>({
+    student_id: '',
+    item_id: '',
+    season_id: '',
+  });
 
   const loadItems = () => {
     if (!org?.id) return;
@@ -309,6 +345,105 @@ export default function AdminGamificationPage() {
     }
   };
 
+  // --- Ops tab: sync status, ledger browser, trophy grant ------------------
+
+  const opsBase = () => `/api/admin/organizations/${org?.id}/gamification/ops`;
+
+  const loadSyncStatus = () => {
+    if (!org?.id) return;
+    fetch(`${opsBase()}/sync-status`)
+      .then((r) => r.json())
+      .then((d) => setSyncStatus(d.status ?? null))
+      .catch(() => setError('Failed to load sync status'));
+  };
+
+  const loadLedger = () => {
+    if (!org?.id) return;
+    const qs = new URLSearchParams();
+    if (ledgerStudent) qs.set('student_id', ledgerStudent);
+    if (ledgerKind !== 'all') qs.set('ledger', ledgerKind);
+    fetch(`${opsBase()}/ledger?${qs.toString()}`)
+      .then((r) => r.json())
+      .then((d) => setLedgerEntries(d.entries ?? []))
+      .catch(() => setError('Failed to load ledger'));
+  };
+
+  useEffect(() => {
+    if (tab === 'ops' && org?.id) {
+      loadSyncStatus();
+      loadLedger();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, org?.id]);
+
+  const runSync = async () => {
+    if (!org?.id) return;
+    setSyncing(true);
+    setError(null);
+    try {
+      const res = await fetch(`${opsBase()}/sync`, { method: 'POST' });
+      if (!res.ok) throw new Error();
+      loadSyncStatus();
+      loadLedger();
+      flash();
+    } catch {
+      setError('Sync failed');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const reverseEntry = async (entry: LedgerEntry) => {
+    if (!org?.id) return;
+    if (
+      !confirm(
+        `Reverse this ${entry.ledger.toUpperCase()} entry (${entry.amount})? A compensating entry is added — nothing is deleted.`,
+      )
+    )
+      return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`${opsBase()}/ledger/reverse`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ledger: entry.ledger, entry_id: entry.id }),
+      });
+      if (!res.ok) throw new Error();
+      loadLedger();
+      flash();
+    } catch {
+      setError('Reversal failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const grantTrophy = async () => {
+    if (!org?.id || !grant.student_id || !grant.item_id) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`${opsBase()}/trophy-grant`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          student_id: grant.student_id,
+          item_id: grant.item_id,
+          season_id: grant.season_id || undefined,
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || d.status || 'Grant failed');
+      setGrant({ student_id: '', item_id: '', season_id: '' });
+      flash();
+    } catch (e) {
+      setError((e as Error).message || 'Grant failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const numInput = (value: number, onChange: (n: number) => void) => (
     <input
       type="number"
@@ -328,7 +463,7 @@ export default function AdminGamificationPage() {
       </p>
 
       <div className="flex gap-2 mb-6 flex-wrap">
-        {(['rules', 'ranks', 'items', 'legions', 'seasons'] as const).map((tabKey) => (
+        {(['rules', 'ranks', 'items', 'legions', 'seasons', 'ops'] as const).map((tabKey) => (
           <button
             key={tabKey}
             onClick={() => setTab(tabKey)}
@@ -1004,6 +1139,166 @@ export default function AdminGamificationPage() {
           >
             + Add season
           </button>
+        </div>
+      )}
+
+      {tab === 'ops' && (
+        <div className="space-y-6">
+          {/* Sync status + Sync now */}
+          <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold text-gray-900">Sync status</h2>
+              <button
+                onClick={runSync}
+                disabled={syncing}
+                className="px-4 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium disabled:opacity-50"
+              >
+                {syncing ? 'Syncing…' : 'Sync now'}
+              </button>
+            </div>
+            {syncStatus ? (
+              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+                <dt className="text-gray-500">Last run</dt>
+                <dd className="text-gray-900">{fmt(syncStatus.last_run_at)}</dd>
+                <dt className="text-gray-500">Status</dt>
+                <dd className={syncStatus.last_status === 'error' ? 'text-red-600' : 'text-gray-900'}>
+                  {syncStatus.last_status ?? '—'}
+                </dd>
+                <dt className="text-gray-500">Cursor</dt>
+                <dd className="text-gray-900">{fmt(syncStatus.last_result_created_at)}</dd>
+                <dt className="text-gray-500">Initialized</dt>
+                <dd className="text-gray-900">{fmt(syncStatus.cursor_initialized_at)}</dd>
+                {syncStatus.last_error && (
+                  <>
+                    <dt className="text-gray-500">Last error</dt>
+                    <dd className="text-red-600 break-all">{syncStatus.last_error}</dd>
+                  </>
+                )}
+              </dl>
+            ) : (
+              <p className="text-sm text-gray-400">Sync has not run yet for this org.</p>
+            )}
+          </section>
+
+          {/* Award audit log — ledger browser + reversal */}
+          <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+            <h2 className="font-semibold text-gray-900">Award audit log</h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                value={ledgerStudent}
+                onChange={(e) => setLedgerStudent(e.target.value)}
+                placeholder="Filter by student id"
+                className="rounded-lg border border-gray-300 px-2 py-1 text-sm flex-1 min-w-[160px]"
+              />
+              <select
+                value={ledgerKind}
+                onChange={(e) => setLedgerKind(e.target.value as 'all' | 'xp' | 'coin')}
+                className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+              >
+                <option value="all">All</option>
+                <option value="xp">XP</option>
+                <option value="coin">Coins</option>
+              </select>
+              <button
+                onClick={loadLedger}
+                className="px-3 py-1 rounded-lg bg-gray-100 text-gray-700 text-sm font-medium"
+              >
+                Apply
+              </button>
+            </div>
+            {ledgerEntries.length === 0 ? (
+              <p className="text-sm text-gray-400">No ledger entries.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-gray-500">
+                      <th className="py-1 pr-2 font-medium">When</th>
+                      <th className="pr-2 font-medium">Ledger</th>
+                      <th className="pr-2 font-medium">Student</th>
+                      <th className="pr-2 font-medium">Amount</th>
+                      <th className="pr-2 font-medium">Reason</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ledgerEntries.map((e) => (
+                      <tr key={`${e.ledger}-${e.id}`} className="border-t border-gray-100">
+                        <td className="py-1 pr-2 text-gray-500 whitespace-nowrap">{fmt(e.occurred_at)}</td>
+                        <td className="pr-2 uppercase text-gray-600">{e.ledger}</td>
+                        <td className="pr-2 text-gray-600 font-mono text-xs break-all">{e.student_id}</td>
+                        <td className={`pr-2 font-medium ${e.amount < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                          {e.amount}
+                        </td>
+                        <td className="pr-2 text-gray-500">{e.reason ?? e.source ?? '—'}</td>
+                        <td className="text-right">
+                          <button
+                            onClick={() => reverseEntry(e)}
+                            disabled={saving}
+                            className="text-xs text-red-500 disabled:opacity-50"
+                          >
+                            Reverse
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          {/* Manual trophy grant */}
+          <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+            <h2 className="font-semibold text-gray-900">Manual trophy grant</h2>
+            <p className="text-sm text-gray-500">
+              Grant a trophy item to a student (e.g. a late-linking kid within the grace window).
+              Idempotent — granting twice is a no-op.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <input
+                value={grant.student_id}
+                onChange={(e) => setGrant({ ...grant, student_id: e.target.value })}
+                placeholder="Student id"
+                className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+              />
+              <select
+                value={grant.item_id}
+                onChange={(e) => setGrant({ ...grant, item_id: e.target.value })}
+                className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+              >
+                <option value="">— trophy item —</option>
+                {items
+                  .filter((it) => it.kind === 'trophy' && it.id)
+                  .map((it) => (
+                    <option key={it.id} value={it.id}>
+                      {it.name_en || it.sku}
+                    </option>
+                  ))}
+              </select>
+              <select
+                value={grant.season_id}
+                onChange={(e) => setGrant({ ...grant, season_id: e.target.value })}
+                className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+              >
+                <option value="">— season (optional) —</option>
+                {seasons
+                  .filter((s) => s.id)
+                  .map((s) => (
+                    <option key={s.id} value={s.id!}>
+                      {s.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <button
+              onClick={grantTrophy}
+              disabled={saving || !grant.student_id || !grant.item_id}
+              className="px-5 py-2 rounded-lg bg-purple-600 text-white font-medium disabled:opacity-50"
+            >
+              Grant trophy
+            </button>
+          </section>
         </div>
       )}
     </div>
