@@ -20,6 +20,12 @@ import {
   type StreakRow,
   buildProfile,
 } from './profile';
+import { type ItemRow } from './items';
+
+const ITEM_COLS =
+  'id,sku,slot,rarity,kind,price_coins,name_ru,name_kk,name_en,' +
+  'description_ru,description_kk,description_en,art_url,anim_url,' +
+  'available,available_from,available_until,sort_order';
 
 function num(v: unknown): number {
   const n = typeof v === 'string' ? parseFloat(v) : (v as number);
@@ -140,4 +146,111 @@ export async function recomputePlayers(
   }
 
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Cosmetics IO (Phase 2, §7) — catalog, inventory, loadout, atomic purchase.
+// ---------------------------------------------------------------------------
+
+/** Full cosmetic catalog for an org, ascending by sort_order. */
+export async function getItems(orgId: string): Promise<ItemRow[]> {
+  const { data } = await supabaseAdmin
+    .from('items')
+    .select(ITEM_COLS)
+    .eq('organization_id', orgId)
+    .order('sort_order', { ascending: true });
+  return (data ?? []).map((r) => ({
+    ...r,
+    price_coins: r.price_coins == null ? null : num(r.price_coins),
+  })) as ItemRow[];
+}
+
+export interface Inventory {
+  ownedItemIds: string[];
+  loadout: Record<string, string>; // slot → item_id
+}
+
+/** A student's owned item ids and their equipped-per-slot loadout. */
+export async function getInventory(orgId: string, studentId: string): Promise<Inventory> {
+  const [{ data: owned }, { data: loadout }] = await Promise.all([
+    supabaseAdmin
+      .from('player_items')
+      .select('item_id')
+      .eq('organization_id', orgId)
+      .eq('student_id', studentId),
+    supabaseAdmin
+      .from('player_loadout')
+      .select('slot,item_id')
+      .eq('organization_id', orgId)
+      .eq('student_id', studentId),
+  ]);
+  const map: Record<string, string> = {};
+  for (const r of loadout ?? []) map[r.slot as string] = r.item_id as string;
+  return { ownedItemIds: (owned ?? []).map((r) => r.item_id as string), loadout: map };
+}
+
+/** Materialized coin balance (authoritative value is SUM(coin_ledger), §5.2). */
+export async function getCoinBalance(orgId: string, studentId: string): Promise<number> {
+  const { data } = await supabaseAdmin
+    .from('player_gamification')
+    .select('coin_balance')
+    .eq('organization_id', orgId)
+    .eq('student_id', studentId)
+    .maybeSingle();
+  return roundHalf(num(data?.coin_balance));
+}
+
+export interface SpendResult {
+  status: string;
+  balance?: number;
+  price?: number;
+  item_id?: string;
+}
+
+/** Atomic purchase via the spend_coins RPC (balance check + debit + grant). */
+export async function buyItem(
+  orgId: string,
+  studentId: string,
+  itemId: string,
+): Promise<SpendResult> {
+  const { data, error } = await supabaseAdmin.rpc('spend_coins', {
+    p_org: orgId,
+    p_student: studentId,
+    p_item: itemId,
+  });
+  if (error) throw new Error(error.message);
+  return (data ?? { status: 'error' }) as SpendResult;
+}
+
+/** Equip an owned item into its slot (one item per slot). */
+export async function equipItem(
+  orgId: string,
+  studentId: string,
+  slot: string,
+  itemId: string,
+): Promise<void> {
+  await supabaseAdmin.from('player_loadout').upsert(
+    {
+      organization_id: orgId,
+      student_id: studentId,
+      slot,
+      item_id: itemId,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'organization_id,student_id,slot' },
+  );
+}
+
+/** Clear the equipped item in a slot. */
+export async function unequipSlot(
+  orgId: string,
+  studentId: string,
+  slot: string,
+): Promise<void> {
+  await supabaseAdmin
+    .from('player_loadout')
+    .delete()
+    .eq('organization_id', orgId)
+    .eq('student_id', studentId)
+    .eq('slot', slot);
 }
