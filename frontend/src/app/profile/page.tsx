@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useTranslations, useLocale } from 'next-intl'
 import { useEffect, useState } from 'react'
 import { Avatar } from '@/components/gamification/Avatar'
+import { CelebrationController } from '@/components/gamification/CelebrationController'
 import { StreakBanner } from '@/components/gamification/StreakBanner'
 import { XPDisplay } from '@/components/gamification/XPDisplay'
 import LoadingScreen from '@/components/LoadingScreen'
@@ -95,6 +96,9 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-gray-50 animate-page-enter">
+      {/* Rank-up / streak-milestone celebrations (§3, §5.5) */}
+      <CelebrationController profile={profile} />
+
       {/* Profile Header */}
       <div className="bg-gradient-to-br from-purple-600 to-purple-800 text-white">
         <div className="container mx-auto px-4 py-8">

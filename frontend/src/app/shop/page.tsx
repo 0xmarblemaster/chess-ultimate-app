@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useTranslations, useLocale } from 'next-intl';
 import { SLOTS, itemName, type ItemRow } from '@/lib/gamification/items';
 import LoadingScreen from '@/components/LoadingScreen';
+import { AchievementCelebration } from '@/components/gamification/CelebrationOverlay';
 
 interface ShopItem extends ItemRow {
   owned: boolean;
@@ -32,6 +33,7 @@ export default function ShopPage() {
   const [linked, setLinked] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [flash, setFlash] = useState<{ id: string; kind: 'ok' | 'err' } | null>(null);
+  const [unlocked, setUnlocked] = useState<ShopItem | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch('/api/gamification/items');
@@ -59,7 +61,10 @@ export default function ShopPage() {
       const ok = res.status === 200;
       setFlash({ id: item.id, kind: ok ? 'ok' : 'err' });
       setTimeout(() => setFlash(null), 2000);
-      if (ok) await load();
+      if (ok) {
+        setUnlocked(item); // item-unlock celebration (§6)
+        await load();
+      }
     } finally {
       setBusy(null);
     }
@@ -81,6 +86,16 @@ export default function ShopPage() {
 
   return (
     <div className="max-w-4xl mx-auto p-6">
+      {unlocked && (
+        <AchievementCelebration
+          name={itemName(unlocked, locale)}
+          description={t(`shop.slots.${unlocked.slot}`)}
+          icon="🎁"
+          xpReward={0}
+          onClose={() => setUnlocked(null)}
+        />
+      )}
+
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{t('shop.title')}</h1>
