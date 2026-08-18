@@ -104,6 +104,9 @@ vi.mock('@/lib/chess-empire-client', () => ({
 vi.mock('@/lib/gamification/store', () => ({
   loadGamificationProfile: vi.fn(async () => null),
 }));
+vi.mock('@/lib/gamification/standings-store', () => ({
+  buildCurrentStandings: vi.fn(async () => null),
+}));
 
 // Stub the actual visual children so the test focuses on which top-level
 // shell renders rather than re-asserting child markup.

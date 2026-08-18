@@ -35,6 +35,8 @@ import {
   listActiveStudentsByCoach,
 } from '@/lib/chess-empire-client';
 import { loadGamificationProfile } from '@/lib/gamification/store';
+import { buildCurrentStandings } from '@/lib/gamification/standings-store';
+import { type LegionStanding, type StudentProximity, studentProximity } from '@/lib/gamification/standings';
 import type { CECoachProfile } from '@/lib/chess-empire-client';
 import { computeCoachStats } from '@/lib/empire-coach-stats';
 
@@ -194,7 +196,7 @@ export async function renderEmpireHomepage(
     };
   }
 
-  const [ratings, rank, gamification, achievements] = await Promise.all([
+  const [ratings, rank, gamification, achievements, standingsBundle] = await Promise.all([
     getStudentRatings(studentId, 30).catch((err) => {
       console.error('[empire-home] ratings fetch failed', err);
       return [];
@@ -216,7 +218,30 @@ export async function renderEmpireHomepage(
       console.error('[empire-home] achievements fetch failed', err);
       return [];
     }),
+    buildCurrentStandings(orgId).catch((err) => {
+      console.error('[empire-home] standings fetch failed', err);
+      return null;
+    }),
   ]);
+
+  // Caller's own legion standing (§9.2) — members stripped, plus their Top-N
+  // proximity. Best-effort: a missing season / unmapped branch leaves it null.
+  let legionStanding: Omit<LegionStanding, 'members'> | null = null;
+  let topNProximity: StudentProximity | null = null;
+  let topN = 5;
+  if (standingsBundle) {
+    topN = standingsBundle.standings.top_n;
+    const prox = studentProximity(standingsBundle.standings, studentId);
+    topNProximity = prox;
+    if (prox.legion_id) {
+      const ls = standingsBundle.standings.legions.find((l) => l.legion.id === prox.legion_id);
+      if (ls) {
+        const { members, ...rest } = ls;
+        void members;
+        legionStanding = rest;
+      }
+    }
+  }
 
   if (!studentDisplayName) {
     console.warn(
@@ -237,6 +262,9 @@ export async function renderEmpireHomepage(
         bestDefeatedBot={profile.best_defeated_bot ?? null}
         gamification={gamification}
         achievements={achievements}
+        legionStanding={legionStanding}
+        topNProximity={topNProximity}
+        topN={topN}
       />
     ),
   };

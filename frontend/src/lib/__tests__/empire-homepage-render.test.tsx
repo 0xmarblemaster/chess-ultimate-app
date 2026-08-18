@@ -28,6 +28,9 @@ const memberStore: { state: string; role: string; studentId: string | null } = {
 vi.mock('@/lib/gamification/store', () => ({
   loadGamificationProfile: vi.fn(async () => null),
 }));
+vi.mock('@/lib/gamification/standings-store', () => ({
+  buildCurrentStandings: vi.fn(async () => null),
+}));
 
 vi.mock('@/lib/chess-empire-member', () => ({
   getMembershipState: vi.fn(async () => ({

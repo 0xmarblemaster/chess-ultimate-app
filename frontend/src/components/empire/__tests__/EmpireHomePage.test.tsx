@@ -409,3 +409,75 @@ describe('EmpireHomePage — no_link state', () => {
     expect(queryByTestId('pending-banner')).toBeNull();
   });
 });
+
+describe('EmpireHomePage — legion standing widget (§9.2)', () => {
+  const baseStanding = {
+    legion: { id: 'leg-1', name: 'Snow Leopards', totem: '🐆', crest_url: null },
+    points: 487,
+    top_n_wins: 20,
+    place: 2,
+    gap_to_first: 25,
+    gap_to_above: 25,
+    member_count: 8,
+  };
+
+  it('renders the legion standing widget and the Top-N proximity line when scored', async () => {
+    const ui = await EmpireHomePage({
+      state: 'verified',
+      studentDisplayName: 'Ali',
+      profile: aliProfile,
+      ratings: [],
+      rank: emptyRank,
+      legionStanding: baseStanding,
+      topNProximity: {
+        legion_id: 'leg-1',
+        place: 6,
+        in_top_n: false,
+        points_to_top_n: 7,
+        season_points: 40,
+      },
+      topN: 5,
+    });
+    const { getByTestId } = render(ui);
+    const widget = getByTestId('empire-legion-standing');
+    expect(widget.textContent).toContain('Snow Leopards');
+    expect(widget.textContent).toContain('487');
+    // gap-to-next uses gapToNext with the points behind the legion above.
+    expect(widget.textContent).toContain('legion.gapToNext');
+    const proximity = getByTestId('empire-topn-proximity');
+    expect(proximity.textContent).toContain('legion.toTopN');
+  });
+
+  it('shows the in-Top-N copy when the caller is already in the cut', async () => {
+    const ui = await EmpireHomePage({
+      state: 'verified',
+      studentDisplayName: 'Ali',
+      profile: aliProfile,
+      ratings: [],
+      rank: emptyRank,
+      legionStanding: { ...baseStanding, place: 1, gap_to_above: 0 },
+      topNProximity: {
+        legion_id: 'leg-1',
+        place: 1,
+        in_top_n: true,
+        points_to_top_n: 0,
+        season_points: 120,
+      },
+      topN: 5,
+    });
+    const { getByTestId } = render(ui);
+    expect(getByTestId('empire-topn-proximity').textContent).toContain('legion.inTopN');
+  });
+
+  it('omits the widget entirely when there is no legion standing', async () => {
+    const ui = await EmpireHomePage({
+      state: 'verified',
+      studentDisplayName: 'Ali',
+      profile: aliProfile,
+      ratings: [],
+      rank: emptyRank,
+    });
+    const { queryByTestId } = render(ui);
+    expect(queryByTestId('empire-legion-standing')).toBeNull();
+  });
+});

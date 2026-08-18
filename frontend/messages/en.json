@@ -264,7 +264,8 @@
       "none": "You're not in a legion yet.",
       "noSeason": "No active season yet.",
       "season": "Season",
-      "top": "Top {n}"
+      "top": "Top {n}",
+      "gapToNext": "To next place: {points} pts"
     },
     "cup": {
       "title": "Legion Cup",
