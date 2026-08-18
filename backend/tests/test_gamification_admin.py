@@ -140,6 +140,38 @@ class TestSettings:
             )
         assert r.status_code == 400
 
+    def test_put_persists_standings_and_streak_keys(self, client):
+        """Rules tab wires top_n, trophy threshold, unlinked toggle, league
+        thresholds and streak (milestones + freeze windows) — all must survive
+        the whitelist merge so the UI inputs actually persist."""
+        streak = {
+            'bonus_min': 3,
+            'bonus_xp': 2,
+            'milestones': {'3': 3, '5': 5, '10': 10, '20': 25},
+            'freeze_windows': [{'from': '2026-12-25', 'until': '2027-01-08', 'label': 'Winter'}],
+        }
+        with patch('routes.gamification._get_supabase') as mock:
+            _sb(mock, {'organization_members': ADMIN_MEMBER, 'gamification_settings': SAMPLE_SETTINGS})
+            r = client.put(
+                f'/api/admin/organizations/{ORG_ID}/gamification/settings',
+                headers={'X-User-Id': ADMIN_USER_ID},
+                json={'config': {
+                    'top_n': 7,
+                    'min_tournaments_for_trophy': 4,
+                    'count_unlinked_in_standings': True,
+                    'league_thresholds': {'a_min': 900, 'b_min': 500},
+                    'streak': streak,
+                }},
+            )
+        assert r.status_code == 200
+        merged = r.get_json()['config']
+        assert merged['top_n'] == 7
+        assert merged['min_tournaments_for_trophy'] == 4
+        assert merged['count_unlinked_in_standings'] is True
+        assert merged['league_thresholds'] == {'a_min': 900, 'b_min': 500}
+        assert merged['streak']['freeze_windows'][0]['label'] == 'Winter'
+        assert merged['streak']['milestones']['20'] == 25
+
 
 class TestRanks:
     def test_get_returns_ladder(self, client):

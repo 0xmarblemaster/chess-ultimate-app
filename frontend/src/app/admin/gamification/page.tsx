@@ -85,6 +85,7 @@ export default function AdminGamificationPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [newMilestoneWeeks, setNewMilestoneWeeks] = useState('');
 
   const loadItems = () => {
     if (!org?.id) return;
@@ -371,6 +372,52 @@ export default function AdminGamificationPage() {
           </section>
 
           <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+            <h2 className="font-semibold text-gray-900">Standings & trophies</h2>
+            <label className="flex items-center justify-between">
+              <span className="text-sm text-gray-700">Top-N (players scored per legion)</span>
+              {numInput(config.top_n, (n) => setConfig({ ...config, top_n: n }))}
+            </label>
+            <label className="flex items-center justify-between">
+              <span className="text-sm text-gray-700">Min tournaments for trophy</span>
+              {numInput(config.min_tournaments_for_trophy, (n) =>
+                setConfig({ ...config, min_tournaments_for_trophy: n }),
+              )}
+            </label>
+            <label className="flex items-center justify-between">
+              <span className="text-sm text-gray-700">Count unlinked students in standings</span>
+              <input
+                type="checkbox"
+                checked={config.count_unlinked_in_standings}
+                onChange={(e) => setConfig({ ...config, count_unlinked_in_standings: e.target.checked })}
+                className="h-4 w-4 rounded border-gray-300 text-purple-600"
+              />
+            </label>
+            <div className="pt-2">
+              <div className="text-sm font-medium text-gray-700 mb-2">League thresholds (min rating)</div>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">A min</span>
+                  {numInput(config.league_thresholds.a_min, (n) =>
+                    setConfig({
+                      ...config,
+                      league_thresholds: { ...config.league_thresholds, a_min: n },
+                    }),
+                  )}
+                </label>
+                <label className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">B min</span>
+                  {numInput(config.league_thresholds.b_min, (n) =>
+                    setConfig({
+                      ...config,
+                      league_thresholds: { ...config.league_thresholds, b_min: n },
+                    }),
+                  )}
+                </label>
+              </div>
+            </div>
+          </section>
+
+          <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
             <h2 className="font-semibold text-gray-900">Streaks</h2>
             <label className="flex items-center justify-between">
               <span className="text-sm text-gray-700">Min streak for bonus (weeks)</span>
@@ -386,22 +433,130 @@ export default function AdminGamificationPage() {
             </label>
             <div className="pt-2">
               <div className="text-sm font-medium text-gray-700 mb-2">Milestones (weeks → XP)</div>
-              <div className="grid grid-cols-2 gap-2">
-                {Object.entries(config.streak.milestones).map(([weeks, reward]) => (
-                  <label key={weeks} className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">{weeks} wk</span>
-                    {numInput(reward, (n) =>
-                      setConfig({
-                        ...config,
-                        streak: {
-                          ...config.streak,
-                          milestones: { ...config.streak.milestones, [weeks]: n },
-                        },
-                      }),
-                    )}
-                  </label>
-                ))}
+              <div className="space-y-2">
+                {Object.entries(config.streak.milestones)
+                  .sort((a, b) => Number(a[0]) - Number(b[0]))
+                  .map(([weeks, reward]) => (
+                    <div key={weeks} className="flex items-center gap-2">
+                      <span className="text-sm text-gray-600 w-16">{weeks} wk</span>
+                      {numInput(reward, (n) =>
+                        setConfig({
+                          ...config,
+                          streak: {
+                            ...config.streak,
+                            milestones: { ...config.streak.milestones, [weeks]: n },
+                          },
+                        }),
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = { ...config.streak.milestones };
+                          delete next[weeks];
+                          setConfig({ ...config, streak: { ...config.streak, milestones: next } });
+                        }}
+                        className="text-sm text-red-500"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
               </div>
+              <div className="flex items-center gap-2 mt-2">
+                <input
+                  type="number"
+                  value={newMilestoneWeeks}
+                  onChange={(e) => setNewMilestoneWeeks(e.target.value)}
+                  placeholder="weeks"
+                  className="w-24 rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const w = parseInt(newMilestoneWeeks, 10);
+                    if (!w || w <= 0 || config.streak.milestones[String(w)] !== undefined) return;
+                    setConfig({
+                      ...config,
+                      streak: {
+                        ...config.streak,
+                        milestones: { ...config.streak.milestones, [String(w)]: 0 },
+                      },
+                    });
+                    setNewMilestoneWeeks('');
+                  }}
+                  className="text-sm text-purple-600"
+                >
+                  + Add milestone
+                </button>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <div className="text-sm font-medium text-gray-700 mb-2">Holiday freeze windows</div>
+              <p className="text-xs text-gray-400 mb-2">
+                Weeks inside these ranges neither extend nor break streaks (каникулы).
+              </p>
+              <div className="space-y-2">
+                {config.streak.freeze_windows.map((w, i) => {
+                  const setWin = (patch: Partial<{ from: string; until: string; label: string }>) => {
+                    const next = [...config.streak.freeze_windows];
+                    next[i] = { ...w, ...patch };
+                    setConfig({ ...config, streak: { ...config.streak, freeze_windows: next } });
+                  };
+                  return (
+                    <div key={i} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 items-center">
+                      <input
+                        type="date"
+                        value={w.from ?? ''}
+                        onChange={(e) => setWin({ from: e.target.value })}
+                        className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                      />
+                      <input
+                        type="date"
+                        value={w.until ?? ''}
+                        onChange={(e) => setWin({ until: e.target.value })}
+                        className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                      />
+                      <input
+                        value={w.label ?? ''}
+                        placeholder="label"
+                        onChange={(e) => setWin({ label: e.target.value })}
+                        className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setConfig({
+                            ...config,
+                            streak: {
+                              ...config.streak,
+                              freeze_windows: config.streak.freeze_windows.filter((_, j) => j !== i),
+                            },
+                          })
+                        }
+                        className="text-sm text-red-500"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  setConfig({
+                    ...config,
+                    streak: {
+                      ...config.streak,
+                      freeze_windows: [...config.streak.freeze_windows, { from: '', until: '', label: '' }],
+                    },
+                  })
+                }
+                className="mt-2 text-sm text-purple-600"
+              >
+                + Add window
+              </button>
             </div>
           </section>
 
