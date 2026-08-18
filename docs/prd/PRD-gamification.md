@@ -333,7 +333,18 @@ coin_purchases(id, organization_id, student_id, package_id, amount_kzt, provider
 | **3. Legions & Cup** | Legions (+placeholder crests), seasons, standings (current-branch scoring, unlinked-hidden), `/legion` + `/cup`, season auto-freeze + close + trophy job, trophy case, admin Legions+Seasons tabs |
 | **4. Monetization** | Coin packages (admin-defined pricing), purchase flow on Empire Payments rail, admin Coin tab, reconciliation |
 
-All decision blockers are resolved — Phase 1 is ready to dispatch. Phases 1–3 = spec §17 MVP. Phase 4 trails (depends on Empire Payments build) — coins are earnable meanwhile. Per workspace rules: tests every phase (ledger idempotency, reversal, half-point math, streak reset/freeze logic, RPC balance safety, standings math incl. transfer + link/unlink recompute, season close, RLS), suite run from main session before a phase is DONE.
+All decision blockers are resolved — Phase 1 is ready to dispatch. Phases 1–3 = spec §17 MVP. Phase 4 trails (depends on Empire Payments build) — coins are earnable meanwhile.
+
+### 14.1 Mandatory Test Gate (REQUIREMENT — every phase)
+
+No phase may be declared **DONE** until all of the following pass. This is a hard requirement, not guidance:
+
+1. **Unit tests written with the implementation** — every phase ships tests covering its scope (ledger idempotency, reversal, half-point math, streak reset/freeze logic, RPC balance safety, standings math incl. transfer + link/unlink recompute, season close, RLS — as applicable to the phase).
+2. **Full relevant suites re-run from the main session** after Ralph finishes — never trust the agent's self-report. Frontend: `npx vitest run` on all gamification/Empire test files. Backend: `pytest tests/test_gamification_*.py`.
+3. **Pass/fail counts pasted in the completion report.** Any failure = phase is `BLOCKED`, not DONE. Pre-existing unrelated failures noted separately.
+4. **Regression check:** tests from all previous phases must still pass (the suites are cumulative — Phase 3 runs Phase 1+2 tests too).
+
+Phase 1 verification (2026-08-18): frontend 28/28 (gamification lib) + 65/65 (Empire client/UI), backend 9/9 — all green.
 
 ## 15. Decisions Log (was: Open Questions — all resolved 2026-08-17)
 
