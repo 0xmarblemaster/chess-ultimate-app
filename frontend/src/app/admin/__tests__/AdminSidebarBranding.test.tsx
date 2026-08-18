@@ -15,6 +15,17 @@ vi.mock('next/link', () => ({
   ),
 }));
 
+// next-intl — AdminSidebar uses both useTranslations + useLocale for nav labels.
+vi.mock('next-intl', () => ({
+  useTranslations: () => (key: string) => `[${key}]`,
+  useLocale: () => 'en',
+}));
+
+vi.mock('@/components/LanguageSwitcher', () => ({
+  __esModule: true,
+  default: () => <div data-testid="language-switcher" />,
+}));
+
 const mockBranding: { current: Organization } = {
   current: {
     id: '',

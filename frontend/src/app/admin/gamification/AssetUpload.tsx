@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 
 type AssetKind = 'item_art' | 'legion_crest' | 'rank_icon';
 
@@ -33,6 +34,7 @@ export function AssetUpload({
   compact = false,
   className,
 }: AssetUploadProps) {
+  const t = useTranslations('adminGamification.upload');
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,12 +52,12 @@ export function AssetUpload({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.url) {
-        setError(data.error || 'Upload failed');
+        setError(data.error || t('failed'));
         return;
       }
       onChange(data.url as string);
     } catch {
-      setError('Upload failed');
+      setError(t('failed'));
     } finally {
       setUploading(false);
     }
@@ -94,7 +96,7 @@ export function AssetUpload({
             disabled={uploading}
             className="text-xs text-purple-600 disabled:opacity-50"
           >
-            {uploading ? '…' : 'Upload'}
+            {uploading ? t('uploadingShort') : t('upload')}
           </button>
         </div>
         {error && <p className="text-xs text-red-500 mt-1 text-center">{error}</p>}
@@ -118,7 +120,7 @@ export function AssetUpload({
           disabled={uploading}
           className="rounded-lg bg-gray-100 text-gray-700 px-3 py-1 text-sm font-medium disabled:opacity-50 whitespace-nowrap"
         >
-          {uploading ? 'Uploading…' : 'Upload'}
+          {uploading ? t('uploading') : t('upload')}
         </button>
       </div>
       {error && <p className="text-xs text-red-500 mt-1">{error}</p>}

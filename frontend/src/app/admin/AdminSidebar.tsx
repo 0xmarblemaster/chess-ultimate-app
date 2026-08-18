@@ -3,30 +3,32 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
+import { useLocale, useTranslations } from 'next-intl';
 import { useBranding } from '@/contexts/OrganizationContext';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
 
 type MemberRole = 'owner' | 'admin' | 'teacher' | 'student';
 
 interface NavItem {
   href: string;
-  label: string;
+  labelKey: string;
   icon: string;
   roles: MemberRole[];
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: '/admin/dashboard', label: 'Dashboard', icon: '📊', roles: ['owner', 'admin', 'teacher'] },
-  { href: '/admin/students', label: 'Students', icon: '👥', roles: ['owner', 'admin', 'teacher'] },
-  { href: '/admin/courses', label: 'Courses', icon: '📚', roles: ['owner', 'admin'] },
-  { href: '/admin/settings', label: 'Settings', icon: '⚙️', roles: ['owner', 'admin'] },
-  { href: '/admin/settings/domain', label: 'Custom Domain', icon: '🌐', roles: ['owner', 'admin'] },
-  { href: '/admin/settings/sender-domain', label: 'Sender Domain', icon: '✉️', roles: ['owner', 'admin'] },
-  { href: '/admin/settings/team', label: 'Team & Ownership', icon: '🤝', roles: ['owner'] },
-  { href: '/admin/settings/branches', label: 'Branches', icon: '🏢', roles: ['owner', 'admin'] },
-  { href: '/admin/analytics', label: 'Analytics', icon: '📈', roles: ['owner', 'admin', 'teacher'] },
-  { href: '/admin/billing', label: 'Billing', icon: '💳', roles: ['owner'] },
-  { href: '/admin/tournaments', label: 'Tournaments', icon: '🏆', roles: ['owner', 'admin'] },
-  { href: '/admin/gamification', label: 'Gamification', icon: '🎮', roles: ['owner', 'admin'] },
+  { href: '/admin/dashboard', labelKey: 'dashboard', icon: '📊', roles: ['owner', 'admin', 'teacher'] },
+  { href: '/admin/students', labelKey: 'students', icon: '👥', roles: ['owner', 'admin', 'teacher'] },
+  { href: '/admin/courses', labelKey: 'courses', icon: '📚', roles: ['owner', 'admin'] },
+  { href: '/admin/settings', labelKey: 'settings', icon: '⚙️', roles: ['owner', 'admin'] },
+  { href: '/admin/settings/domain', labelKey: 'domain', icon: '🌐', roles: ['owner', 'admin'] },
+  { href: '/admin/settings/sender-domain', labelKey: 'senderDomain', icon: '✉️', roles: ['owner', 'admin'] },
+  { href: '/admin/settings/team', labelKey: 'team', icon: '🤝', roles: ['owner'] },
+  { href: '/admin/settings/branches', labelKey: 'branches', icon: '🏢', roles: ['owner', 'admin'] },
+  { href: '/admin/analytics', labelKey: 'analytics', icon: '📈', roles: ['owner', 'admin', 'teacher'] },
+  { href: '/admin/billing', labelKey: 'billing', icon: '💳', roles: ['owner'] },
+  { href: '/admin/tournaments', labelKey: 'tournaments', icon: '🏆', roles: ['owner', 'admin'] },
+  { href: '/admin/gamification', labelKey: 'gamification', icon: '🎮', roles: ['owner', 'admin'] },
 ];
 
 interface AdminSidebarProps {
@@ -38,6 +40,8 @@ interface AdminSidebarProps {
 export default function AdminSidebar({ currentRole, mobileOpen = false, onClose }: AdminSidebarProps) {
   const pathname = usePathname();
   const branding = useBranding();
+  const t = useTranslations('adminNav');
+  const locale = useLocale();
 
   const visibleItems = NAV_ITEMS.filter(item => item.roles.includes(currentRole));
 
@@ -68,7 +72,7 @@ export default function AdminSidebar({ currentRole, mobileOpen = false, onClose 
           <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
             {branding.name}
           </span>
-          <span className="text-xs text-gray-500 dark:text-gray-400">Admin Panel</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400">{t('panelSubtitle')}</span>
         </div>
       </div>
 
@@ -88,20 +92,21 @@ export default function AdminSidebar({ currentRole, mobileOpen = false, onClose 
               style={isActive ? { color: 'var(--brand-primary)' } : undefined}
             >
               <span className="text-base">{item.icon}</span>
-              <span>{item.label}</span>
+              <span>{t(item.labelKey)}</span>
             </Link>
           );
         })}
       </nav>
 
-      <div className="px-3 py-4 border-t border-gray-200 dark:border-gray-700">
+      <div className="px-3 py-4 border-t border-gray-200 dark:border-gray-700 space-y-1">
+        <LanguageSwitcher currentLocale={locale} variant="minimal" dropUp />
         <Link
           href="/dashboard"
           onClick={onClose}
           className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
         >
           <span className="text-base">←</span>
-          <span>Back to App</span>
+          <span>{t('backToApp')}</span>
         </Link>
       </div>
     </>

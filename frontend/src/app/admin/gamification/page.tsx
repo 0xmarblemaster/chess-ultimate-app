@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { AssetUpload } from './AssetUpload';
 
@@ -136,6 +137,7 @@ function fmt(iso: string | null): string {
 
 export default function AdminGamificationPage() {
   const { org } = useOrganization();
+  const t = useTranslations('adminGamification');
   const [tab, setTab] = useState<
     'rules' | 'ranks' | 'items' | 'legions' | 'seasons' | 'coins' | 'ops'
   >('rules');
@@ -172,7 +174,7 @@ export default function AdminGamificationPage() {
     fetch(`/api/admin/organizations/${org.id}/gamification/items`)
       .then((r) => r.json())
       .then((d) => setItems(d.items ?? []))
-      .catch(() => setError('Failed to load items'));
+      .catch(() => setError(t('errors.loadItems')));
   };
 
   const loadLegions = () => {
@@ -180,7 +182,7 @@ export default function AdminGamificationPage() {
     fetch(`/api/admin/organizations/${org.id}/gamification/legions`)
       .then((r) => r.json())
       .then((d) => setLegions(d.legions ?? []))
-      .catch(() => setError('Failed to load legions'));
+      .catch(() => setError(t('errors.loadLegions')));
   };
 
   const loadSeasons = () => {
@@ -188,7 +190,7 @@ export default function AdminGamificationPage() {
     fetch(`/api/admin/organizations/${org.id}/gamification/seasons`)
       .then((r) => r.json())
       .then((d) => setSeasons(d.seasons ?? []))
-      .catch(() => setError('Failed to load seasons'));
+      .catch(() => setError(t('errors.loadSeasons')));
   };
 
   useEffect(() => {
@@ -196,11 +198,11 @@ export default function AdminGamificationPage() {
     fetch(`/api/admin/organizations/${org.id}/gamification/settings`)
       .then((r) => r.json())
       .then((d) => setConfig(d.config))
-      .catch(() => setError('Failed to load settings'));
+      .catch(() => setError(t('errors.loadSettings')));
     fetch(`/api/admin/organizations/${org.id}/gamification/ranks`)
       .then((r) => r.json())
       .then((d) => setRanks(d.ranks ?? []))
-      .catch(() => setError('Failed to load ranks'));
+      .catch(() => setError(t('errors.loadRanks')));
     loadItems();
     loadLegions();
     loadSeasons();
@@ -225,7 +227,7 @@ export default function AdminGamificationPage() {
       if (!res.ok) throw new Error();
       flash();
     } catch {
-      setError('Save failed');
+      setError(t('errors.save'));
     } finally {
       setSaving(false);
     }
@@ -244,7 +246,7 @@ export default function AdminGamificationPage() {
       if (!res.ok) throw new Error();
       flash();
     } catch {
-      setError('Save failed');
+      setError(t('errors.save'));
     } finally {
       setSaving(false);
     }
@@ -265,7 +267,7 @@ export default function AdminGamificationPage() {
       loadItems();
       flash();
     } catch {
-      setError('Save failed');
+      setError(t('errors.save'));
     } finally {
       setSaving(false);
     }
@@ -302,7 +304,7 @@ export default function AdminGamificationPage() {
       loadLegions();
       flash();
     } catch {
-      setError('Save failed');
+      setError(t('errors.save'));
     } finally {
       setSaving(false);
     }
@@ -337,12 +339,12 @@ export default function AdminGamificationPage() {
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || 'Save failed');
+        throw new Error(d.error || t('errors.save'));
       }
       loadSeasons();
       flash();
     } catch (e) {
-      setError((e as Error).message || 'Save failed');
+      setError((e as Error).message || t('errors.save'));
     } finally {
       setSaving(false);
     }
@@ -354,7 +356,7 @@ export default function AdminGamificationPage() {
 
   const closeSeason = async (season: Season) => {
     if (!org?.id || !season.id) return;
-    if (!confirm(`Close «${season.name}»? Standings freeze and trophies are granted. This cannot be undone.`)) return;
+    if (!confirm(t('seasons.confirmClose', { name: season.name }))) return;
     setSaving(true);
     setError(null);
     try {
@@ -363,11 +365,11 @@ export default function AdminGamificationPage() {
         { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) },
       );
       const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || d.status || 'Close failed');
+      if (!res.ok) throw new Error(d.error || d.status || t('errors.close'));
       loadSeasons();
       flash();
     } catch (e) {
-      setError((e as Error).message || 'Close failed');
+      setError((e as Error).message || t('errors.close'));
     } finally {
       setSaving(false);
     }
@@ -410,7 +412,7 @@ export default function AdminGamificationPage() {
         delete next[id];
         return next;
       });
-      setError('Failed to load standings');
+      setError(t('errors.loadStandings'));
     }
   };
 
@@ -423,7 +425,7 @@ export default function AdminGamificationPage() {
     fetch(`${opsBase()}/sync-status`)
       .then((r) => r.json())
       .then((d) => setSyncStatus(d.status ?? null))
-      .catch(() => setError('Failed to load sync status'));
+      .catch(() => setError(t('errors.loadSyncStatus')));
   };
 
   const loadLedger = () => {
@@ -434,7 +436,7 @@ export default function AdminGamificationPage() {
     fetch(`${opsBase()}/ledger?${qs.toString()}`)
       .then((r) => r.json())
       .then((d) => setLedgerEntries(d.entries ?? []))
-      .catch(() => setError('Failed to load ledger'));
+      .catch(() => setError(t('errors.loadLedger')));
   };
 
   useEffect(() => {
@@ -456,7 +458,7 @@ export default function AdminGamificationPage() {
       loadLedger();
       flash();
     } catch {
-      setError('Sync failed');
+      setError(t('errors.sync'));
     } finally {
       setSyncing(false);
     }
@@ -466,7 +468,7 @@ export default function AdminGamificationPage() {
     if (!org?.id) return;
     if (
       !confirm(
-        `Reverse this ${entry.ledger.toUpperCase()} entry (${entry.amount})? A compensating entry is added — nothing is deleted.`,
+        t('ops.confirmReverse', { ledger: entry.ledger.toUpperCase(), amount: entry.amount }),
       )
     )
       return;
@@ -482,7 +484,7 @@ export default function AdminGamificationPage() {
       loadLedger();
       flash();
     } catch {
-      setError('Reversal failed');
+      setError(t('errors.reversal'));
     } finally {
       setSaving(false);
     }
@@ -503,11 +505,11 @@ export default function AdminGamificationPage() {
         }),
       });
       const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.error || d.status || 'Grant failed');
+      if (!res.ok) throw new Error(d.error || d.status || t('errors.grant'));
       setGrant({ student_id: '', item_id: '', season_id: '' });
       flash();
     } catch (e) {
-      setError((e as Error).message || 'Grant failed');
+      setError((e as Error).message || t('errors.grant'));
     } finally {
       setSaving(false);
     }
@@ -520,7 +522,7 @@ export default function AdminGamificationPage() {
     fetch(`/api/admin/organizations/${org.id}/gamification/coin-packages`)
       .then((r) => r.json())
       .then((d) => setPackages(d.packages ?? []))
-      .catch(() => setError('Failed to load packages'));
+      .catch(() => setError(t('errors.loadPackages')));
   };
 
   const loadPurchases = () => {
@@ -529,7 +531,7 @@ export default function AdminGamificationPage() {
     fetch(`/api/admin/organizations/${org.id}/gamification/coin-purchases${qs}`)
       .then((r) => r.json())
       .then((d) => setPurchases(d.purchases ?? []))
-      .catch(() => setError('Failed to load purchases'));
+      .catch(() => setError(t('errors.loadPurchases')));
   };
 
   useEffect(() => {
@@ -553,12 +555,12 @@ export default function AdminGamificationPage() {
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || 'Save failed');
+        throw new Error(d.error || t('errors.save'));
       }
       loadPackages();
       flash();
     } catch (e) {
-      setError((e as Error).message || 'Save failed');
+      setError((e as Error).message || t('errors.save'));
     } finally {
       setSaving(false);
     }
@@ -583,9 +585,9 @@ export default function AdminGamificationPage() {
   const purchaseAction = async (p: Purchase, action: 'confirm' | 'refund' | 'reject') => {
     if (!org?.id) return;
     const prompts: Record<typeof action, string> = {
-      confirm: `Mark this purchase paid and credit ${p.coins} coins? Idempotent — safe to click once.`,
-      refund: `Refund this purchase? A compensating ledger entry is added; items are not revoked.`,
-      reject: `Reject this claim? No coins are credited.`,
+      confirm: t('coins.confirmConfirm', { coins: p.coins }),
+      refund: t('coins.confirmRefund'),
+      reject: t('coins.confirmReject'),
     };
     if (!confirm(prompts[action])) return;
     setSaving(true);
@@ -597,12 +599,12 @@ export default function AdminGamificationPage() {
       );
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || d.current || d.status || 'Action failed');
+        throw new Error(d.error || d.current || d.status || t('errors.action'));
       }
       loadPurchases();
       flash();
     } catch (e) {
-      setError((e as Error).message || 'Action failed');
+      setError((e as Error).message || t('errors.action'));
     } finally {
       setSaving(false);
     }
@@ -620,43 +622,40 @@ export default function AdminGamificationPage() {
 
   return (
     <div className="p-6 max-w-3xl">
-      <h1 className="text-2xl font-bold text-gray-900 mb-1">Gamification</h1>
-      <p className="text-sm text-gray-500 mb-6">
-        Configure XP rates, coins, streaks and the rank ladder. Nothing is hardcoded — these values
-        drive the sync engine and profiles.
-      </p>
+      <h1 className="text-2xl font-bold text-gray-900 mb-1">{t('title')}</h1>
+      <p className="text-sm text-gray-500 mb-6">{t('subtitle')}</p>
 
       <div className="flex gap-2 mb-6 flex-wrap">
         {(['rules', 'ranks', 'items', 'legions', 'seasons', 'coins', 'ops'] as const).map((tabKey) => (
           <button
             key={tabKey}
             onClick={() => setTab(tabKey)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium capitalize ${
+            className={`px-4 py-2 rounded-lg text-sm font-medium ${
               tab === tabKey ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-700'
             }`}
           >
-            {tabKey}
+            {t(`tabs.${tabKey}`)}
           </button>
         ))}
       </div>
 
       {error && <div className="mb-4 rounded-lg bg-red-50 text-red-600 px-4 py-2 text-sm">{error}</div>}
-      {saved && <div className="mb-4 rounded-lg bg-green-50 text-green-600 px-4 py-2 text-sm">Saved ✓</div>}
+      {saved && <div className="mb-4 rounded-lg bg-green-50 text-green-600 px-4 py-2 text-sm">{t('saved')}</div>}
 
       {tab === 'rules' && config && (
         <div className="space-y-6">
           <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-            <h2 className="font-semibold text-gray-900">XP & coins</h2>
+            <h2 className="font-semibold text-gray-900">{t('rules.xpCoinsHeading')}</h2>
             <label className="flex items-center justify-between">
-              <span className="text-sm text-gray-700">Participation XP</span>
+              <span className="text-sm text-gray-700">{t('rules.participationXp')}</span>
               {numInput(config.participation_xp, (n) => setConfig({ ...config, participation_xp: n }))}
             </label>
             <label className="flex items-center justify-between">
-              <span className="text-sm text-gray-700">Coins per XP</span>
+              <span className="text-sm text-gray-700">{t('rules.coinsPerXp')}</span>
               {numInput(config.coin_per_xp, (n) => setConfig({ ...config, coin_per_xp: n }))}
             </label>
             <div className="pt-2">
-              <div className="text-sm font-medium text-gray-700 mb-2">Win XP by tournament kind</div>
+              <div className="text-sm font-medium text-gray-700 mb-2">{t('rules.winXpHeading')}</div>
               <div className="grid grid-cols-2 gap-2">
                 {WIN_KINDS.map((kind) => (
                   <label key={kind} className="flex items-center justify-between">
@@ -671,19 +670,19 @@ export default function AdminGamificationPage() {
           </section>
 
           <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-            <h2 className="font-semibold text-gray-900">Standings & trophies</h2>
+            <h2 className="font-semibold text-gray-900">{t('rules.standingsHeading')}</h2>
             <label className="flex items-center justify-between">
-              <span className="text-sm text-gray-700">Top-N (players scored per legion)</span>
+              <span className="text-sm text-gray-700">{t('rules.topN')}</span>
               {numInput(config.top_n, (n) => setConfig({ ...config, top_n: n }))}
             </label>
             <label className="flex items-center justify-between">
-              <span className="text-sm text-gray-700">Min tournaments for trophy</span>
+              <span className="text-sm text-gray-700">{t('rules.minTournaments')}</span>
               {numInput(config.min_tournaments_for_trophy, (n) =>
                 setConfig({ ...config, min_tournaments_for_trophy: n }),
               )}
             </label>
             <label className="flex items-center justify-between">
-              <span className="text-sm text-gray-700">Count unlinked students in standings</span>
+              <span className="text-sm text-gray-700">{t('rules.countUnlinked')}</span>
               <input
                 type="checkbox"
                 checked={config.count_unlinked_in_standings}
@@ -692,10 +691,10 @@ export default function AdminGamificationPage() {
               />
             </label>
             <div className="pt-2">
-              <div className="text-sm font-medium text-gray-700 mb-2">League thresholds (min rating)</div>
+              <div className="text-sm font-medium text-gray-700 mb-2">{t('rules.leagueThresholds')}</div>
               <div className="grid grid-cols-2 gap-2">
                 <label className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">A min</span>
+                  <span className="text-sm text-gray-600">{t('rules.aMin')}</span>
                   {numInput(config.league_thresholds.a_min, (n) =>
                     setConfig({
                       ...config,
@@ -704,7 +703,7 @@ export default function AdminGamificationPage() {
                   )}
                 </label>
                 <label className="flex items-center justify-between">
-                  <span className="text-sm text-gray-600">B min</span>
+                  <span className="text-sm text-gray-600">{t('rules.bMin')}</span>
                   {numInput(config.league_thresholds.b_min, (n) =>
                     setConfig({
                       ...config,
@@ -717,27 +716,27 @@ export default function AdminGamificationPage() {
           </section>
 
           <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-            <h2 className="font-semibold text-gray-900">Streaks</h2>
+            <h2 className="font-semibold text-gray-900">{t('rules.streaksHeading')}</h2>
             <label className="flex items-center justify-between">
-              <span className="text-sm text-gray-700">Min streak for bonus (weeks)</span>
+              <span className="text-sm text-gray-700">{t('rules.minStreak')}</span>
               {numInput(config.streak.bonus_min, (n) =>
                 setConfig({ ...config, streak: { ...config.streak, bonus_min: n } }),
               )}
             </label>
             <label className="flex items-center justify-between">
-              <span className="text-sm text-gray-700">Per-week bonus XP</span>
+              <span className="text-sm text-gray-700">{t('rules.perWeekBonus')}</span>
               {numInput(config.streak.bonus_xp, (n) =>
                 setConfig({ ...config, streak: { ...config.streak, bonus_xp: n } }),
               )}
             </label>
             <div className="pt-2">
-              <div className="text-sm font-medium text-gray-700 mb-2">Milestones (weeks → XP)</div>
+              <div className="text-sm font-medium text-gray-700 mb-2">{t('rules.milestonesHeading')}</div>
               <div className="space-y-2">
                 {Object.entries(config.streak.milestones)
                   .sort((a, b) => Number(a[0]) - Number(b[0]))
                   .map(([weeks, reward]) => (
                     <div key={weeks} className="flex items-center gap-2">
-                      <span className="text-sm text-gray-600 w-16">{weeks} wk</span>
+                      <span className="text-sm text-gray-600 w-16">{t('rules.weeksShort', { weeks })}</span>
                       {numInput(reward, (n) =>
                         setConfig({
                           ...config,
@@ -766,7 +765,7 @@ export default function AdminGamificationPage() {
                   type="number"
                   value={newMilestoneWeeks}
                   onChange={(e) => setNewMilestoneWeeks(e.target.value)}
-                  placeholder="weeks"
+                  placeholder={t('rules.weeksPlaceholder')}
                   className="w-24 rounded-lg border border-gray-300 px-2 py-1 text-sm"
                 />
                 <button
@@ -785,16 +784,14 @@ export default function AdminGamificationPage() {
                   }}
                   className="text-sm text-purple-600"
                 >
-                  + Add milestone
+                  {t('rules.addMilestone')}
                 </button>
               </div>
             </div>
 
             <div className="pt-2">
-              <div className="text-sm font-medium text-gray-700 mb-2">Holiday freeze windows</div>
-              <p className="text-xs text-gray-400 mb-2">
-                Weeks inside these ranges neither extend nor break streaks (каникулы).
-              </p>
+              <div className="text-sm font-medium text-gray-700 mb-2">{t('rules.freezeHeading')}</div>
+              <p className="text-xs text-gray-400 mb-2">{t('rules.freezeHelp')}</p>
               <div className="space-y-2">
                 {config.streak.freeze_windows.map((w, i) => {
                   const setWin = (patch: Partial<{ from: string; until: string; label: string }>) => {
@@ -818,7 +815,7 @@ export default function AdminGamificationPage() {
                       />
                       <input
                         value={w.label ?? ''}
-                        placeholder="label"
+                        placeholder={t('rules.labelPlaceholder')}
                         onChange={(e) => setWin({ label: e.target.value })}
                         className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
                       />
@@ -854,7 +851,7 @@ export default function AdminGamificationPage() {
                 }
                 className="mt-2 text-sm text-purple-600"
               >
-                + Add window
+                {t('rules.addWindow')}
               </button>
             </div>
           </section>
@@ -864,7 +861,7 @@ export default function AdminGamificationPage() {
             disabled={saving}
             className="px-5 py-2 rounded-lg bg-purple-600 text-white font-medium disabled:opacity-50"
           >
-            {saving ? 'Saving…' : 'Save rules'}
+            {saving ? t('common.saving') : t('rules.saveButton')}
           </button>
         </div>
       )}
@@ -873,12 +870,12 @@ export default function AdminGamificationPage() {
         <div className="space-y-4">
           <section className="bg-white rounded-xl border border-gray-200 p-5">
             <div className="grid grid-cols-[72px_1fr_1fr_1fr_1fr_100px] gap-2 text-xs font-semibold text-gray-500 mb-2">
-              <span>Icon</span>
-              <span>Code</span>
-              <span>RU</span>
-              <span>KK</span>
-              <span>EN</span>
-              <span>Min XP</span>
+              <span>{t('ranks.colIcon')}</span>
+              <span>{t('ranks.colCode')}</span>
+              <span>{t('ranks.colRu')}</span>
+              <span>{t('ranks.colKk')}</span>
+              <span>{t('ranks.colEn')}</span>
+              <span>{t('ranks.colMinXp')}</span>
             </div>
             {ranks.map((rank, i) => (
               <div key={rank.code} className="grid grid-cols-[72px_1fr_1fr_1fr_1fr_100px] gap-2 mb-2 items-start">
@@ -935,7 +932,7 @@ export default function AdminGamificationPage() {
               }
               className="mt-2 text-sm text-purple-600"
             >
-              + Add rank
+              {t('ranks.addRank')}
             </button>
           </section>
 
@@ -944,17 +941,14 @@ export default function AdminGamificationPage() {
             disabled={saving}
             className="px-5 py-2 rounded-lg bg-purple-600 text-white font-medium disabled:opacity-50"
           >
-            {saving ? 'Saving…' : 'Save ranks'}
+            {saving ? t('common.saving') : t('ranks.saveButton')}
           </button>
         </div>
       )}
 
       {tab === 'items' && (
         <div className="space-y-4">
-          <p className="text-sm text-gray-500">
-            Cosmetic catalog. Prices are in coins; leave price empty for trophy/default items.
-            Art can be swapped later without touching the shop.
-          </p>
+          <p className="text-sm text-gray-500">{t('items.description')}</p>
           {items.map((item, i) => {
             const set = (patch: Partial<Item>) => {
               const next = [...items];
@@ -971,7 +965,7 @@ export default function AdminGamificationPage() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2 flex-1">
                     <input
                       value={item.sku}
-                      placeholder="sku"
+                      placeholder={t('items.skuPlaceholder')}
                       onChange={(e) => set({ sku: e.target.value })}
                       className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
                     />
@@ -1004,26 +998,26 @@ export default function AdminGamificationPage() {
                     </select>
                     <input
                       value={item.name_en}
-                      placeholder="Name EN"
+                      placeholder={t('items.nameEnPlaceholder')}
                       onChange={(e) => set({ name_en: e.target.value })}
                       className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
                     />
                     <input
                       value={item.name_ru}
-                      placeholder="Name RU"
+                      placeholder={t('items.nameRuPlaceholder')}
                       onChange={(e) => set({ name_ru: e.target.value })}
                       className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
                     />
                     <input
                       value={item.name_kk}
-                      placeholder="Name KK"
+                      placeholder={t('items.nameKkPlaceholder')}
                       onChange={(e) => set({ name_kk: e.target.value })}
                       className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
                     />
                     <input
                       type="number"
                       value={item.price_coins ?? ''}
-                      placeholder="price"
+                      placeholder={t('items.pricePlaceholder')}
                       onChange={(e) =>
                         set({ price_coins: e.target.value === '' ? null : parseInt(e.target.value, 10) })
                       }
@@ -1034,7 +1028,7 @@ export default function AdminGamificationPage() {
                       kind="item_art"
                       value={item.art_url}
                       onChange={(url) => set({ art_url: url })}
-                      placeholder="/gamification/items/....svg"
+                      placeholder={t('items.artPlaceholder')}
                       className="col-span-2 md:col-span-4"
                     />
                   </div>
@@ -1044,14 +1038,14 @@ export default function AdminGamificationPage() {
                     onClick={() => deleteItem(item)}
                     className="text-sm text-red-500 px-3 py-1"
                   >
-                    Delete
+                    {t('common.delete')}
                   </button>
                   <button
                     onClick={() => saveItem(item)}
                     disabled={saving}
                     className="rounded-lg bg-purple-600 text-white px-4 py-1 text-sm font-medium disabled:opacity-50"
                   >
-                    Save
+                    {t('common.save')}
                   </button>
                 </div>
               </section>
@@ -1077,17 +1071,14 @@ export default function AdminGamificationPage() {
             }
             className="text-sm text-purple-600"
           >
-            + Add item
+            {t('items.addItem')}
           </button>
         </div>
       )}
 
       {tab === 'legions' && (
         <div className="space-y-4">
-          <p className="text-sm text-gray-500">
-            Each legion maps to a Chess Empire branch. Season points are scored by each
-            legion&apos;s Top-N linked players. Crests can be swapped later.
-          </p>
+          <p className="text-sm text-gray-500">{t('legions.description')}</p>
           {legions.map((legion, i) => {
             const set = (patch: Partial<Legion>) => {
               const next = [...legions];
@@ -1104,19 +1095,19 @@ export default function AdminGamificationPage() {
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-2 flex-1">
                     <input
                       value={legion.name}
-                      placeholder="Name"
+                      placeholder={t('legions.namePlaceholder')}
                       onChange={(e) => set({ name: e.target.value })}
                       className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
                     />
                     <input
                       value={legion.totem ?? ''}
-                      placeholder="Totem"
+                      placeholder={t('legions.totemPlaceholder')}
                       onChange={(e) => set({ totem: e.target.value })}
                       className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
                     />
                     <input
                       value={legion.ce_branch_id ?? ''}
-                      placeholder="CE branch id"
+                      placeholder={t('legions.branchIdPlaceholder')}
                       onChange={(e) => set({ ce_branch_id: e.target.value || null })}
                       className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
                     />
@@ -1125,7 +1116,7 @@ export default function AdminGamificationPage() {
                       kind="legion_crest"
                       value={legion.crest_url ?? ''}
                       onChange={(url) => set({ crest_url: url })}
-                      placeholder="/gamification/crests/....svg"
+                      placeholder={t('legions.crestPlaceholder')}
                       className="col-span-2 md:col-span-3"
                     />
                     <div className="flex items-center gap-2">
@@ -1146,14 +1137,14 @@ export default function AdminGamificationPage() {
                 </div>
                 <div className="flex justify-end gap-2 mt-3">
                   <button onClick={() => deleteLegion(legion)} className="text-sm text-red-500 px-3 py-1">
-                    Delete
+                    {t('common.delete')}
                   </button>
                   <button
                     onClick={() => saveLegion(legion)}
                     disabled={saving}
                     className="rounded-lg bg-purple-600 text-white px-4 py-1 text-sm font-medium disabled:opacity-50"
                   >
-                    Save
+                    {t('common.save')}
                   </button>
                 </div>
               </section>
@@ -1176,17 +1167,14 @@ export default function AdminGamificationPage() {
             }
             className="text-sm text-purple-600"
           >
-            + Add legion
+            {t('legions.addLegion')}
           </button>
         </div>
       )}
 
       {tab === 'seasons' && (
         <div className="space-y-4">
-          <p className="text-sm text-gray-500">
-            One season is active at a time. A season auto-freezes at its end date; confirm
-            <b> Close</b> to finalize standings and grant trophies. Closed seasons are history.
-          </p>
+          <p className="text-sm text-gray-500">{t('seasons.description')}</p>
           {seasons.map((season, i) => {
             const set = (patch: Partial<Season>) => {
               const next = [...seasons];
@@ -1200,7 +1188,7 @@ export default function AdminGamificationPage() {
                 <div className="flex items-center justify-between mb-2">
                   <input
                     value={season.name}
-                    placeholder="Season name"
+                    placeholder={t('seasons.namePlaceholder')}
                     onChange={(e) => set({ name: e.target.value })}
                     className="rounded-lg border border-gray-300 px-2 py-1 text-sm font-medium flex-1 mr-3"
                   />
@@ -1214,12 +1202,12 @@ export default function AdminGamificationPage() {
                     }`}
                   >
                     {season.status}
-                    {season.status === 'active' && frozen ? ' · frozen' : ''}
+                    {season.status === 'active' && frozen ? t('seasons.frozenSuffix') : ''}
                   </span>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                   <label className="text-xs text-gray-500">
-                    Starts
+                    {t('seasons.starts')}
                     <input
                       type="datetime-local"
                       value={toLocalInput(season.starts_at)}
@@ -1229,7 +1217,7 @@ export default function AdminGamificationPage() {
                     />
                   </label>
                   <label className="text-xs text-gray-500">
-                    Ends
+                    {t('seasons.ends')}
                     <input
                       type="datetime-local"
                       value={toLocalInput(season.ends_at)}
@@ -1239,7 +1227,7 @@ export default function AdminGamificationPage() {
                     />
                   </label>
                   <label className="text-xs text-gray-500">
-                    Top-N
+                    {t('seasons.topN')}
                     <input
                       type="number"
                       value={season.top_n ?? 5}
@@ -1249,14 +1237,14 @@ export default function AdminGamificationPage() {
                     />
                   </label>
                   <label className="text-xs text-gray-500 md:col-span-3">
-                    Trophy item
+                    {t('seasons.trophyItem')}
                     <select
                       value={season.trophy_item_id ?? ''}
                       disabled={season.status === 'closed'}
                       onChange={(e) => set({ trophy_item_id: e.target.value || null })}
                       className="w-full rounded-lg border border-gray-300 px-2 py-1 text-sm"
                     >
-                      <option value="">— none —</option>
+                      <option value="">{t('seasons.trophyNone')}</option>
                       {items
                         .filter((it) => it.kind === 'trophy' && it.id)
                         .map((it) => (
@@ -1270,7 +1258,7 @@ export default function AdminGamificationPage() {
                 {season.status !== 'closed' && (
                   <div className="flex flex-wrap justify-end gap-2 mt-3">
                     <button onClick={() => deleteSeason(season)} className="text-sm text-red-500 px-3 py-1">
-                      Delete
+                      {t('common.delete')}
                     </button>
                     {season.status === 'draft' && season.id && (
                       <button
@@ -1278,7 +1266,7 @@ export default function AdminGamificationPage() {
                         disabled={saving}
                         className="rounded-lg bg-green-600 text-white px-4 py-1 text-sm font-medium disabled:opacity-50"
                       >
-                        Activate
+                        {t('seasons.activate')}
                       </button>
                     )}
                     {season.status === 'active' && season.id && (
@@ -1287,7 +1275,7 @@ export default function AdminGamificationPage() {
                         disabled={saving}
                         className="rounded-lg bg-amber-600 text-white px-4 py-1 text-sm font-medium disabled:opacity-50"
                       >
-                        Close & award
+                        {t('seasons.closeAward')}
                       </button>
                     )}
                     <button
@@ -1295,7 +1283,7 @@ export default function AdminGamificationPage() {
                       disabled={saving}
                       className="rounded-lg bg-purple-600 text-white px-4 py-1 text-sm font-medium disabled:opacity-50"
                     >
-                      Save
+                      {t('common.save')}
                     </button>
                   </div>
                 )}
@@ -1309,19 +1297,19 @@ export default function AdminGamificationPage() {
                       className="text-sm text-purple-600 font-medium disabled:opacity-50"
                     >
                       {preview === 'loading'
-                        ? 'Loading standings…'
+                        ? t('seasons.loadingStandings')
                         : preview
-                          ? 'Refresh standings'
-                          : 'Preview standings'}
+                          ? t('seasons.refreshStandings')
+                          : t('seasons.previewStandings')}
                     </button>
                     {preview && preview !== 'loading' && (
                       <div className="mt-3">
                         <div className="text-xs text-gray-400 mb-2">
-                          Read-only · Top-{preview.top_n} scored per legion
-                          {preview.frozen ? ' · ❄️ frozen' : ''}
+                          {t('seasons.standingsMeta', { topN: preview.top_n })}
+                          {preview.frozen ? t('seasons.standingsFrozen') : ''}
                         </div>
                         {preview.legions.length === 0 ? (
-                          <p className="text-sm text-gray-400">No standings yet.</p>
+                          <p className="text-sm text-gray-400">{t('seasons.noStandings')}</p>
                         ) : (
                           <div className="space-y-1">
                             {preview.legions.map((row) => (
@@ -1340,7 +1328,7 @@ export default function AdminGamificationPage() {
                                   {row.legion.name}
                                 </span>
                                 <span className="text-xs text-gray-400">
-                                  {row.member_count} members
+                                  {t('seasons.members', { count: row.member_count })}
                                 </span>
                                 <span className="w-16 text-right font-bold text-purple-600">
                                   {row.points}
@@ -1372,7 +1360,7 @@ export default function AdminGamificationPage() {
             }
             className="text-sm text-purple-600"
           >
-            + Add season
+            {t('seasons.addSeason')}
           </button>
         </div>
       )}
@@ -1382,21 +1370,18 @@ export default function AdminGamificationPage() {
           {/* Base rate + packages (all pricing is admin-created — D-6) */}
           <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-gray-900">Coin packages</h2>
+              <h2 className="font-semibold text-gray-900">{t('coins.packagesHeading')}</h2>
               <span className="text-xs text-gray-400">
-                Base rate: 1 earned XP = {config?.coin_per_xp ?? 1} coin
+                {t('coins.baseRate', { coins: config?.coin_per_xp ?? 1 })}
               </span>
             </div>
-            <p className="text-sm text-gray-500">
-              Parents buy coins for the cosmetics shop. Prices are in ₸ and set entirely here —
-              nothing is hardcoded. Toggle <b>active</b> to hide a package without deleting it.
-            </p>
+            <p className="text-sm text-gray-500">{t('coins.packagesDescription')}</p>
             <div className="grid grid-cols-[1fr_1fr_1fr_auto_auto_auto] gap-2 text-xs font-semibold text-gray-500">
-              <span>Coins</span>
-              <span>Price ₸</span>
-              <span>₸ / coin</span>
-              <span>Order</span>
-              <span>Active</span>
+              <span>{t('coins.colCoins')}</span>
+              <span>{t('coins.colPrice')}</span>
+              <span>{t('coins.colPerCoin')}</span>
+              <span>{t('coins.colOrder')}</span>
+              <span>{t('coins.colActive')}</span>
               <span></span>
             </div>
             {packages.map((pkg, i) => {
@@ -1442,7 +1427,7 @@ export default function AdminGamificationPage() {
                       disabled={saving}
                       className="rounded-lg bg-purple-600 text-white px-3 py-1 text-sm font-medium disabled:opacity-50"
                     >
-                      Save
+                      {t('common.save')}
                     </button>
                     <button
                       onClick={() => deletePackage(pkg)}
@@ -1463,41 +1448,37 @@ export default function AdminGamificationPage() {
               }
               className="text-sm text-purple-600"
             >
-              + Add package
+              {t('coins.addPackage')}
             </button>
           </section>
 
           {/* Manual-confirm queue */}
           <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-gray-900">Purchase queue</h2>
+              <h2 className="font-semibold text-gray-900">{t('coins.queueHeading')}</h2>
               <select
                 value={purchaseFilter}
                 onChange={(e) => setPurchaseFilter(e.target.value as 'pending' | 'all')}
                 className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
               >
-                <option value="pending">Pending</option>
-                <option value="all">All</option>
+                <option value="pending">{t('coins.filterPending')}</option>
+                <option value="all">{t('coins.filterAll')}</option>
               </select>
             </div>
-            <p className="text-sm text-gray-500">
-              A parent taps «Я оплатил(а)» → a pending row lands here. Confirm to credit coins
-              (idempotent — double-clicks can&apos;t double-credit). Refund adds a compensating
-              ledger entry; balance floors at 0.
-            </p>
+            <p className="text-sm text-gray-500">{t('coins.queueDescription')}</p>
             {purchases.length === 0 ? (
-              <p className="text-sm text-gray-400">No purchases.</p>
+              <p className="text-sm text-gray-400">{t('coins.noPurchases')}</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left text-xs text-gray-500">
-                      <th className="py-1 pr-2 font-medium">When</th>
-                      <th className="pr-2 font-medium">Student</th>
-                      <th className="pr-2 font-medium">Coins</th>
-                      <th className="pr-2 font-medium">₸</th>
-                      <th className="pr-2 font-medium">Provider</th>
-                      <th className="pr-2 font-medium">Status</th>
+                      <th className="py-1 pr-2 font-medium">{t('coins.colWhen')}</th>
+                      <th className="pr-2 font-medium">{t('coins.colStudent')}</th>
+                      <th className="pr-2 font-medium">{t('coins.colCoins')}</th>
+                      <th className="pr-2 font-medium">{t('coins.colKzt')}</th>
+                      <th className="pr-2 font-medium">{t('coins.colProvider')}</th>
+                      <th className="pr-2 font-medium">{t('coins.colStatus')}</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -1532,14 +1513,14 @@ export default function AdminGamificationPage() {
                                 disabled={saving}
                                 className="text-xs text-green-600 font-medium disabled:opacity-50 mr-2"
                               >
-                                Confirm
+                                {t('coins.confirm')}
                               </button>
                               <button
                                 onClick={() => purchaseAction(p, 'reject')}
                                 disabled={saving}
                                 className="text-xs text-gray-500 disabled:opacity-50"
                               >
-                                Reject
+                                {t('coins.reject')}
                               </button>
                             </>
                           )}
@@ -1549,7 +1530,7 @@ export default function AdminGamificationPage() {
                               disabled={saving}
                               className="text-xs text-red-500 disabled:opacity-50"
                             >
-                              Refund
+                              {t('coins.refund')}
                             </button>
                           )}
                         </td>
@@ -1568,47 +1549,47 @@ export default function AdminGamificationPage() {
           {/* Sync status + Sync now */}
           <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="font-semibold text-gray-900">Sync status</h2>
+              <h2 className="font-semibold text-gray-900">{t('ops.syncHeading')}</h2>
               <button
                 onClick={runSync}
                 disabled={syncing}
                 className="px-4 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium disabled:opacity-50"
               >
-                {syncing ? 'Syncing…' : 'Sync now'}
+                {syncing ? t('ops.syncing') : t('ops.syncNow')}
               </button>
             </div>
             {syncStatus ? (
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-                <dt className="text-gray-500">Last run</dt>
+                <dt className="text-gray-500">{t('ops.lastRun')}</dt>
                 <dd className="text-gray-900">{fmt(syncStatus.last_run_at)}</dd>
-                <dt className="text-gray-500">Status</dt>
+                <dt className="text-gray-500">{t('ops.status')}</dt>
                 <dd className={syncStatus.last_status === 'error' ? 'text-red-600' : 'text-gray-900'}>
                   {syncStatus.last_status ?? '—'}
                 </dd>
-                <dt className="text-gray-500">Cursor</dt>
+                <dt className="text-gray-500">{t('ops.cursor')}</dt>
                 <dd className="text-gray-900">{fmt(syncStatus.last_result_created_at)}</dd>
-                <dt className="text-gray-500">Initialized</dt>
+                <dt className="text-gray-500">{t('ops.initialized')}</dt>
                 <dd className="text-gray-900">{fmt(syncStatus.cursor_initialized_at)}</dd>
                 {syncStatus.last_error && (
                   <>
-                    <dt className="text-gray-500">Last error</dt>
+                    <dt className="text-gray-500">{t('ops.lastError')}</dt>
                     <dd className="text-red-600 break-all">{syncStatus.last_error}</dd>
                   </>
                 )}
               </dl>
             ) : (
-              <p className="text-sm text-gray-400">Sync has not run yet for this org.</p>
+              <p className="text-sm text-gray-400">{t('ops.syncNever')}</p>
             )}
           </section>
 
           {/* Award audit log — ledger browser + reversal */}
           <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-            <h2 className="font-semibold text-gray-900">Award audit log</h2>
+            <h2 className="font-semibold text-gray-900">{t('ops.auditHeading')}</h2>
             <div className="flex flex-wrap items-center gap-2">
               <input
                 value={ledgerStudent}
                 onChange={(e) => setLedgerStudent(e.target.value)}
-                placeholder="Filter by student id"
+                placeholder={t('ops.filterStudentPlaceholder')}
                 className="rounded-lg border border-gray-300 px-2 py-1 text-sm flex-1 min-w-[160px]"
               />
               <select
@@ -1616,29 +1597,29 @@ export default function AdminGamificationPage() {
                 onChange={(e) => setLedgerKind(e.target.value as 'all' | 'xp' | 'coin')}
                 className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
               >
-                <option value="all">All</option>
-                <option value="xp">XP</option>
-                <option value="coin">Coins</option>
+                <option value="all">{t('ops.filterAll')}</option>
+                <option value="xp">{t('ops.filterXp')}</option>
+                <option value="coin">{t('ops.filterCoin')}</option>
               </select>
               <button
                 onClick={loadLedger}
                 className="px-3 py-1 rounded-lg bg-gray-100 text-gray-700 text-sm font-medium"
               >
-                Apply
+                {t('ops.apply')}
               </button>
             </div>
             {ledgerEntries.length === 0 ? (
-              <p className="text-sm text-gray-400">No ledger entries.</p>
+              <p className="text-sm text-gray-400">{t('ops.noLedger')}</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-left text-xs text-gray-500">
-                      <th className="py-1 pr-2 font-medium">When</th>
-                      <th className="pr-2 font-medium">Ledger</th>
-                      <th className="pr-2 font-medium">Student</th>
-                      <th className="pr-2 font-medium">Amount</th>
-                      <th className="pr-2 font-medium">Reason</th>
+                      <th className="py-1 pr-2 font-medium">{t('ops.colWhen')}</th>
+                      <th className="pr-2 font-medium">{t('ops.colLedger')}</th>
+                      <th className="pr-2 font-medium">{t('ops.colStudent')}</th>
+                      <th className="pr-2 font-medium">{t('ops.colAmount')}</th>
+                      <th className="pr-2 font-medium">{t('ops.colReason')}</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -1658,7 +1639,7 @@ export default function AdminGamificationPage() {
                             disabled={saving}
                             className="text-xs text-red-500 disabled:opacity-50"
                           >
-                            Reverse
+                            {t('ops.reverse')}
                           </button>
                         </td>
                       </tr>
@@ -1671,16 +1652,13 @@ export default function AdminGamificationPage() {
 
           {/* Manual trophy grant */}
           <section className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
-            <h2 className="font-semibold text-gray-900">Manual trophy grant</h2>
-            <p className="text-sm text-gray-500">
-              Grant a trophy item to a student (e.g. a late-linking kid within the grace window).
-              Idempotent — granting twice is a no-op.
-            </p>
+            <h2 className="font-semibold text-gray-900">{t('ops.grantHeading')}</h2>
+            <p className="text-sm text-gray-500">{t('ops.grantDescription')}</p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
               <input
                 value={grant.student_id}
                 onChange={(e) => setGrant({ ...grant, student_id: e.target.value })}
-                placeholder="Student id"
+                placeholder={t('ops.studentIdPlaceholder')}
                 className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
               />
               <select
@@ -1688,7 +1666,7 @@ export default function AdminGamificationPage() {
                 onChange={(e) => setGrant({ ...grant, item_id: e.target.value })}
                 className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
               >
-                <option value="">— trophy item —</option>
+                <option value="">{t('ops.trophyItemOption')}</option>
                 {items
                   .filter((it) => it.kind === 'trophy' && it.id)
                   .map((it) => (
@@ -1702,7 +1680,7 @@ export default function AdminGamificationPage() {
                 onChange={(e) => setGrant({ ...grant, season_id: e.target.value })}
                 className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
               >
-                <option value="">— season (optional) —</option>
+                <option value="">{t('ops.seasonOption')}</option>
                 {seasons
                   .filter((s) => s.id)
                   .map((s) => (
@@ -1717,7 +1695,7 @@ export default function AdminGamificationPage() {
               disabled={saving || !grant.student_id || !grant.item_id}
               className="px-5 py-2 rounded-lg bg-purple-600 text-white font-medium disabled:opacity-50"
             >
-              Grant trophy
+              {t('ops.grantTrophy')}
             </button>
           </section>
         </div>
