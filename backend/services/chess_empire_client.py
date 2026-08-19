@@ -168,7 +168,12 @@ class ChessEmpireClient:
         }
 
     def _functions_headers(self) -> dict:
-        return {'x-api-key': self._service_key(), 'Accept': 'application/json'}
+        key = self._service_key()
+        return {
+            'Authorization': f'Bearer {key}',
+            'x-api-key': key,
+            'Accept': 'application/json',
+        }
 
     def _request_json(self, method: str, url: str, rest: bool) -> Any:
         headers = self._rest_headers() if rest else self._functions_headers()
