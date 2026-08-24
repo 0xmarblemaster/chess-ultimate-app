@@ -26,5 +26,5 @@ export type { SoundKey } from './ReviewSounds';
 export { default as StartReviewButton, canReview } from './StartReviewButton';
 export type { ReviewGame } from './StartReviewButton';
 export { useReviewStore, reviewReducer } from './reviewStore';
-export { startReview, fetchReview } from './reviewApi';
+export { startReview, fetchReview, ReviewFetchError } from './reviewApi';
 export * from './types';

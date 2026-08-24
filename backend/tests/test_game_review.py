@@ -223,3 +223,52 @@ def test_invalid_pgn_returns_400(client, fast_engine):
 
 def test_unknown_review_returns_404(client, fast_engine):
     assert client.get("/api/review/deadbeef").status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Cross-worker status sidecar (fixes the multi-gunicorn-worker 404 storm)
+# ---------------------------------------------------------------------------
+def test_get_review_falls_back_to_status_sidecar(fast_engine):
+    """A poll landing on a worker that never saw the job (empty _JOBS, no cache)
+    reads the shared status sidecar instead of returning a spurious None/404."""
+    rid = "siblingjob"
+    game_review._write_status(rid, "running", 0.4)
+    with game_review._JOBS_LOCK:
+        game_review._JOBS.clear()  # this worker never received the job
+
+    out = game_review.get_review(rid)
+    assert out is not None
+    assert out["status"] == "running"
+    assert out["progress"] == pytest.approx(0.4)
+
+
+def test_get_review_none_when_nothing_exists(fast_engine):
+    with game_review._JOBS_LOCK:
+        game_review._JOBS.clear()
+    assert game_review.get_review("genuinely-unknown-id") is None
+
+
+def test_submit_dedupes_against_sibling_sidecar(fast_engine):
+    """A duplicate submit landing on another worker (empty _JOBS) honours the
+    sidecar and returns the in-flight status without enqueueing a 2nd analysis."""
+    rid = game_review.pgn_hash(SCHOLARS_MATE_PGN)
+    game_review._write_status(rid, "running", 0.2)
+    with game_review._JOBS_LOCK:
+        game_review._JOBS.clear()
+
+    qsize_before = game_review._QUEUE.qsize()
+    review_id, status = game_review.submit_review(SCHOLARS_MATE_PGN)
+    assert review_id == rid
+    assert status == "running"
+    assert game_review._QUEUE.qsize() == qsize_before  # not re-enqueued
+
+
+def test_status_sidecar_removed_when_done(client, fast_engine):
+    """Once analysis completes the sidecar is deleted so the full result cache is
+    the single source of truth — a later 404 then means genuinely unknown."""
+    body = client.post("/api/review", json={"pgn": SCHOLARS_MATE_PGN}).get_json()
+    rid = body["review_id"]
+    _poll_until_done(client, rid)
+
+    assert game_review._read_status(rid) is None
+    assert game_review._read_cache(rid) is not None

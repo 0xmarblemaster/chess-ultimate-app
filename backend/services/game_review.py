@@ -357,6 +357,51 @@ def _write_cache(review_id: str, result: dict) -> None:
     os.replace(tmp, _cache_path(review_id))
 
 
+# --- Cross-worker status sidecar -------------------------------------------
+# gunicorn runs several worker processes and ``_JOBS`` is a per-process dict, so
+# a poll can land on a worker that never received the job → a spurious 404 while
+# analysis is still running. This sidecar records {status, progress} on disk so
+# EVERY worker reports a consistent in-flight status. It is deleted once the full
+# result cache lands (that file then becomes the single source of truth), which
+# means a 404 reliably means "genuinely unknown id".
+def _status_path(review_id: str) -> str:
+    return os.path.join(CACHE_DIR, f"{review_id}.status.json")
+
+
+def _write_status(
+    review_id: str, status: str, progress: float, error: str | None = None
+) -> None:
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    payload: dict = {"status": status, "progress": progress}
+    if error is not None:
+        payload["error"] = error
+    tmp = _status_path(review_id) + ".tmp"
+    try:
+        with open(tmp, "w") as fh:
+            json.dump(payload, fh)
+        os.replace(tmp, _status_path(review_id))
+    except OSError:
+        logger.warning("Could not write review status sidecar for %s", review_id)
+
+
+def _read_status(review_id: str) -> dict | None:
+    path = _status_path(review_id)
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path) as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+
+
+def _delete_status(review_id: str) -> None:
+    try:
+        os.remove(_status_path(review_id))
+    except OSError:
+        pass
+
+
 # In-memory job state: review_id -> {status, progress, result, error}.
 _JOBS: dict[str, dict] = {}
 _JOBS_LOCK = threading.Lock()
@@ -376,16 +421,29 @@ def _worker_loop() -> None:
         review_id, pgn, depth = _QUEUE.get()
         try:
             _set_job(review_id, status="running", progress=0.0)
+            _write_status(review_id, "running", 0.0)
+
+            last_step = -1
 
             def _progress(evaluated: int, total: int, _id=review_id) -> None:
-                _set_job(_id, progress=(evaluated / total) if total else 0.0)
+                nonlocal last_step
+                frac = (evaluated / total) if total else 0.0
+                _set_job(_id, progress=frac)
+                # Throttle disk writes to ~5% steps so sibling workers can show
+                # progress without a filesystem write on every ply.
+                step = int(frac * 20)
+                if step != last_step:
+                    last_step = step
+                    _write_status(_id, "running", frac)
 
             result = analyze_game(pgn, depth=depth, progress_cb=_progress)
             _write_cache(review_id, result)
             _set_job(review_id, status="done", progress=1.0, result=result)
+            _delete_status(review_id)  # full cache is now the source of truth
         except Exception as exc:  # noqa: BLE001 — surface any analysis failure
             logger.exception("Game review %s failed", review_id)
             _set_job(review_id, status="error", error=str(exc))
+            _write_status(review_id, "error", 0.0, error=str(exc))
         finally:
             _QUEUE.task_done()
 
@@ -413,6 +471,12 @@ def submit_review(pgn: str, depth: int = DEPTH) -> tuple[str, str]:
         existing = _JOBS.get(review_id)
         if existing and existing["status"] in ("queued", "running", "done"):
             return review_id, existing["status"]
+        # Another gunicorn worker may already be analyzing this exact game — the
+        # sidecar is the only cross-process signal we have. Honour it so a
+        # duplicate POST doesn't kick off a second identical analysis.
+        sidecar = _read_status(review_id)
+        if sidecar and sidecar.get("status") in ("queued", "running"):
+            return review_id, sidecar["status"]
         _JOBS[review_id] = {
             "status": "queued",
             "progress": 0.0,
@@ -420,6 +484,7 @@ def submit_review(pgn: str, depth: int = DEPTH) -> tuple[str, str]:
             "error": None,
         }
 
+    _write_status(review_id, "queued", 0.0)
     _QUEUE.put((review_id, pgn, depth))
     return review_id, "queued"
 
@@ -433,10 +498,23 @@ def get_review(review_id: str) -> dict | None:
 
     if job is None:
         cached = _read_cache(review_id)
-        if cached is None:
-            return None
-        _set_job(review_id, status="done", progress=1.0, result=cached)
-        job = {"status": "done", "progress": 1.0, "result": cached, "error": None}
+        if cached is not None:
+            _set_job(review_id, status="done", progress=1.0, result=cached)
+            job = {"status": "done", "progress": 1.0, "result": cached, "error": None}
+        else:
+            # No in-memory job and no cached result on this worker: the job may be
+            # in-flight on a sibling worker. Fall back to the shared status
+            # sidecar so we report queued/running instead of a spurious 404.
+            sidecar = _read_status(review_id)
+            if sidecar is None:
+                return None
+            out: dict = {
+                "status": sidecar.get("status", "running"),
+                "progress": round(sidecar.get("progress", 0.0), 4),
+            }
+            if sidecar.get("status") == "error" and sidecar.get("error"):
+                out["error"] = sidecar["error"]
+            return out
 
     out: dict = {"status": job["status"], "progress": round(job["progress"], 4)}
     if job["status"] == "done" and job.get("result") is not None:

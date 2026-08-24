@@ -1,5 +1,17 @@
 import type { ReviewJob } from './types';
 
+/** Thrown by {@link fetchReview} on a non-2xx poll, carrying the HTTP status so
+ *  the caller can distinguish a terminal 404 (unknown id) from a retryable
+ *  network/5xx blip. */
+export class ReviewFetchError extends Error {
+  status: number;
+  constructor(status: number) {
+    super(`Review fetch failed (${status})`);
+    this.name = 'ReviewFetchError';
+    this.status = status;
+  }
+}
+
 /** POST a PGN to the review pipeline. Returns the review id + initial status. */
 export async function startReview(pgn: string): Promise<{ review_id: string; status: string }> {
   const res = await fetch('/api/review', {
@@ -18,7 +30,7 @@ export async function startReview(pgn: string): Promise<{ review_id: string; sta
 export async function fetchReview(id: string): Promise<ReviewJob> {
   const res = await fetch(`/api/review/${id}`, { cache: 'no-store' });
   if (!res.ok) {
-    throw new Error(`Review fetch failed (${res.status})`);
+    throw new ReviewFetchError(res.status);
   }
   return res.json();
 }

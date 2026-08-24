@@ -11,6 +11,7 @@ import {
   EvalGraph,
   useReviewStore,
   fetchReview,
+  ReviewFetchError,
 } from '@/components/review';
 import type { EngineEval } from '@/components/review';
 
@@ -59,8 +60,18 @@ function ReviewPageInner() {
         }
         if (job.status === 'error') return;
         timer = setTimeout(poll, POLL_MS);
-      } catch {
-        if (!cancelled) timer = setTimeout(poll, POLL_MS);
+      } catch (err) {
+        if (cancelled) return;
+        // A 4xx (notably 404 = unknown id) is terminal — the backend sidecar
+        // means an in-flight job now reports queued/running, so a 404 is a real
+        // "not found", not a transient cross-worker miss. Stop polling and show
+        // the error instead of looping forever. Retry only network/5xx blips.
+        const httpStatus = err instanceof ReviewFetchError ? err.status : 0;
+        if (httpStatus >= 400 && httpStatus < 500) {
+          setStatus('error');
+          return;
+        }
+        timer = setTimeout(poll, POLL_MS);
       }
     };
     poll();
