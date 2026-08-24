@@ -1701,17 +1701,8 @@ export default function DebutPage() {
               onFlip={handleFlip}
             />
 
-            {/* Database games are historical → always reviewable. */}
-            {activeGameForTree?.pgn && (
-              <Box sx={{ mt: 1 }}>
-                <StartReviewButton
-                  game={{ pgn: activeGameForTree.pgn, orientation: boardOrientation }}
-                  source="database"
-                  variant="primary"
-                  label="Review this game"
-                />
-              </Box>
-            )}
+            {/* Review button lives in the reachable repertoire layout (see below).
+                Browse mode is parked (disabled) — no duplicate button here. */}
 
             {/* Move history breadcrumb */}
             <Box sx={{
