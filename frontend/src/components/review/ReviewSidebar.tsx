@@ -7,6 +7,7 @@ import PlayersAccuracyRow from './PlayersAccuracyRow';
 import TallyTable from './TallyTable';
 import GameRating from './GameRating';
 import PhaseStats from './PhaseStats';
+import ReviewPanel from './ReviewPanel';
 
 export interface SidebarPlayer {
   name: string;
@@ -19,6 +20,11 @@ export interface ReviewSidebarProps {
   white: SidebarPlayer;
   black: SidebarPlayer;
   onStartReview: () => void;
+  /** Review-mode wiring (Phase 4). */
+  currentPly: number;
+  onSetPly: (ply: number) => void;
+  onStepPly: (delta: number) => void;
+  onExitReview: () => void;
 }
 
 /** Build a short, deterministic coach greeting from the aggregates. */
@@ -54,23 +60,20 @@ export default function ReviewSidebar({
   white,
   black,
   onStartReview,
+  currentPly,
+  onSetPly,
+  onStepPly,
+  onExitReview,
 }: ReviewSidebarProps) {
   if (mode === 'review') {
     return (
-      <aside
-        data-testid="review-sidebar"
-        data-mode="review"
-        style={{ width: 430, maxWidth: '100%', display: 'flex', flexDirection: 'column', gap: 14 }}
-      >
-        <div className="review-card" style={{ padding: 20, textAlign: 'center' }}>
-          <div className="review-heading" style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>
-            Move-by-move review
-          </div>
-          <p style={{ fontSize: 13, opacity: 0.8, margin: 0 }}>
-            The stepper, coach bubble and on-board badges arrive in the next phase.
-          </p>
-        </div>
-      </aside>
+      <ReviewPanel
+        data={data}
+        currentPly={currentPly}
+        onSetPly={onSetPly}
+        onStepPly={onStepPly}
+        onExitReview={onExitReview}
+      />
     );
   }
 

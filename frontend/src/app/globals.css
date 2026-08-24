@@ -996,3 +996,30 @@ html.dark .divide-gray-200 > :not(:last-child) { border-color: #333 !important; 
   );
   background-size: 25% 25%;
 }
+
+/* --- Phase 4: Review walkthrough overlays --- */
+
+/* Square tint on from/to squares = classification colour @ 0.5 opacity.
+   Appears instantly with the move (no fade), per the Chess.com reference. */
+.review-square-tint {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* On-board classification badge, tucked over the destination's top-right
+   corner, popping in on ply change (scale 0 → 1.1 → 1, ~180ms ease-out). */
+.review-board-badge {
+  pointer-events: none;
+  transform-origin: center;
+  animation: review-badge-pop 180ms ease-out;
+}
+
+@keyframes review-badge-pop {
+  0% { transform: scale(0); }
+  70% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .review-board-badge { animation: none; }
+}

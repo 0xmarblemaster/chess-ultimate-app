@@ -17,11 +17,6 @@ import type { EngineEval } from '@/components/review';
 const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 const POLL_MS = 1500;
 
-function uciToLastMove(uci?: string): [string, string] | null {
-  if (!uci || uci.length < 4) return null;
-  return [uci.slice(0, 2), uci.slice(2, 4)];
-}
-
 export default function ReviewPage() {
   // useSearchParams requires a Suspense boundary during prerender.
   return (
@@ -152,7 +147,8 @@ function ReviewPageInner() {
               <ReviewBoard
                 fen={fen}
                 orientation={orientation}
-                lastMove={uciToLastMove(currentMove?.uci)}
+                move={currentMove}
+                animationKey={currentPly}
               />
             </div>
           </section>
@@ -164,6 +160,10 @@ function ReviewPageInner() {
               white={{ name: 'White', rating: data.estRating.w }}
               black={{ name: 'Black', rating: data.estRating.b }}
               onStartReview={() => dispatch({ type: 'setMode', mode: 'review' })}
+              currentPly={currentPly}
+              onSetPly={(ply) => dispatch({ type: 'setPly', ply })}
+              onStepPly={(delta) => dispatch({ type: 'stepPly', delta })}
+              onExitReview={() => dispatch({ type: 'setMode', mode: 'highlights' })}
             />
             <EvalGraph
               moves={data.moves}
