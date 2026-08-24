@@ -1,0 +1,199 @@
+"""
+Tests for the Game Review engine pipeline (Phase 1).
+
+Unit tests use pure math; the pipeline test uses the REAL Stockfish binary at
+/usr/games/stockfish at a low depth so it runs in seconds. Endpoint tests
+monkeypatch the analysis function to keep the queue/cache flow fast and
+deterministic (the pipeline test is the one that exercises the real engine).
+"""
+
+import time
+
+import pytest
+
+from services import game_review
+
+# Scholar's mate — a 7-ply miniature ending in checkmate, White winning.
+SCHOLARS_MATE_PGN = (
+    "1. e4 e5 2. Bc4 Nc6 3. Qh5 Nf6 4. Qxf7# 1-0"
+)
+
+
+# ---------------------------------------------------------------------------
+# Win% conversion
+# ---------------------------------------------------------------------------
+def test_win_percent_zero_cp_is_fifty():
+    assert game_review.win_percent_white({"type": "cp", "value": 0}) == pytest.approx(50.0)
+
+
+def test_win_percent_mate_clamps():
+    assert game_review.win_percent_white({"type": "mate", "value": 3}) == 100.0
+    assert game_review.win_percent_white({"type": "mate", "value": -3}) == 0.0
+
+
+def test_win_percent_symmetry():
+    for cp in (10, 43, 150, 800, -37, -1200):
+        w = game_review.win_percent_white({"type": "cp", "value": cp})
+        b = game_review.win_percent_white({"type": "cp", "value": -cp})
+        assert w + b == pytest.approx(100.0)
+
+
+def test_win_percent_advantage_direction():
+    assert game_review.win_percent_white({"type": "cp", "value": 300}) > 50.0
+    assert game_review.win_percent_white({"type": "cp", "value": -300}) < 50.0
+
+
+# ---------------------------------------------------------------------------
+# Per-move accuracy
+# ---------------------------------------------------------------------------
+def test_move_accuracy_no_loss_is_full():
+    assert game_review.move_accuracy(50.0, 50.0) > 99.0
+
+
+def test_move_accuracy_big_loss_is_low():
+    assert game_review.move_accuracy(90.0, 40.0) < 20.0
+
+
+def test_move_accuracy_gain_clamps_to_100():
+    # A move that improves the mover's win% cannot score above 100.
+    assert game_review.move_accuracy(40.0, 70.0) == 100.0
+
+
+def test_black_move_sign_correctness():
+    """
+    A Black move that IMPROVES Black's position must score high, and a Black
+    blunder must score low. Inputs are White-POV win% before/after; the flip to
+    the mover's POV is what gets the sign right.
+    """
+    # White-POV 60 -> 30 means Black went from 40% to 70% (Black improved).
+    good = game_review.accuracy_for_move(60.0, 30.0, mover_is_white=False)
+    assert good > 99.0
+
+    # White-POV 30 -> 80 means Black went from 70% to 20% (Black blundered).
+    bad = game_review.accuracy_for_move(30.0, 80.0, mover_is_white=False)
+    assert bad < 20.0
+
+    # Same numbers scored as White (naively, without the flip) would be wrong:
+    # verify the White interpretation of the "good" Black move is actually a loss.
+    as_white = game_review.accuracy_for_move(60.0, 30.0, mover_is_white=True)
+    assert as_white < 40.0
+
+
+# ---------------------------------------------------------------------------
+# Full pipeline against the real Stockfish binary
+# ---------------------------------------------------------------------------
+def test_pipeline_scholars_mate():
+    result = game_review.analyze_game(SCHOLARS_MATE_PGN, depth=8)
+
+    assert result["plies"] == 7
+    assert result["engine"] == "sf-d8"
+    assert len(result["moves"]) == 7
+    assert set(result["accuracy"].keys()) == {"w", "b"}
+
+    expected_keys = {
+        "ply", "san", "uci", "fen", "eval", "best", "second",
+        "winPercent", "accuracy",
+    }
+    for i, move in enumerate(result["moves"], start=1):
+        assert move["ply"] == i
+        assert set(move.keys()) == expected_keys
+        assert move["eval"]["type"] in ("cp", "mate")
+        assert isinstance(move["eval"]["value"], int)
+        assert 0.0 <= move["winPercent"] <= 100.0
+        assert 0.0 <= move["accuracy"] <= 100.0
+
+    # White delivers checkmate — the final position is winning for White.
+    last = result["moves"][-1]
+    assert last["san"].startswith("Qxf7")
+    assert last["winPercent"] > 90.0
+
+    # Every non-final ply has an engine best move suggested from the prior position.
+    assert result["moves"][0]["best"] is not None
+    assert result["moves"][0]["best"]["uci"]
+
+
+# ---------------------------------------------------------------------------
+# HTTP endpoints (analysis monkeypatched for speed)
+# ---------------------------------------------------------------------------
+@pytest.fixture
+def client():
+    from flask import Flask
+    from routes.review import review_bp
+
+    app = Flask(__name__)
+    app.config["TESTING"] = True
+    app.register_blueprint(review_bp)
+    return app.test_client()
+
+
+@pytest.fixture
+def fast_engine(monkeypatch, tmp_path):
+    """Replace the heavy Stockfish analysis with a quick deterministic stub and
+    isolate the on-disk cache to a temp dir."""
+    monkeypatch.setattr(game_review, "CACHE_DIR", str(tmp_path))
+
+    def fake_analyze(pgn, depth=game_review.DEPTH, progress_cb=None):
+        if progress_cb:
+            progress_cb(2, 2)
+        return {
+            "moves": [
+                {
+                    "ply": 1, "san": "e4", "uci": "e2e4", "fen": "fen1",
+                    "eval": {"type": "cp", "value": 20},
+                    "best": {"uci": "e2e4", "eval": {"type": "cp", "value": 20}},
+                    "second": None, "winPercent": 51.8, "accuracy": 100.0,
+                },
+            ],
+            "accuracy": {"w": 100.0, "b": 90.0},
+            "engine": f"sf-d{depth}",
+            "plies": 1,
+        }
+
+    monkeypatch.setattr(game_review, "analyze_game", fake_analyze)
+    # Clear any state carried over from the module-level job dict.
+    with game_review._JOBS_LOCK:
+        game_review._JOBS.clear()
+
+
+def _poll_until_done(client, review_id, timeout=5.0):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        resp = client.get(f"/api/review/{review_id}")
+        data = resp.get_json()
+        if data["status"] in ("done", "error"):
+            return data
+        time.sleep(0.02)
+    pytest.fail("review did not finish in time")
+
+
+def test_post_then_poll_to_done(client, fast_engine):
+    resp = client.post("/api/review", json={"pgn": SCHOLARS_MATE_PGN})
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["status"] in ("queued", "done")
+    review_id = body["review_id"]
+
+    data = _poll_until_done(client, review_id)
+    assert data["status"] == "done"
+    assert data["result"]["plies"] == 1
+    assert data["progress"] == 1.0
+
+
+def test_cache_hit_returns_same_id_and_done(client, fast_engine):
+    first = client.post("/api/review", json={"pgn": SCHOLARS_MATE_PGN}).get_json()
+    _poll_until_done(client, first["review_id"])
+
+    # Second request for the same game is an instant cache hit.
+    second = client.post("/api/review", json={"pgn": SCHOLARS_MATE_PGN}).get_json()
+    assert second["review_id"] == first["review_id"]
+    assert second["status"] == "done"
+
+
+def test_invalid_pgn_returns_400(client, fast_engine):
+    assert client.post("/api/review", json={"pgn": "not a real pgn"}).status_code == 400
+    assert client.post("/api/review", json={"pgn": ""}).status_code == 400
+    assert client.post("/api/review", json={}).status_code == 400
+
+
+def test_unknown_review_returns_404(client, fast_engine):
+    assert client.get("/api/review/deadbeef").status_code == 404

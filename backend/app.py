@@ -266,6 +266,13 @@ except ImportError as e:
     logger.warning(f"⚠️  Could not import refunds API: {e}")
 
 try:
+    from routes.review import review_bp
+    app.register_blueprint(review_bp)
+    logger.info("✅ Game Review API registered (engine pipeline, phase 1)")
+except ImportError as e:
+    logger.warning(f"⚠️  Could not import game review API: {e}")
+
+try:
     from commands.lifecycle_emails_cli import register_cli as register_lifecycle_cli
     register_lifecycle_cli(app)
     logger.info("✅ Lifecycle-emails CLI registered (flask lifecycle-emails send-due)")
