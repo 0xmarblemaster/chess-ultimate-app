@@ -178,11 +178,6 @@ export default function PlayPage() {
     history.push({ phase: 'setup', bot: bot.id })
   }
 
-  const handleChangeBot = () => {
-    // Mirror the Back button: pop the `setup` entry back to `selecting`.
-    history.back()
-  }
-
   const startGame = (bot: Bot | null = selectedBot) => {
     if (!bot) return
     setSelectedBot(bot)
@@ -504,7 +499,6 @@ export default function PlayPage() {
             playerColor={playerColor}
             onColorChange={setPlayerColor}
             onPlay={() => startGame()}
-            onChangeBot={handleChangeBot}
           />
         </Box>
       )}

@@ -61,7 +61,7 @@ vi.mock('@/components/play/BotGrid', async () => {
 });
 
 vi.mock('@/components/play/GameSetup', () => ({
-  default: ({ onPlay, onColorChange, onChangeBot }: any) =>
+  default: ({ onPlay, onColorChange }: any) =>
     React.createElement('div', { 'data-testid': 'setup-screen' }, [
       React.createElement('button', { key: 'p', 'data-testid': 'play', onClick: onPlay }, 'play'),
       React.createElement(
@@ -69,15 +69,12 @@ vi.mock('@/components/play/GameSetup', () => ({
         { key: 'b', 'data-testid': 'color-black', onClick: () => onColorChange('black') },
         'black',
       ),
-      React.createElement(
-        'button',
-        { key: 'c', 'data-testid': 'change-bot', onClick: onChangeBot },
-        'change',
-      ),
     ]),
 }));
 
 vi.mock('@/components/play/GameHeader', () => ({ default: () => null }));
+
+vi.mock('@/components/play/PlayFriendCard', () => ({ default: () => null }));
 
 vi.mock('@/components/play/GameDock', () => ({
   default: ({ onNewGame, onResign }: any) =>

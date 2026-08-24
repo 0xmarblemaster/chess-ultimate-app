@@ -50,7 +50,6 @@ describe('GameSetup world theming', () => {
         playerColor="white"
         onColorChange={() => {}}
         onPlay={() => {}}
-        onChangeBot={() => {}}
       />,
     );
     const text = container.textContent ?? '';
@@ -68,7 +67,6 @@ describe('GameSetup avatar', () => {
         playerColor="white"
         onColorChange={() => {}}
         onPlay={() => {}}
-        onChangeBot={() => {}}
       />,
     );
     expect(container.querySelector('img')?.getAttribute('src')).toBe('/bots/test.webp');
@@ -81,7 +79,6 @@ describe('GameSetup avatar', () => {
         playerColor="white"
         onColorChange={() => {}}
         onPlay={() => {}}
-        onChangeBot={() => {}}
       />,
     );
     expect(container.querySelector('img')).toBeNull();
@@ -99,7 +96,6 @@ describe('GameSetup interactions', () => {
         playerColor="white"
         onColorChange={onColorChange}
         onPlay={onPlay}
-        onChangeBot={() => {}}
       />,
     );
     // Color picker exposes three radios.
@@ -108,20 +104,5 @@ describe('GameSetup interactions', () => {
     expect(onColorChange).toHaveBeenCalledWith('black');
     fireEvent.click(getByText(/Play against Testy/));
     expect(onPlay).toHaveBeenCalled();
-  });
-
-  it('fires onChangeBot from the back control', () => {
-    const onChangeBot = vi.fn();
-    const { getByText } = render(
-      <GameSetup
-        bot={makeBot('beginner', '/bots/test.webp')}
-        playerColor="white"
-        onColorChange={() => {}}
-        onPlay={() => {}}
-        onChangeBot={onChangeBot}
-      />,
-    );
-    fireEvent.click(getByText(/Change bot/));
-    expect(onChangeBot).toHaveBeenCalled();
   });
 });

@@ -14,7 +14,6 @@ interface GameSetupProps {
   playerColor: PlayerColor
   onColorChange: (color: PlayerColor) => void
   onPlay: () => void
-  onChangeBot: () => void
   disabled?: boolean
 }
 
@@ -35,7 +34,6 @@ export default function GameSetup({
   playerColor,
   onColorChange,
   onPlay,
-  onChangeBot,
   disabled = false,
 }: GameSetupProps) {
   const t = useTranslations('bots')
@@ -65,8 +63,11 @@ export default function GameSetup({
           sx={{
             position: 'absolute',
             top: 18,
-            left: 22,
+            left: '50%',
+            transform: 'translateX(-50%)',
             display: 'inline-block',
+            textAlign: 'center',
+            whiteSpace: 'nowrap',
             bgcolor: 'rgba(255,255,255,0.28)',
             color: '#fff',
             fontFamily: nunito.style.fontFamily,
@@ -83,29 +84,6 @@ export default function GameSetup({
             {world.emoji}
           </Box>
           {worldName(t, bot.tier)} · {tierLabel(t, bot.tier)}
-        </Box>
-
-        {/* Change bot (back) */}
-        <Box
-          component="button"
-          type="button"
-          onClick={onChangeBot}
-          sx={{
-            position: 'absolute',
-            top: 18,
-            right: 22,
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            color: '#fff',
-            opacity: 0.9,
-            fontFamily: nunito.style.fontFamily,
-            fontWeight: 800,
-            fontSize: '14px',
-            '&:hover': { opacity: 1 },
-          }}
-        >
-          {playText(t, 'changeBot', 'Change bot')} ↺
         </Box>
 
         {/* Wave edge */}
