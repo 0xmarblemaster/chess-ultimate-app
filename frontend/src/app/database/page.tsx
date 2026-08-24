@@ -1813,6 +1813,18 @@ export default function DebutPage() {
             />
             </Box>
 
+            {/* Opened games (database/user) are historical → always reviewable. */}
+            {activeGame?.pgn && (
+              <Box sx={{ mt: 1.5, display: 'flex', justifyContent: 'center', width: '100%' }}>
+                <StartReviewButton
+                  game={{ pgn: activeGame.pgn, orientation: boardOrientation }}
+                  source="database"
+                  variant="primary"
+                  label="Review this game"
+                />
+              </Box>
+            )}
+
             {/* My Games move list — below board when on My Games tab with no game open */}
             {activeTab === 'my-games' && !activeGame && (
               <MyGamesMoveList
