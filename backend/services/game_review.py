@@ -30,11 +30,18 @@ import chess
 import chess.engine
 import chess.pgn
 
+from services import move_classify
+
 logger = logging.getLogger(__name__)
 
 STOCKFISH_PATH = os.environ.get("STOCKFISH_PATH", "/usr/games/stockfish")
 DEPTH = 14  # constant, easy to tune
 MULTIPV = 2  # 2nd-best line is needed by Phase 2 classification
+
+# Result schema version. Phase 1 caches lack classification/aggregates and are
+# treated as cache misses (re-analyzed) so every stored result matches the
+# frozen Phase 2 contract.
+VERSION = 2
 
 _BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE_DIR = os.path.join(_BACKEND_DIR, "data", "game_reviews")
@@ -206,13 +213,70 @@ def analyze_game(pgn: str, depth: int = DEPTH, progress_cb=None) -> dict:
 
     all_win_white = [win_percent_white(e) for e in pos_eval_white]
 
-    result_moves: list[dict] = []
-    color_accuracies: dict[str, list[tuple[int, float]]] = {"w": [], "b": []}
+    def _mover_win(win_white: float, mover_is_white: bool) -> float:
+        return win_white if mover_is_white else 100.0 - win_white
+
+    # Opening / book detection from the position EPDs.
+    epds = [chess.Board(f).epd() for f in fens]
+    opening = move_classify.detect_opening(epds)
+    last_book_ply = opening["lastBookPly"]
+
+    # Build per-ply context and run the stateful classification cascade.
+    ply_contexts: list[dict] = []
     for i in range(1, n + 1):
         mover_is_white = i % 2 == 1  # ply 1 is White
-        acc = accuracy_for_move(
-            all_win_white[i - 1], all_win_white[i], mover_is_white
+        board_before = chess.Board(fens[i - 1])
+        best = pos_best[i - 1]
+        second = pos_second[i - 1]
+        second_win = None
+        if second is not None:
+            second_win = _mover_win(
+                win_percent_white(second["eval"]), mover_is_white
+            )
+        ply_contexts.append(
+            {
+                "is_book": i <= last_book_ply,
+                "board_before": board_before,
+                "move": chess.Move.from_uci(ucis[i - 1]),
+                "played_uci": ucis[i - 1],
+                "best_uci": best["uci"] if best else None,
+                "win_before_mover": _mover_win(all_win_white[i - 1], mover_is_white),
+                "win_after_mover": _mover_win(all_win_white[i], mover_is_white),
+                "second_win_mover": second_win,
+                "n_legal": board_before.legal_moves.count(),
+            }
         )
+    classifications = move_classify.classify_game(ply_contexts)
+
+    # Assemble moves + aggregates. Book plies carry accuracy=null and are
+    # excluded from every accuracy mean; forced plies keep their accuracy value
+    # but are also excluded from the means (Chess.com behaviour).
+    result_moves: list[dict] = []
+    color_accuracies: dict[str, list[tuple[int, float]]] = {"w": [], "b": []}
+    tally = move_classify.empty_tally()
+    phase_accs: dict[str, dict[str, list[float]]] = {
+        p: {"w": [], "b": []} for p in ("opening", "middlegame", "endgame")
+    }
+    key_moments: list[int] = []
+    move_counts = {"w": 0, "b": 0}
+
+    for i in range(1, n + 1):
+        mover_is_white = i % 2 == 1
+        color = "w" if mover_is_white else "b"
+        move_counts[color] += 1
+        cls = classifications[i - 1]
+        phase = move_classify.phase_for_ply(i, last_book_ply, chess.Board(fens[i]))
+        acc = accuracy_for_move(all_win_white[i - 1], all_win_white[i], mover_is_white)
+
+        tally[color][cls] += 1
+        if cls in move_classify.KEY_MOMENT_CLASSES:
+            key_moments.append(i)
+
+        scored = cls not in ("book", "forced")
+        if scored:
+            color_accuracies[color].append((i, acc))
+            phase_accs[phase][color].append(acc)
+
         result_moves.append(
             {
                 "ply": i,
@@ -223,16 +287,35 @@ def analyze_game(pgn: str, depth: int = DEPTH, progress_cb=None) -> dict:
                 "best": pos_best[i - 1],  # best move in the position before the ply
                 "second": pos_second[i - 1],
                 "winPercent": round(all_win_white[i], 1),
-                "accuracy": round(acc, 1),
+                "accuracy": None if cls == "book" else round(acc, 1),
+                "classification": cls,
+                "phase": phase,
             }
         )
-        color_accuracies["w" if mover_is_white else "b"].append((i, acc))
+
+    accuracy = game_accuracy(all_win_white, color_accuracies)
+    phases = {
+        p: {
+            c: (round(sum(v) / len(v), 1) if v else None)
+            for c, v in colors.items()
+        }
+        for p, colors in phase_accs.items()
+    }
+    est_rating = {
+        c: move_classify.est_rating(accuracy[c], move_counts[c]) for c in ("w", "b")
+    }
 
     return {
         "moves": result_moves,
-        "accuracy": game_accuracy(all_win_white, color_accuracies),
+        "accuracy": accuracy,
+        "tally": tally,
+        "estRating": est_rating,
+        "phases": phases,
+        "keyMoments": key_moments,
+        "opening": opening,
         "engine": f"sf-d{depth}",
         "plies": n,
+        "version": VERSION,
     }
 
 
@@ -256,9 +339,14 @@ def _read_cache(review_id: str) -> dict | None:
         return None
     try:
         with open(path) as fh:
-            return json.load(fh)
+            cached = json.load(fh)
     except (OSError, ValueError):
         return None
+    # Phase 1 results (no version / older version) lack the Phase 2 fields —
+    # treat them as misses so the game is re-analyzed against the new contract.
+    if cached.get("version") != VERSION:
+        return None
+    return cached
 
 
 def _write_cache(review_id: str, result: dict) -> None:

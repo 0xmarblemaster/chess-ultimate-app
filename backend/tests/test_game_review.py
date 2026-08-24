@@ -11,7 +11,7 @@ import time
 
 import pytest
 
-from services import game_review
+from services import game_review, move_classify
 
 # Scholar's mate — a 7-ply miniature ending in checkmate, White winning.
 SCHOLARS_MATE_PGN = (
@@ -92,7 +92,7 @@ def test_pipeline_scholars_mate():
 
     expected_keys = {
         "ply", "san", "uci", "fen", "eval", "best", "second",
-        "winPercent", "accuracy",
+        "winPercent", "accuracy", "classification", "phase",
     }
     for i, move in enumerate(result["moves"], start=1):
         assert move["ply"] == i
@@ -100,7 +100,9 @@ def test_pipeline_scholars_mate():
         assert move["eval"]["type"] in ("cp", "mate")
         assert isinstance(move["eval"]["value"], int)
         assert 0.0 <= move["winPercent"] <= 100.0
-        assert 0.0 <= move["accuracy"] <= 100.0
+        assert move["accuracy"] is None or 0.0 <= move["accuracy"] <= 100.0
+        assert move["classification"] in move_classify.CLASSIFICATIONS
+        assert move["phase"] in ("opening", "middlegame", "endgame")
 
     # White delivers checkmate — the final position is winning for White.
     last = result["moves"][-1]
@@ -110,6 +112,23 @@ def test_pipeline_scholars_mate():
     # Every non-final ply has an engine best move suggested from the prior position.
     assert result["moves"][0]["best"] is not None
     assert result["moves"][0]["best"]["uci"]
+
+    # Phase 2 top-level schema is present and internally consistent.
+    assert result["version"] == 2
+    assert set(result["tally"].keys()) == {"w", "b"}
+    total_tally = sum(result["tally"]["w"].values()) + sum(result["tally"]["b"].values())
+    assert total_tally == result["plies"]
+    assert set(result["estRating"].keys()) == {"w", "b"}
+    assert set(result["phases"].keys()) == {"opening", "middlegame", "endgame"}
+    assert all(m in range(1, result["plies"] + 1) for m in result["keyMoments"])
+    assert set(result["opening"].keys()) == {"eco", "name", "lastBookPly"}
+
+    # Opening detected (1. e4 e5 2. Bc4 is a known line) and its book plies are
+    # excluded from accuracy (carry accuracy=null).
+    assert result["opening"]["lastBookPly"] >= 1
+    book_moves = [m for m in result["moves"] if m["classification"] == "book"]
+    assert book_moves
+    assert all(m["accuracy"] is None for m in book_moves)
 
 
 # ---------------------------------------------------------------------------
@@ -141,12 +160,19 @@ def fast_engine(monkeypatch, tmp_path):
                     "ply": 1, "san": "e4", "uci": "e2e4", "fen": "fen1",
                     "eval": {"type": "cp", "value": 20},
                     "best": {"uci": "e2e4", "eval": {"type": "cp", "value": 20}},
-                    "second": None, "winPercent": 51.8, "accuracy": 100.0,
+                    "second": None, "winPercent": 51.8, "accuracy": None,
+                    "classification": "book", "phase": "opening",
                 },
             ],
             "accuracy": {"w": 100.0, "b": 90.0},
+            "tally": move_classify.empty_tally(),
+            "estRating": {"w": 1200, "b": 1200},
+            "phases": {p: {"w": None, "b": None} for p in ("opening", "middlegame", "endgame")},
+            "keyMoments": [],
+            "opening": {"eco": "B00", "name": "King's Pawn Game", "lastBookPly": 1},
             "engine": f"sf-d{depth}",
             "plies": 1,
+            "version": 2,
         }
 
     monkeypatch.setattr(game_review, "analyze_game", fake_analyze)
