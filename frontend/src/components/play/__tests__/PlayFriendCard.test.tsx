@@ -104,37 +104,38 @@ describe('PlayFriendCard horizontal variant — desktop', () => {
 describe('PlayFriendCard horizontal variant — mobile', () => {
   beforeEach(() => setMatchMedia(true)); // mobile
 
-  it('starts collapsed: shows a summary of the defaults + a create button, options hidden', () => {
+  it('starts expanded: shows the option controls + full create button, no summary', () => {
     const { getByTestId, getByText, queryByText } = render(
       <PlayFriendCard variant="horizontal" />,
     );
 
     const toggle = getByTestId('play-friend-toggle');
-    expect(toggle.getAttribute('aria-expanded')).toBe('false');
-    // Default summary reflects the card's existing defaults (5 + 0 · Random).
-    expect(getByText('5 + 0 · Random')).toBeTruthy();
-    // A create button is available without expanding.
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    // The option controls are visible on mount.
+    expect(getByText('TIME CONTROL')).toBeTruthy();
+    expect(getByText('YOUR COLOR')).toBeTruthy();
+    // The full CTA label is shown when expanded.
     expect(getByTestId('create-challenge')).toBeTruthy();
-    // The collapsed pill uses the short CTA label so it can't steal the
-    // toggle's width (locale-proof overlap fix); the full label is not shown.
-    expect(getByText('Create')).toBeTruthy();
-    expect(queryByText('Create game link')).toBeNull();
-    // The option controls are hidden until expanded.
-    expect(queryByText('TIME CONTROL')).toBeNull();
-    expect(queryByText('YOUR COLOR')).toBeNull();
+    expect(getByText('Create game link')).toBeTruthy();
+    // The collapsed-only summary is not shown while expanded.
+    expect(queryByText('5 + 0 · Random')).toBeNull();
   });
 
-  it('expands the options inline when the pill is tapped', () => {
+  it('collapses to a summary + short create button when the pill is tapped', () => {
     const { getByTestId, getByText, queryByText } = render(
       <PlayFriendCard variant="horizontal" />,
     );
 
-    expect(queryByText('TIME CONTROL')).toBeNull();
+    expect(getByText('TIME CONTROL')).toBeTruthy();
     fireEvent.click(getByTestId('play-friend-toggle'));
 
-    expect(getByTestId('play-friend-toggle').getAttribute('aria-expanded')).toBe('true');
-    expect(getByText('TIME CONTROL')).toBeTruthy();
-    expect(getByText('YOUR COLOR')).toBeTruthy();
-    expect(getByText('Create game link')).toBeTruthy();
+    expect(getByTestId('play-friend-toggle').getAttribute('aria-expanded')).toBe('false');
+    // Options hidden, summary of the defaults shown instead.
+    expect(queryByText('TIME CONTROL')).toBeNull();
+    expect(queryByText('YOUR COLOR')).toBeNull();
+    expect(getByText('5 + 0 · Random')).toBeTruthy();
+    // The collapsed pill uses the short CTA label (locale-proof overlap fix).
+    expect(getByText('Create')).toBeTruthy();
+    expect(queryByText('Create game link')).toBeNull();
   });
 });

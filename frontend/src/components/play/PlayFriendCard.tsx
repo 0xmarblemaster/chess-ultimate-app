@@ -78,7 +78,7 @@ export default function PlayFriendCard({ variant = 'card' }: PlayFriendCardProps
   const [color, setColor] = useState<ColorChoice>('random');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
 
   const createChallenge = async () => {
     if (creating) return;
