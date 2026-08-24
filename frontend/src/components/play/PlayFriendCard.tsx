@@ -164,7 +164,7 @@ export default function PlayFriendCard({ variant = 'card' }: PlayFriendCardProps
     </Typography>
   );
 
-  const createButton = (extraSx?: object) => (
+  const createButton = (extraSx?: object, label?: string) => (
     <Button
       variant="contained"
       disabled={creating}
@@ -181,7 +181,9 @@ export default function PlayFriendCard({ variant = 'card' }: PlayFriendCardProps
         ...extraSx,
       }}
     >
-      {creating ? playText(t, 'creating', 'Creating…') : playText(t, 'createGameLink', 'Create game link')}
+      {creating
+        ? playText(t, 'creating', 'Creating…')
+        : label ?? playText(t, 'createGameLink', 'Create game link')}
     </Button>
   );
 
@@ -240,6 +242,7 @@ export default function PlayFriendCard({ variant = 'card' }: PlayFriendCardProps
             sx={{
               flex: 1,
               minWidth: 0,
+              overflow: 'hidden',
               display: 'flex',
               alignItems: 'center',
               gap: 1,
@@ -254,7 +257,17 @@ export default function PlayFriendCard({ variant = 'card' }: PlayFriendCardProps
             }}
           >
             <Box component="span" aria-hidden="true" sx={{ fontSize: 18 }}>🤝</Box>
-            <Box component="span" sx={{ fontWeight: 800, fontSize: '15px', whiteSpace: 'nowrap' }}>
+            <Box
+              component="span"
+              sx={{
+                fontWeight: 800,
+                fontSize: '15px',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                minWidth: 0,
+              }}
+            >
               {playText(t, 'sectionFriend', 'Play a friend')}
             </Box>
             {!expanded && (
@@ -263,6 +276,7 @@ export default function PlayFriendCard({ variant = 'card' }: PlayFriendCardProps
                 sx={{
                   color: '#5C6B85',
                   fontSize: '13px',
+                  minWidth: 0,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
@@ -275,7 +289,11 @@ export default function PlayFriendCard({ variant = 'card' }: PlayFriendCardProps
               {expanded ? '▴' : '▾'}
             </Box>
           </Box>
-          {!expanded && createButton({ py: 1, px: 2, fontSize: '14px' })}
+          {!expanded &&
+            createButton(
+              { py: 1, px: 2, fontSize: '14px', flexShrink: 0 },
+              playText(t, 'createShort', 'Create'),
+            )}
         </Box>
 
         {expanded && (

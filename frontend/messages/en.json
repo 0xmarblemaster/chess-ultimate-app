@@ -2040,6 +2040,7 @@
       "yourColor": "YOUR COLOR",
       "untimed": "Untimed",
       "createGameLink": "Create game link",
+      "createShort": "Create",
       "creating": "Creating…",
       "errCreate": "Could not create the game. Try again.",
       "errNetwork": "Network error. Try again."

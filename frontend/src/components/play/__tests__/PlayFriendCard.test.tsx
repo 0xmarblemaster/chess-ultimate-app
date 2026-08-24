@@ -115,6 +115,10 @@ describe('PlayFriendCard horizontal variant — mobile', () => {
     expect(getByText('5 + 0 · Random')).toBeTruthy();
     // A create button is available without expanding.
     expect(getByTestId('create-challenge')).toBeTruthy();
+    // The collapsed pill uses the short CTA label so it can't steal the
+    // toggle's width (locale-proof overlap fix); the full label is not shown.
+    expect(getByText('Create')).toBeTruthy();
+    expect(queryByText('Create game link')).toBeNull();
     // The option controls are hidden until expanded.
     expect(queryByText('TIME CONTROL')).toBeNull();
     expect(queryByText('YOUR COLOR')).toBeNull();
