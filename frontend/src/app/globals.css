@@ -859,3 +859,140 @@ html.dark .divide-gray-200 > :not(:last-child) { border-color: #333 !important; 
 .lesson-connector-complete {
   background: var(--success);
 }
+
+/* ========================================================================
+   GAME REVIEW — DESIGN SYSTEM (Phase 3)
+   Two layers:
+   1. Classification palette — theme-invariant, exact frozen hex. Read the
+      same on light and dark boards. Move SAN, tally counts, graph dots and
+      board effects all reference these.
+   2. --review-* — themable set. Light = "Chesster Light" (proto2), dark =
+      "Midnight Glass" (proto3). Toggled by data-theme on the .review-root.
+      One component tree, two themes — never two layouts.
+   ======================================================================== */
+
+:root {
+  --color-classification-brilliant: #26C2A3;
+  --color-classification-great: #749BBF;
+  --color-classification-best: #81B64C;
+  --color-classification-excellent: #81B64C;
+  --color-classification-good: #95B776;
+  --color-classification-book: #D5A47D;
+  --color-classification-inaccuracy: #F7C631;
+  --color-classification-mistake: #FFA459;
+  --color-classification-miss: #FF7769;
+  --color-classification-blunder: #FA412D;
+  --color-classification-forced: #9AA0AA;
+}
+
+/* Light theme (default) — proto2 Chesster */
+.review-root {
+  --review-font: var(--font-review-inter, 'Inter'), system-ui, sans-serif;
+  --review-font-heading: var(--font-review-inter, 'Inter'), system-ui, sans-serif;
+  --review-bg: #FAFAFA;
+  --review-card: #ffffff;
+  --review-card-solid: #ffffff;
+  --review-card-border: #F4F4F5;
+  --review-card-shadow: 0 4px 16px rgba(24, 24, 27, 0.08);
+  --review-board-shadow: 0 10px 30px rgba(24, 24, 27, 0.10);
+  --review-text: #27272A;
+  --review-text-dim: #71717A;
+  --review-accent: #0d9488;
+  --review-accent-2: #14B8A6;
+  --review-cta-gradient: linear-gradient(135deg, #14B8A6, #0d9488);
+  --review-cta-shadow: 0 4px 0 #0f766e;
+  --review-tint: #F0FDFA;
+  --review-tint-2: #DCFCE7;
+  --review-neutral: #F4F4F5;
+  --review-board-light: #F0F4FF;
+  --review-board-dark: #B3C2E0;
+  --review-coord: #5B6B8C;
+  --review-evalbar-track: #27272A;
+  --review-evalbar-fill: #ffffff;
+  --review-evalbar-score: #333333;
+  --review-graph-line: #0d9488;
+  --review-glow: transparent;
+
+  font-family: var(--review-font);
+  color: var(--review-text);
+  background: var(--review-bg);
+}
+
+/* Dark theme — proto3 Midnight Glass */
+.review-root[data-theme='dark'] {
+  --review-font-heading: var(--font-review-heading, 'Space Grotesk'), sans-serif;
+  --review-bg: radial-gradient(1200px 700px at 70% -10%, #1E2A4A 0%, #0B1120 55%, #080D18 100%);
+  --review-card: rgba(255, 255, 255, 0.05);
+  --review-card-solid: #1E293B;
+  --review-card-border: rgba(148, 163, 184, 0.12);
+  --review-card-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  --review-board-shadow: 0 0 0 1px rgba(129, 140, 248, 0.25), 0 20px 60px rgba(0, 0, 0, 0.5);
+  --review-text: #E2E8F0;
+  --review-text-dim: #64748B;
+  --review-accent: #818CF8;
+  --review-accent-2: #6366F1;
+  --review-cta-gradient: linear-gradient(135deg, #818CF8, #6366F1);
+  --review-cta-shadow: 0 0 24px rgba(99, 102, 241, 0.45);
+  --review-tint: rgba(129, 140, 248, 0.15);
+  --review-tint-2: rgba(129, 140, 248, 0.15);
+  --review-neutral: rgba(255, 255, 255, 0.04);
+  --review-board-light: #3D4763;
+  --review-board-dark: #252E47;
+  --review-coord: #8B9AC2;
+  --review-evalbar-track: #151B2E;
+  --review-evalbar-fill: #E2E8F0;
+  --review-evalbar-score: #0B1120;
+  --review-graph-line: #818CF8;
+  --review-glow: rgba(129, 140, 248, 0.15);
+}
+
+.review-root { min-height: 100vh; }
+
+.review-card {
+  background: var(--review-card);
+  border: 1px solid var(--review-card-border);
+  border-radius: 16px;
+  box-shadow: var(--review-card-shadow);
+  backdrop-filter: blur(14px);
+}
+
+.review-heading { font-family: var(--review-font-heading); }
+
+.review-cta {
+  background: var(--review-cta-gradient);
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  font-family: var(--review-font-heading);
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: var(--review-cta-shadow);
+  transition: transform 0.1s ease, filter 0.15s ease;
+}
+.review-cta:hover:not(:disabled) { filter: brightness(1.05); }
+.review-cta:active:not(:disabled) { transform: translateY(1px); }
+.review-cta:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+
+.review-ghost-btn {
+  background: var(--review-card);
+  color: var(--review-accent);
+  border: 2px solid var(--review-accent);
+  border-radius: 14px;
+  font-family: var(--review-font-heading);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* Review board squares recoloured from the themable board vars (proto2/proto3).
+   A conic-gradient checker tiled at 25% paints an 8×8 board over chessground. */
+.review-root .cg-wrap { background: transparent; }
+.review-root cg-board {
+  background-color: var(--review-board-light);
+  background-image: conic-gradient(
+    var(--review-board-dark) 0deg 90deg,
+    var(--review-board-light) 90deg 180deg,
+    var(--review-board-dark) 180deg 270deg,
+    var(--review-board-light) 270deg 360deg
+  );
+  background-size: 25% 25%;
+}

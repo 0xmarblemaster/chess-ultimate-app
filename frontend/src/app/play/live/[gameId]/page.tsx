@@ -50,6 +50,27 @@ function tcLabel(initialSec: number | null, incrementSec: number | null): string
   return `${Math.floor(initialSec / 60)} + ${incrementSec ?? 0}`;
 }
 
+/** Rebuild a PGN from the live move list (UCI) so it can be sent to Game Review. */
+function buildReviewPgn(moves: Array<{ san: string | null; uci: string }>): string | undefined {
+  try {
+    const chess = new Chess();
+    for (const m of moves) {
+      if (m.uci && m.uci.length >= 4) {
+        chess.move({
+          from: m.uci.slice(0, 2),
+          to: m.uci.slice(2, 4),
+          promotion: m.uci.slice(4) || undefined,
+        });
+      } else if (m.san) {
+        chess.move(m.san);
+      }
+    }
+    return chess.history().length > 0 ? chess.pgn() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Build the UCI for a board drag, using the chosen promotion piece (queen by default). */
 function moveToUci(fen: string, from: Key, to: Key, promotion?: string): string | null {
   try {
@@ -295,6 +316,7 @@ function LiveGameView() {
           incrementSec={game.incrementSec}
           open={modalOpen}
           onClose={() => setModalOpen(false)}
+          reviewPgn={buildReviewPgn(game.moves)}
         />
       </GameSurface>
     );

@@ -8,6 +8,7 @@ import { fredoka, nunito } from '@/lib/fonts'
 import { LIVE_PLAY_THEME } from '@/lib/livePlayTheme'
 import GameEndModalBase from './GameEndModalBase'
 import type { GameOutcome } from '@/lib/gameOutcome'
+import StartReviewButton from '@/components/review/StartReviewButton'
 
 interface LiveGameEndModalProps {
   /** Result from the player's point of view. */
@@ -23,6 +24,8 @@ interface LiveGameEndModalProps {
   incrementSec: number | null
   open: boolean
   onClose: () => void
+  /** Finished-game PGN; when present a "Game Review" entry point is shown. */
+  reviewPgn?: string
 }
 
 const LIVE_THEME = LIVE_PLAY_THEME
@@ -71,6 +74,7 @@ export default function LiveGameEndModal({
   incrementSec,
   open,
   onClose,
+  reviewPgn,
 }: LiveGameEndModalProps) {
   const t = useTranslations('gameEnd')
   const router = useRouter()
@@ -168,6 +172,15 @@ export default function LiveGameEndModal({
       >
         {t('backToPlay')}
       </Box>
+      {reviewPgn && (
+        <StartReviewButton
+          game={{ pgn: reviewPgn, isFinished: true, orientation: myColor ?? 'white' }}
+          source="online"
+          variant="ghost"
+          label={t('gameReview')}
+          style={{ width: '100%' }}
+        />
+      )}
     </>
   )
 

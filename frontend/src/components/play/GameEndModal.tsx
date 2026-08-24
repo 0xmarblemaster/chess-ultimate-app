@@ -9,6 +9,7 @@ import { nunito } from '@/lib/fonts'
 import BotAvatar from './BotAvatar'
 import GameEndModalBase from './GameEndModalBase'
 import type { GameOutcome } from '@/lib/gameOutcome'
+import StartReviewButton from '@/components/review/StartReviewButton'
 
 interface GameEndModalProps {
   bot: Bot
@@ -25,6 +26,8 @@ interface GameEndModalProps {
   onTryStronger: (nextBot: Bot) => void
   /** Back to bot selection. */
   onChooseAnother: () => void
+  /** Finished-game PGN; when present a "Game Review" entry point is shown. */
+  reviewPgn?: string
 }
 
 const INK = '#28324E'
@@ -56,6 +59,7 @@ export default function GameEndModal({
   onPlayAgain,
   onTryStronger,
   onChooseAnother,
+  reviewPgn,
 }: GameEndModalProps) {
   const t = useTranslations('gameEnd')
   const theme = gameTheme(bot)
@@ -142,6 +146,16 @@ export default function GameEndModal({
         >
           {t('chooseAnother')}
         </Box>
+      )}
+
+      {reviewPgn && (
+        <StartReviewButton
+          game={{ pgn: reviewPgn, isFinished: true }}
+          source="bot"
+          variant="ghost"
+          label={t('gameReview')}
+          style={{ width: '100%' }}
+        />
       )}
     </>
   )

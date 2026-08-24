@@ -22,6 +22,7 @@ import type { MasterGamesFilterState } from '@/components/openings/MasterGamesFi
 import { useLichessExplorer } from '@/hooks/useLichessExplorer';
 import { useReplayStockfish } from '@/hooks/useReplayStockfish';
 import { StockfishErrorBoundary } from '@/components/chess/StockfishErrorBoundary';
+import StartReviewButton from '@/components/review/StartReviewButton';
 
 // Dynamic imports to avoid SSR issues
 const DebutBoard = dynamic(() => import('@/components/openings/DebutBoard'), {
@@ -1699,6 +1700,18 @@ export default function DebutPage() {
               onGoToEnd={() => {}}
               onFlip={handleFlip}
             />
+
+            {/* Database games are historical → always reviewable. */}
+            {activeGameForTree?.pgn && (
+              <Box sx={{ mt: 1 }}>
+                <StartReviewButton
+                  game={{ pgn: activeGameForTree.pgn, orientation: boardOrientation }}
+                  source="database"
+                  variant="primary"
+                  label="Review this game"
+                />
+              </Box>
+            )}
 
             {/* Move history breadcrumb */}
             <Box sx={{

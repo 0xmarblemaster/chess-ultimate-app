@@ -1931,7 +1931,8 @@
     "backToPlay": "Back to Play",
     "tryStronger": "Try a stronger bot",
     "chooseAnother": "Choose another bot",
-    "ariaResult": "You won by checkmate against {botName}"
+    "ariaResult": "You won by checkmate against {botName}",
+    "gameReview": "Game Review"
   },
   "bots": {
     "luna-1100": {

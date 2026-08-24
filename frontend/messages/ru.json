@@ -1931,7 +1931,8 @@
     "backToPlay": "Назад к игре",
     "tryStronger": "Сразись с ботом посильнее",
     "chooseAnother": "Выбрать другого бота",
-    "ariaResult": "Ты победил {botName} матом"
+    "ariaResult": "Ты победил {botName} матом",
+    "gameReview": "Разбор партии"
   },
   "bots": {
     "luna-1100": {

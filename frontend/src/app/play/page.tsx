@@ -618,6 +618,7 @@ export default function PlayPage() {
               onPlayAgain={handlePlayAgain}
               onTryStronger={handleTryStronger}
               onChooseAnother={resetGame}
+              reviewPgn={chess.pgn()}
             />
           )}
         </Box>

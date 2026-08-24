@@ -1931,7 +1931,8 @@
     "backToPlay": "Ойынға оралу",
     "tryStronger": "Күштірек ботпен ойнап көр",
     "chooseAnother": "Басқа бот таңдау",
-    "ariaResult": "Сен {botName} ботын матпен жеңдің"
+    "ariaResult": "Сен {botName} ботын матпен жеңдің",
+    "gameReview": "Ойынды талдау"
   },
   "bots": {
     "luna-1100": {
