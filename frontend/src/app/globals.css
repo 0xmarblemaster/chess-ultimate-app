@@ -983,6 +983,57 @@ html.dark .divide-gray-200 > :not(:last-child) { border-color: #333 !important; 
   cursor: pointer;
 }
 
+/* Review page layout (desktop baseline). These classes replace the page's
+   former inline layout styles so the mobile media query below can override
+   them — inline styles can't be beaten by a media query. Values here match the
+   prior inline styles exactly, so desktop (>=769px) renders unchanged. */
+.review-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 32px;
+}
+
+.review-main {
+  display: flex;
+  gap: 28px;
+  padding: 20px 32px;
+  align-items: flex-start;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.review-board-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.review-board-row {
+  display: flex;
+  gap: 10px;
+}
+
+.review-side-col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 430px;
+  max-width: 100%;
+}
+
+/* Eval bar tracks the board. Desktop keeps the fixed 688; the mobile block
+   below switches it to stretch to the (shrunken) board's height. */
+.review-eval-bar {
+  height: 688px;
+}
+
+/* Accuracy rings row — gutter lives here (not inline) so the mobile block can
+   tighten it. 12px matches the prior inline value, so desktop is unchanged. */
+.review-accuracy-row {
+  gap: 12px;
+}
+
 /* Review board squares recoloured from the themable board vars (proto2/proto3).
    A conic-gradient checker tiled at 25% paints an 8×8 board over chessground. */
 .review-root .cg-wrap { background: transparent; }
@@ -1022,4 +1073,66 @@ html.dark .divide-gray-200 > :not(:last-child) { border-color: #333 !important; 
 
 @media (prefers-reduced-motion: reduce) {
   .review-board-badge { animation: none; }
+}
+
+/* --- Mobile Game Review (<=768px) ---
+   Single column, board-first. The board section gets a real, non-circular
+   width (100% + min-width:0) so ChessgroundBoard's ResizeObserver measures the
+   true viewport-constrained width and the board shrinks below 520px instead of
+   locking and clipping the h-file. All controls stack full-width below. */
+@media (max-width: 768px) {
+  /* Chessground paints its file/rank labels in coord boxes that extend a fixed
+     ~24px past the board edge (empty padding — the glyphs themselves sit inside
+     the board). At desktop widths the page's 32px gutter absorbs that; at phone
+     widths it would spill a few px past the viewport and trip a horizontal
+     scrollbar. Clip the empty spill; the glyphs sit inside the viewport so no
+     label is hidden. (`overflow-x: clip` would be cleaner but Next's
+     lightningcss drops it for the browserslist targets, so use `hidden`.) */
+  .review-root {
+    overflow-x: hidden;
+  }
+
+  .review-topbar {
+    padding: 12px 12px;
+  }
+
+  .review-main {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 16px;
+    padding: 12px 12px;
+  }
+
+  /* Break the shrink-to-fit circular board lock. */
+  .review-board-col {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .review-board-row {
+    min-width: 0;
+  }
+  /* min-width:0 lets the board flex-item shrink past its intrinsic size
+     (the default min-width:auto is what pins it at 520px). */
+  .review-board-row > * {
+    min-width: 0;
+  }
+
+  .review-side-col {
+    width: 100%;
+  }
+
+  /* No fixed 688px on mobile — stretch to the board row's height so the bar
+     ends level with the board instead of leaving a tall empty gap. */
+  .review-eval-bar {
+    height: auto;
+    align-self: stretch;
+  }
+
+  /* Keep the two accuracy rings 2-up but tighten the gutter so they don't
+     cramp on the narrowest phones. */
+  .review-accuracy-row {
+    gap: 8px;
+  }
 }

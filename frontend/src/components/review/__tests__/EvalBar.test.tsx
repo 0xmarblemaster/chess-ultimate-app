@@ -43,4 +43,22 @@ describe('EvalBar', () => {
     expect(fill.style.transform).toBe('translate3d(0, 21%, 0)');
     expect(fill.style.transition).toContain('transform');
   });
+
+  it('sets no inline height by default so the height is driven by the responsive class', () => {
+    const { getByTestId } = render(
+      <EvalBar whiteWinPercent={50} evaluation={{ type: 'cp', value: 0 }} />,
+    );
+    const bar = getByTestId('eval-bar');
+    // Height must come from `.review-eval-bar` (688 desktop / stretch on mobile),
+    // not an inline value — an inline height can't be beaten by a media query.
+    expect(bar.className).toContain('review-eval-bar');
+    expect(bar.style.height).toBe('');
+  });
+
+  it('honours an explicit height override when provided', () => {
+    const { getByTestId } = render(
+      <EvalBar whiteWinPercent={50} evaluation={{ type: 'cp', value: 0 }} height={400} />,
+    );
+    expect(getByTestId('eval-bar').style.height).toBe('400px');
+  });
 });

@@ -91,7 +91,7 @@ export default function ReviewSidebar({
         message={copy.message}
       />
 
-      <div style={{ display: 'flex', gap: 12 }}>
+      <div className="review-accuracy-row" style={{ display: 'flex' }}>
         <AccuracyCard label={white.name} value={data.accuracy.w} color="var(--review-accent)" />
         <AccuracyCard label={black.name} value={data.accuracy.b} color="var(--review-text-dim)" />
       </div>

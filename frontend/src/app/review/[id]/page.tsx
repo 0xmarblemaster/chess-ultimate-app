@@ -101,15 +101,7 @@ function ReviewPageInner() {
 
   return (
     <div className="review-root" data-theme={themeAttr}>
-      <header
-        className="top"
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '14px 32px',
-        }}
-      >
+      <header className="review-topbar">
         <div
           className="review-heading"
           style={{ fontSize: 19, fontWeight: 800, color: 'var(--review-accent)' }}
@@ -142,18 +134,9 @@ function ReviewPageInner() {
           <ReviewProgress progress={progress} status={status === 'running' ? 'running' : 'queued'} />
         )
       ) : (
-        <main
-          style={{
-            display: 'flex',
-            gap: 28,
-            padding: '20px 32px',
-            alignItems: 'flex-start',
-            justifyContent: 'center',
-            flexWrap: 'wrap',
-          }}
-        >
-          <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ display: 'flex', gap: 10 }}>
+        <main className="review-main">
+          <section className="review-board-col">
+            <div className="review-board-row">
               <EvalBar whiteWinPercent={whiteWin} evaluation={evaluation} />
               <ReviewBoard
                 fen={fen}
@@ -164,7 +147,7 @@ function ReviewPageInner() {
             </div>
           </section>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, width: 430, maxWidth: '100%' }}>
+          <div className="review-side-col">
             <ReviewSidebar
               data={data}
               mode={mode}

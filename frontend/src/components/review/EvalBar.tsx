@@ -29,19 +29,26 @@ export interface EvalBarProps {
   whiteWinPercent: number;
   /** White-POV engine eval for the score label. */
   evaluation: EngineEval;
+  /**
+   * Explicit pixel height. When omitted the bar tracks the board via the
+   * `.review-eval-bar` class — a fixed 688 on desktop, and `height:auto` +
+   * `align-self:stretch` on mobile so it matches the shrunken board's height
+   * instead of leaving a tall empty gap.
+   */
   height?: number;
 }
 
-export default function EvalBar({ whiteWinPercent, evaluation, height = 688 }: EvalBarProps) {
+export default function EvalBar({ whiteWinPercent, evaluation, height }: EvalBarProps) {
   const offset = whiteFillOffset(whiteWinPercent);
   const whiteLeads = whiteWinPercent >= 50;
 
   return (
     <div
       data-testid="eval-bar"
+      className="review-eval-bar"
       style={{
         width: 26,
-        height,
+        ...(height !== undefined ? { height } : null),
         position: 'relative',
         overflow: 'hidden',
         borderRadius: 4,
