@@ -39,6 +39,12 @@ interface ChessgroundBoardProps {
   onChange?: (fen: string) => void;
   /** Fired when a square is clicked (left button). In editable mode used for click-to-place. */
   onSelect?: (key: Key) => void;
+  /**
+   * Fired with the board's real rendered pixel size whenever it changes. Lets
+   * callers drive sibling layout (e.g. the review eval bar) from one measured
+   * value instead of relying on Safari's flaky aspect-ratio height derivation.
+   */
+  onSizeChange?: (px: number) => void;
 }
 
 /**
@@ -63,6 +69,7 @@ export default function ChessgroundBoard({
   editable = false,
   onChange,
   onSelect,
+  onSizeChange,
 }: ChessgroundBoardProps) {
   const boardRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -124,6 +131,17 @@ export default function ChessgroundBoard({
       : MAX_DEFAULT_BOARD_SIZE;
 
   const effectiveBoardSize = boardSize ?? responsiveBoardSize;
+
+  // Surface the real rendered pixel size upward whenever it changes so callers
+  // can size siblings from a measured number (guard against redundant calls).
+  const onSizeChangeRef = useRef(onSizeChange);
+  onSizeChangeRef.current = onSizeChange;
+  const lastReportedSizeRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (lastReportedSizeRef.current === effectiveBoardSize) return;
+    lastReportedSizeRef.current = effectiveBoardSize;
+    onSizeChangeRef.current?.(effectiveBoardSize);
+  }, [effectiveBoardSize]);
 
   const onMoveRef = useRef(onMove);
   onMoveRef.current = onMove;

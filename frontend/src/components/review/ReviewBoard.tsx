@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback, useState } from 'react';
 import ChessgroundBoard from '@/components/chess/ChessgroundBoard';
 import ClassificationIcon from './ClassificationIcon';
 import type { Classification } from './ClassificationIcon';
@@ -78,6 +79,8 @@ export interface ReviewBoardProps {
   move?: ReviewBoardMove | null;
   /** Re-key the badge to retrigger the pop-in animation on ply change. */
   animationKey?: number | string;
+  /** Reports the board's real rendered pixel size (used to size the eval bar). */
+  onBoardSize?: (px: number) => void;
 }
 
 function uciSquares(uci?: string): [string, string] | null {
@@ -99,7 +102,21 @@ export default function ReviewBoard({
   orientation = 'white',
   move,
   animationKey,
+  onBoardSize,
 }: ReviewBoardProps) {
+  // The board's real rendered pixel size, measured by ChessgroundBoard. Once
+  // known we drive the box height from it so the box is exactly square in every
+  // browser — Safari mis-derives an aspect-ratio height on shrunk flex items,
+  // which left dead space below the board and stretched the eval bar too tall.
+  const [boardPx, setBoardPx] = useState<number | null>(null);
+  const handleSize = useCallback(
+    (px: number) => {
+      setBoardPx(px);
+      onBoardSize?.(px);
+    },
+    [onBoardSize],
+  );
+
   const squares = uciSquares(move?.uci);
   const bestSquares = uciSquares(move?.best?.uci);
   const showBestArrow =
@@ -114,7 +131,9 @@ export default function ReviewBoard({
         position: 'relative',
         width: '100%',
         maxWidth: 520,
-        aspectRatio: '1 / 1',
+        // Height comes from the measured board px once known (square guaranteed);
+        // aspectRatio is only a first-paint fallback before the measurement lands.
+        ...(boardPx != null ? { height: boardPx } : { aspectRatio: '1 / 1' }),
         borderRadius: 16,
         boxShadow: 'var(--review-board-shadow)',
       }}
@@ -122,6 +141,7 @@ export default function ReviewBoard({
       <ChessgroundBoard
         fen={fen}
         orientation={orientation}
+        onSizeChange={handleSize}
         movable={false}
         viewOnly
         animationDuration={PIECE_ANIMATION_MS}

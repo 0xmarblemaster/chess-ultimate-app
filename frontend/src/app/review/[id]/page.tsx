@@ -38,6 +38,10 @@ function ReviewPageInner() {
   const { state, dispatch } = useReviewStore(id);
   const { data, currentPly, mode } = state;
 
+  // Board's real rendered pixel size, reported by ReviewBoard. Drives the eval
+  // bar height from one measured value so the bar matches the board exactly.
+  const [boardPx, setBoardPx] = useState<number | undefined>(undefined);
+
   // Poll the backend until the analysis is done (or errors).
   const done = data != null;
   const [progress, setProgressVal] = useState(0);
@@ -138,12 +142,13 @@ function ReviewPageInner() {
         <main className="review-main">
           <section className="review-board-col">
             <div className="review-board-row">
-              <EvalBar whiteWinPercent={whiteWin} evaluation={evaluation} />
+              <EvalBar whiteWinPercent={whiteWin} evaluation={evaluation} height={boardPx} />
               <ReviewBoard
                 fen={fen}
                 orientation={orientation}
                 move={currentMove}
                 animationKey={currentPly}
+                onBoardSize={setBoardPx}
               />
             </div>
             {/* Replay bar glued directly under the board (both modes) so it's

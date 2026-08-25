@@ -72,6 +72,23 @@ describe('ChessgroundBoard container-based default sizing', () => {
     expect(board.style.width).toBe('300px');
   });
 
+  // The measured pixel size is surfaced upward so callers (e.g. the review page)
+  // can size the eval bar from one number instead of Safari's aspect-ratio math.
+  it('reports the effective board size via onSizeChange', () => {
+    mockClientWidth = 300;
+    const sizes: number[] = [];
+    render(<ChessgroundBoard fen={FEN} viewOnly onSizeChange={(px) => sizes.push(px)} />);
+    expect(sizes.length).toBeGreaterThan(0);
+    expect(sizes[sizes.length - 1]).toBe(300);
+  });
+
+  it('reports the explicit boardSize via onSizeChange', () => {
+    mockClientWidth = 900;
+    const sizes: number[] = [];
+    render(<ChessgroundBoard fen={FEN} boardSize={300} viewOnly onSizeChange={(px) => sizes.push(px)} />);
+    expect(sizes[sizes.length - 1]).toBe(300);
+  });
+
   // Regression guard: the inline-block wrapper must neutralise the baseline
   // descender gap. Without verticalAlign:'top', square-aspect-ratio parents
   // (ReviewBoard) grow ~6px taller than wide and the percentage-positioned

@@ -2,11 +2,18 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
+import React from 'react';
 import { cleanup, render } from '@testing-library/react';
 
-// Chessground needs a real board runtime; stub it — Phase 4 only tests overlays.
+// Chessground needs a real board runtime; stub it. The stub reports a fixed
+// measured size via onSizeChange so the box-sizing wiring can be tested.
 vi.mock('@/components/chess/ChessgroundBoard', () => ({
-  default: () => <div data-testid="cg-stub" />,
+  default: ({ onSizeChange }: { onSizeChange?: (px: number) => void }) => {
+    React.useEffect(() => {
+      onSizeChange?.(320);
+    }, [onSizeChange]);
+    return <div data-testid="cg-stub" />;
+  },
 }));
 
 import ReviewBoard, { squareToColRow, squareTintStyle, badgeTuckStyle } from '../ReviewBoard';
@@ -85,5 +92,21 @@ describe('ReviewBoard overlays', () => {
     );
     expect(queryAllByTestId('square-tint')).toHaveLength(0);
     expect(queryByTestId('board-badge')).toBeNull();
+  });
+});
+
+describe('ReviewBoard sizing', () => {
+  it('forwards the measured board size and drives the box height from it', () => {
+    const onBoardSize = vi.fn();
+    const { getByTestId } = render(
+      <ReviewBoard fen="x" orientation="white" move={null} onBoardSize={onBoardSize} />,
+    );
+    // The measured px is surfaced to the caller (for the eval-bar height)...
+    expect(onBoardSize).toHaveBeenCalledWith(320);
+    // ...and drives the box height so the box is exactly square (no Safari
+    // aspect-ratio height derivation, which caused dead space below the board).
+    const box = getByTestId('review-board');
+    expect(box.style.height).toBe('320px');
+    expect(box.style.aspectRatio).toBe('');
   });
 });

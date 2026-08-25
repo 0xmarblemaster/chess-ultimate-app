@@ -144,26 +144,58 @@
   height: 100%;
 }
 
-/* Board coordinates */
-.chessground-board coords {
+/* Board coordinates.
+   chessground base.css positions corner coords with FIXED pixel offsets
+   (files left:24px, ranks top:-20px, coord translateY(39%)) calibrated for a
+   large board. On a small (mobile) board those fixed px are ~half a square off:
+   files shift right so "h" spills off the edge and rank "8" is clipped at the
+   top. Fully override with size-relative positioning so labels scale with the
+   board instead of drifting. Uses .chessground-board.cg-wrap (3 classes) to
+   outrank base .cg-wrap (2 classes). Shared → applies to /play, /openings too. */
+.chessground-board.cg-wrap coords {
   color: #f0d9b5;
   font-size: 0.7em;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-weight: 600;
   pointer-events: none;
+  opacity: 0.9;
 }
 
-.chessground-board coords.files {
-  bottom: -0.5em;
+/* Files: a row across the bottom edge, each letter centred under its column
+   (no fixed left:24px push, so "h" stays on-board). */
+.chessground-board.cg-wrap coords.files {
+  top: auto;
+  left: 0;
+  right: 0;
+  bottom: 2px;
+  width: 100%;
+  height: auto;
 }
 
-.chessground-board coords.ranks {
-  right: -0.5em;
+/* Ranks: a column down the left edge spanning the full board height (no
+   top:-20px push, so rank "8" is not clipped by the board's rounded corner). */
+.chessground-board.cg-wrap coords.ranks {
+  top: 0;
+  bottom: auto;
+  left: 2px;
+  right: auto;
+  height: 100%;
+  width: auto;
+}
+
+/* Kill base's fixed translateY(39%) nudge and centre each label within its
+   1/8 square cell via flex, so alignment holds at any board size. */
+.chessground-board.cg-wrap coords.files coord,
+.chessground-board.cg-wrap coords.ranks coord {
+  transform: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Responsive sizing */
 @media (max-width: 600px) {
-  .chessground-board coords {
+  .chessground-board.cg-wrap coords {
     font-size: 0.6em;
   }
 }
