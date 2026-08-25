@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import {
   CBGoToStartIcon,
   CBPreviousMoveIcon,
@@ -60,6 +61,7 @@ export default function PlaybackControls({
   onJump,
   onStep,
 }: PlaybackControlsProps) {
+  const t = useTranslations('gameReview');
   const [playing, setPlaying] = useState(false);
   const atStart = currentPly <= 0;
   const atEnd = currentPly >= maxPly;
@@ -75,8 +77,8 @@ export default function PlaybackControls({
   });
   useEffect(() => {
     if (!playing || currentPly >= maxPly) return;
-    const t = setTimeout(() => stepRef.current(1), 1000);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => stepRef.current(1), 1000);
+    return () => clearTimeout(timer);
   }, [playing, currentPly, maxPly]);
 
   return (
@@ -94,7 +96,7 @@ export default function PlaybackControls({
     >
       <button
         type="button"
-        aria-label="First move"
+        aria-label={t('playback.firstMove')}
         data-testid="pb-first"
         style={{ ...seg, opacity: atStart ? 0.35 : 1 }}
         disabled={atStart}
@@ -104,7 +106,7 @@ export default function PlaybackControls({
       </button>
       <button
         type="button"
-        aria-label="Previous move"
+        aria-label={t('playback.previousMove')}
         data-testid="pb-prev"
         style={{ ...seg, opacity: atStart ? 0.35 : 1 }}
         disabled={atStart}
@@ -114,7 +116,7 @@ export default function PlaybackControls({
       </button>
       <button
         type="button"
-        aria-label={showPlaying ? 'Pause' : 'Play through'}
+        aria-label={showPlaying ? t('playback.pause') : t('playback.play')}
         data-testid="pb-play"
         style={{
           ...seg,
@@ -133,7 +135,7 @@ export default function PlaybackControls({
       </button>
       <button
         type="button"
-        aria-label="Next move"
+        aria-label={t('playback.nextMove')}
         data-testid="pb-next"
         style={{ ...seg, opacity: atEnd ? 0.35 : 1 }}
         disabled={atEnd}
@@ -143,7 +145,7 @@ export default function PlaybackControls({
       </button>
       <button
         type="button"
-        aria-label="Last move"
+        aria-label={t('playback.lastMove')}
         data-testid="pb-last"
         style={{ ...seg, opacity: atEnd ? 0.35 : 1 }}
         disabled={atEnd}
@@ -153,7 +155,7 @@ export default function PlaybackControls({
       </button>
       <button
         type="button"
-        aria-label="Next key moment"
+        aria-label={t('playback.nextKeyMoment')}
         data-testid="pb-keymoment"
         style={{
           ...seg,
@@ -168,7 +170,7 @@ export default function PlaybackControls({
         disabled={upcomingKeyMoment == null}
         onClick={() => upcomingKeyMoment != null && onJump(upcomingKeyMoment)}
       >
-        Next ⚡
+        {t('playback.next')}
       </button>
     </div>
   );

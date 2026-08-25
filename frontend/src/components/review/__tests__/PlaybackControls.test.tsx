@@ -2,8 +2,9 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { cleanup, render, fireEvent } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
 import PlaybackControls, { nextKeyMoment } from '../PlaybackControls';
+import { renderIntl, gameReview } from './intl';
 
 afterEach(cleanup);
 
@@ -28,7 +29,7 @@ describe('PlaybackControls', () => {
   const setup = (currentPly: number, maxPly = 40, keyMoments: number[] = [5, 12]) => {
     const onJump = vi.fn();
     const onStep = vi.fn();
-    const utils = render(
+    const utils = renderIntl(
       <PlaybackControls
         currentPly={currentPly}
         maxPly={maxPly}
@@ -80,10 +81,10 @@ describe('PlaybackControls', () => {
   it('play toggles to pause and glows accent while playing', () => {
     const { getByTestId } = setup(10);
     const play = getByTestId('pb-play') as HTMLButtonElement;
-    expect(play.getAttribute('aria-label')).toBe('Play through');
+    expect(play.getAttribute('aria-label')).toBe(gameReview.playback.play);
     expect(play.style.color).toBe('var(--review-text)');
     fireEvent.click(play);
-    expect(play.getAttribute('aria-label')).toBe('Pause');
+    expect(play.getAttribute('aria-label')).toBe(gameReview.playback.pause);
     expect(play.style.color).toBe('var(--review-accent)');
   });
 

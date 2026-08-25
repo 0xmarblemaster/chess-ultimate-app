@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 export interface ReviewProgressProps {
   /** 0–1 analysis progress. */
   progress: number;
@@ -8,6 +10,7 @@ export interface ReviewProgressProps {
 
 /** Themed progress panel shown while the engine is still analysing. */
 export default function ReviewProgress({ progress, status }: ReviewProgressProps) {
+  const t = useTranslations('gameReview');
   const pct = Math.round(Math.max(0, Math.min(1, progress)) * 100);
   return (
     <div
@@ -24,7 +27,7 @@ export default function ReviewProgress({ progress, status }: ReviewProgressProps
     >
       <div style={{ fontSize: 40 }}>🐼</div>
       <div className="review-heading" style={{ fontSize: 20, fontWeight: 800 }}>
-        {status === 'queued' ? 'Queued for review…' : 'Analysing your game…'}
+        {status === 'queued' ? t('progress.queued') : t('progress.running')}
       </div>
       <div
         style={{

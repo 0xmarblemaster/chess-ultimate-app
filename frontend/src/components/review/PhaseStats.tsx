@@ -1,12 +1,9 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import type { ReviewResult } from './types';
 
-const PHASES: Array<{ key: keyof ReviewResult['phases']; label: string }> = [
-  { key: 'opening', label: 'Opening' },
-  { key: 'middlegame', label: 'Middlegame' },
-  { key: 'endgame', label: 'Endgame' },
-];
+const PHASE_KEYS: Array<keyof ReviewResult['phases']> = ['opening', 'middlegame', 'endgame'];
 
 function fmt(v: number | null): string {
   return v == null ? '—' : v.toFixed(1);
@@ -18,13 +15,14 @@ export interface PhaseStatsProps {
 
 /** Per-phase accuracy split (Part A Step 6 "Phase stats"). */
 export default function PhaseStats({ phases }: PhaseStatsProps) {
+  const t = useTranslations('gameReview');
   return (
     <div className="review-card" data-testid="phase-stats" style={{ padding: '12px 14px' }}>
       <div
         className="review-heading"
         style={{ fontSize: 12, fontWeight: 700, color: 'var(--review-text-dim)', marginBottom: 8 }}
       >
-        Phases
+        {t('phases.title')}
       </div>
       <div
         style={{
@@ -36,13 +34,18 @@ export default function PhaseStats({ phases }: PhaseStatsProps) {
       >
         <span style={{ color: 'var(--review-text-dim)', fontWeight: 600 }} />
         <span style={{ textAlign: 'center', fontWeight: 700, color: 'var(--review-text-dim)' }}>
-          W
+          {t('players.whiteShort')}
         </span>
         <span style={{ textAlign: 'center', fontWeight: 700, color: 'var(--review-text-dim)' }}>
-          B
+          {t('players.blackShort')}
         </span>
-        {PHASES.map(({ key, label }) => (
-          <PhaseRow key={key} label={label} w={fmt(phases[key].w)} b={fmt(phases[key].b)} />
+        {PHASE_KEYS.map((key) => (
+          <PhaseRow
+            key={key}
+            label={t(`phases.${key}`)}
+            w={fmt(phases[key].w)}
+            b={fmt(phases[key].b)}
+          />
         ))}
       </div>
     </div>

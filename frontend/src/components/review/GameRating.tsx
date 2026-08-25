@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 export interface GameRatingProps {
   whiteRating: number;
   blackRating: number;
@@ -11,9 +13,12 @@ export interface GameRatingProps {
 export default function GameRating({
   whiteRating,
   blackRating,
-  whiteName = 'White',
-  blackName = 'Black',
+  whiteName,
+  blackName,
 }: GameRatingProps) {
+  const t = useTranslations('gameReview');
+  const resolvedWhite = whiteName ?? t('players.white');
+  const resolvedBlack = blackName ?? t('players.black');
   return (
     <div
       className="review-card"
@@ -24,12 +29,12 @@ export default function GameRating({
         className="review-heading"
         style={{ fontSize: 12, fontWeight: 700, color: 'var(--review-text-dim)', marginBottom: 8 }}
       >
-        Game Rating
+        {t('panel.gameRating')}
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
         {[
-          { name: whiteName, rating: whiteRating },
-          { name: blackName, rating: blackRating },
+          { name: resolvedWhite, rating: whiteRating },
+          { name: resolvedBlack, rating: blackRating },
         ].map((p) => (
           <div key={p.name} style={{ flex: 1, textAlign: 'center' }}>
             <div

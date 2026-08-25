@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import type { ReviewResult } from './types';
 import CoachBubble from './CoachBubble';
 import MoveList from './MoveList';
@@ -29,6 +30,7 @@ export default function ReviewPanel({
   onSetPly,
   onExitReview,
 }: ReviewPanelProps) {
+  const t = useTranslations('gameReview');
   const currentMove = currentPly >= 1 ? data.moves[currentPly - 1] : null;
   const prevMove = currentPly >= 2 ? data.moves[currentPly - 2] : null;
 
@@ -75,7 +77,7 @@ export default function ReviewPanel({
           className="review-ghost-btn"
           style={{ padding: '6px 12px', fontSize: 13 }}
         >
-          ‹ Highlights
+          {t('panel.highlights')}
         </button>
         <div style={{ display: 'flex', gap: 8 }}>
           <button
@@ -85,13 +87,13 @@ export default function ReviewPanel({
             className="review-ghost-btn"
             style={{ padding: '6px 12px', fontSize: 13 }}
           >
-            {shared ? 'Copied!' : 'Share'}
+            {shared ? t('panel.copied') : t('panel.share')}
           </button>
           <button
             type="button"
             data-testid="mute-toggle"
             aria-pressed={muted}
-            aria-label={muted ? 'Unmute sounds' : 'Mute sounds'}
+            aria-label={muted ? t('panel.unmuteSounds') : t('panel.muteSounds')}
             onClick={toggleMute}
             className="review-ghost-btn"
             style={{ padding: '6px 12px', fontSize: 13 }}

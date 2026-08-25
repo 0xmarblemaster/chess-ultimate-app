@@ -3,7 +3,8 @@
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import React from 'react';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { renderIntl } from './intl';
 
 // Chessground needs a real board runtime; stub it. The stub reports a fixed
 // measured size via onSizeChange so the box-sizing wiring can be tested.
@@ -63,7 +64,7 @@ describe('ReviewBoard overlays', () => {
   const brilliant = REVIEW_FIXTURE.moves[5]; // Bxh7+, uci d3h7
 
   it('tints the from + to squares of the current move', () => {
-    const { getAllByTestId } = render(
+    const { getAllByTestId } = renderIntl(
       <ReviewBoard fen="x" orientation="white" move={brilliant} />,
     );
     const tints = getAllByTestId('square-tint');
@@ -73,13 +74,13 @@ describe('ReviewBoard overlays', () => {
   });
 
   it('places the badge on the destination square (both orientations)', () => {
-    const white = render(<ReviewBoard fen="x" orientation="white" move={brilliant} />);
+    const white = renderIntl(<ReviewBoard fen="x" orientation="white" move={brilliant} />);
     const wBadge = white.getByTestId('board-badge');
     expect(wBadge.getAttribute('data-square')).toBe('h7');
     expect(wBadge.getAttribute('style')).toContain('97.25%'); // white tuck left
     cleanup();
 
-    const black = render(<ReviewBoard fen="x" orientation="black" move={brilliant} />);
+    const black = renderIntl(<ReviewBoard fen="x" orientation="black" move={brilliant} />);
     const bBadge = black.getByTestId('board-badge');
     expect(bBadge.getAttribute('data-square')).toBe('h7');
     // h7 black → col 0, row 6 → corner left (1*12.5)=12.5 → 12.5-2.75 = 9.75%
@@ -87,7 +88,7 @@ describe('ReviewBoard overlays', () => {
   });
 
   it('renders no overlays without a move', () => {
-    const { queryByTestId, queryAllByTestId } = render(
+    const { queryByTestId, queryAllByTestId } = renderIntl(
       <ReviewBoard fen="x" orientation="white" move={null} />,
     );
     expect(queryAllByTestId('square-tint')).toHaveLength(0);
@@ -98,7 +99,7 @@ describe('ReviewBoard overlays', () => {
 describe('ReviewBoard sizing', () => {
   it('forwards the measured board size and drives the box height from it', () => {
     const onBoardSize = vi.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = renderIntl(
       <ReviewBoard fen="x" orientation="white" move={null} onBoardSize={onBoardSize} />,
     );
     // The measured px is surfaced to the caller (for the eval-bar height)...

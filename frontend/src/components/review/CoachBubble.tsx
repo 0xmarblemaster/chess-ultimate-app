@@ -1,7 +1,11 @@
 'use client';
 
-import ClassificationIcon, { CLASSIFICATION_LABELS } from './ClassificationIcon';
+import { useTranslations } from 'next-intl';
+import ClassificationIcon from './ClassificationIcon';
 import type { ReviewMove } from './types';
+
+/** Minimal shape of the `gameReview` translator used by {@link coachText}. */
+type CoachTranslate = (key: string, values?: Record<string, string | number>) => string;
 
 /**
  * Signed eval delta of a move in PAWNS, from the MOVER's point of view.
@@ -36,9 +40,12 @@ export function formatDelta(pawns: number): string {
 /**
  * Deterministic v1 coach commentary — a template per classification, keyed on
  * SAN, book/opening flag and a trivially-derivable "hangs a piece" hint (a
- * capture SAN answering a blunder/mistake). The LLM "Explain" upgrade is Phase 5.
+ * capture SAN answering a blunder/mistake). Templates resolve at render time
+ * from the `gameReview` catalog via `t`, so they follow the active locale. The
+ * LLM "Explain" upgrade is Phase 5.
  */
 export function coachText(
+  t: CoachTranslate,
   move: ReviewMove,
   prev: ReviewMove | null,
   opening?: { name?: string; lastBookPly?: number },
@@ -48,29 +55,34 @@ export function coachText(
 
   switch (move.classification) {
     case 'book':
-      return isLastBook
-        ? `${san} is the last book move${opening?.name ? ` of the ${opening.name}` : ''}.`
-        : `${san} is still theory — a well-known book move.`;
+      if (isLastBook) {
+        return opening?.name
+          ? t('coach.moveComments.bookLast', { san, opening: opening.name })
+          : t('coach.moveComments.bookLastNoName', { san });
+      }
+      return t('coach.moveComments.bookTheory', { san });
     case 'brilliant':
-      return `Brilliant! ${san} is a stunning sacrifice that the engine loves.`;
+      return t('coach.moveComments.brilliant', { san });
     case 'great':
-      return `Great move — ${san} was the only move that keeps your position together.`;
+      return t('coach.moveComments.great', { san });
     case 'best':
-      return `${san} is the best move here. Nothing improves on it.`;
+      return t('coach.moveComments.best', { san });
     case 'excellent':
-      return `${san} is excellent — right in line with the engine.`;
+      return t('coach.moveComments.excellent', { san });
     case 'good':
-      return `${san} is a good, solid move.`;
+      return t('coach.moveComments.good', { san });
     case 'forced':
-      return `${san} is forced — there was nothing else.`;
+      return t('coach.moveComments.forced', { san });
     case 'inaccuracy':
-      return `${san} is a slight inaccuracy. There was something a little sharper.`;
+      return t('coach.moveComments.inaccuracy', { san });
     case 'mistake':
-      return `${san} is a mistake and lets some of your advantage slip away.`;
+      return t('coach.moveComments.mistake', { san });
     case 'miss':
-      return `${san} misses a stronger continuation that was on the board.`;
+      return t('coach.moveComments.miss', { san });
     case 'blunder':
-      return `${san} is a blunder${dropsMaterial(move, prev) ? ' — it drops material' : ''}. The engine had much better.`;
+      return dropsMaterial(move, prev)
+        ? t('coach.moveComments.blunderDropsMaterial', { san })
+        : t('coach.moveComments.blunder', { san });
     default:
       return san;
   }
@@ -90,11 +102,12 @@ export interface CoachBubbleProps {
 
 /** Review-mode coach bubble: classification icon + SAN + delta chip + text. */
 export default function CoachBubble({ move, prev, opening }: CoachBubbleProps) {
+  const t = useTranslations('gameReview');
   if (!move) {
     return (
       <div className="review-card" data-testid="coach-bubble" style={{ padding: 14, minHeight: 92 }}>
         <p style={{ fontSize: 13, opacity: 0.75, margin: 0 }}>
-          Step through the game to see move-by-move coaching.
+          {t('coach.bubblePlaceholder')}
         </p>
       </div>
     );
@@ -128,7 +141,7 @@ export default function CoachBubble({ move, prev, opening }: CoachBubbleProps) {
             {move.san}
           </span>
           <span style={{ fontSize: 12, fontWeight: 700, opacity: 0.7 }}>
-            {CLASSIFICATION_LABELS[move.classification]}
+            {t(`classifications.${move.classification}`)}
           </span>
           <span
             data-testid="coach-delta"
@@ -145,7 +158,7 @@ export default function CoachBubble({ move, prev, opening }: CoachBubbleProps) {
           </span>
         </div>
         <p style={{ fontSize: 13, lineHeight: 1.4, margin: 0, opacity: 0.9 }}>
-          {coachText(move, prev, opening)}
+          {coachText(t, move, prev, opening)}
         </p>
         {opening?.name && move.classification === 'book' && (
           <div

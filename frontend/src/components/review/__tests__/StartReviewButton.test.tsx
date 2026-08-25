@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { cleanup, render, fireEvent, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, waitFor } from '@testing-library/react';
 
 const push = vi.fn();
 vi.mock('next/navigation', () => ({
@@ -15,6 +15,7 @@ vi.mock('../reviewApi', () => ({
 }));
 
 import StartReviewButton, { canReview } from '../StartReviewButton';
+import { renderIntl, gameReview } from './intl';
 
 afterEach(() => {
   cleanup();
@@ -38,17 +39,17 @@ describe('canReview (gating rule)', () => {
 
 describe('StartReviewButton', () => {
   it('is disabled with a tooltip for an unfinished bot game', () => {
-    const { getByTestId } = render(
+    const { getByTestId } = renderIntl(
       <StartReviewButton game={{ pgn: '1. e4', isFinished: false }} source="bot" />,
     );
     const btn = getByTestId('start-review-button') as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
-    expect(btn.getAttribute('title')).toBe('Finish the game to unlock Review');
+    expect(btn.getAttribute('title')).toBe(gameReview.startButton.disabledTooltip);
   });
 
   it('starts a review and routes to /review/[id] for a finished game', async () => {
     startReview.mockResolvedValue({ review_id: 'abc123', status: 'queued' });
-    const { getByTestId } = render(
+    const { getByTestId } = renderIntl(
       <StartReviewButton
         game={{ pgn: '1. e4 e5', isFinished: true, orientation: 'black' }}
         source="bot"
@@ -64,7 +65,7 @@ describe('StartReviewButton', () => {
   });
 
   it('is enabled for a database game even without isFinished', () => {
-    const { getByTestId } = render(
+    const { getByTestId } = renderIntl(
       <StartReviewButton game={{ pgn: '1. d4' }} source="database" />,
     );
     expect((getByTestId('start-review-button') as HTMLButtonElement).disabled).toBe(false);
@@ -73,7 +74,7 @@ describe('StartReviewButton', () => {
   it('surfaces errors via onError instead of navigating', async () => {
     startReview.mockRejectedValue(new Error('boom'));
     const onError = vi.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = renderIntl(
       <StartReviewButton
         game={{ pgn: '1. e4', isFinished: true }}
         source="bot"

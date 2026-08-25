@@ -2,7 +2,8 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, afterEach } from 'vitest';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { renderIntl } from './intl';
 import EvalGraph, { clampEvalToPawns, evalSeries, EVAL_CLAMP } from '../EvalGraph';
 import { REVIEW_FIXTURE } from './fixture';
 
@@ -35,7 +36,7 @@ describe('evalSeries', () => {
 
 describe('EvalGraph', () => {
   it('renders one key-moment dot group per key moment', () => {
-    const { container } = render(
+    const { container } = renderIntl(
       <EvalGraph moves={REVIEW_FIXTURE.moves} keyMoments={REVIEW_FIXTURE.keyMoments} />,
     );
     const dots = container.querySelectorAll('[data-testid="keymoment-dot"]');
@@ -43,7 +44,7 @@ describe('EvalGraph', () => {
   });
 
   it('colours each key-moment dot by its move classification', () => {
-    const { container } = render(
+    const { container } = renderIntl(
       <EvalGraph moves={REVIEW_FIXTURE.moves} keyMoments={[6]} />,
     );
     const group = container.querySelector('[data-testid="keymoment-dot"][data-ply="6"]')!;
@@ -53,7 +54,7 @@ describe('EvalGraph', () => {
   });
 
   it('draws a current-ply marker when set', () => {
-    const { getByTestId } = render(
+    const { getByTestId } = renderIntl(
       <EvalGraph moves={REVIEW_FIXTURE.moves} keyMoments={[]} currentPly={3} />,
     );
     expect(getByTestId('current-ply-line')).toBeTruthy();

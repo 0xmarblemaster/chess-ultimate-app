@@ -1,8 +1,8 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import ClassificationIcon, {
   CLASSIFICATION_COLORS,
-  CLASSIFICATION_LABELS,
   type Classification,
 } from './ClassificationIcon';
 import type { Tally } from './types';
@@ -26,6 +26,7 @@ export interface TallyTableProps {
 }
 
 export default function TallyTable({ tally }: TallyTableProps) {
+  const t = useTranslations('gameReview');
   const rows = [...ROW_ORDER];
   if ((tally.w.forced ?? 0) + (tally.b.forced ?? 0) > 0) {
     rows.push('forced');
@@ -48,9 +49,9 @@ export default function TallyTable({ tally }: TallyTableProps) {
           padding: '2px 0 6px',
         }}
       >
-        <span style={{ textAlign: 'center' }}>W</span>
+        <span style={{ textAlign: 'center' }}>{t('players.whiteShort')}</span>
         <span />
-        <span style={{ textAlign: 'center' }}>B</span>
+        <span style={{ textAlign: 'center' }}>{t('players.blackShort')}</span>
       </div>
       {rows.map((cls) => {
         const w = tally.w[cls] ?? 0;
@@ -83,7 +84,7 @@ export default function TallyTable({ tally }: TallyTableProps) {
               }}
             >
               <ClassificationIcon type={cls} size={24} />
-              {CLASSIFICATION_LABELS[cls]}
+              {t(`classifications.${cls}`)}
             </span>
             <span
               data-testid={`tally-b-${cls}`}

@@ -2,7 +2,8 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { cleanup, render, fireEvent } from '@testing-library/react';
+import { cleanup, fireEvent } from '@testing-library/react';
+import { renderIntl } from './intl';
 import MoveList, { toMovePairs } from '../MoveList';
 import { REVIEW_FIXTURE } from './fixture';
 
@@ -19,7 +20,7 @@ describe('toMovePairs', () => {
 
 describe('MoveList', () => {
   it('renders one node per ply with an 18px classification badge', () => {
-    const { getAllByTestId } = render(
+    const { getAllByTestId } = renderIntl(
       <MoveList moves={REVIEW_FIXTURE.moves} currentPly={0} onSelect={() => {}} />,
     );
     const nodes = getAllByTestId('move-node');
@@ -32,7 +33,7 @@ describe('MoveList', () => {
   });
 
   it('colours SAN by classification (and leaves book neutral)', () => {
-    const { getAllByTestId } = render(
+    const { getAllByTestId } = renderIntl(
       <MoveList moves={REVIEW_FIXTURE.moves} currentPly={0} onSelect={() => {}} />,
     );
     const nodes = getAllByTestId('move-node');
@@ -43,7 +44,7 @@ describe('MoveList', () => {
   });
 
   it('highlights the selected ply', () => {
-    const { getAllByTestId } = render(
+    const { getAllByTestId } = renderIntl(
       <MoveList moves={REVIEW_FIXTURE.moves} currentPly={5} onSelect={() => {}} />,
     );
     const nodes = getAllByTestId('move-node');
@@ -54,7 +55,7 @@ describe('MoveList', () => {
 
   it('sets currentPly when a ply is clicked', () => {
     const onSelect = vi.fn();
-    const { getAllByTestId } = render(
+    const { getAllByTestId } = renderIntl(
       <MoveList moves={REVIEW_FIXTURE.moves} currentPly={0} onSelect={onSelect} />,
     );
     const node = getAllByTestId('move-node').find((n) => n.getAttribute('data-ply') === '3')!;

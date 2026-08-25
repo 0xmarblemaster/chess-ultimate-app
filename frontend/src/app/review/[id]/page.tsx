@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useDarkMode } from '@/hooks/useDarkMode';
 import {
   ReviewBoard,
@@ -29,6 +30,7 @@ export default function ReviewPage() {
 }
 
 function ReviewPageInner() {
+  const t = useTranslations('gameReview');
   const params = useParams<{ id: string }>();
   const search = useSearchParams();
   const id = params?.id ?? '';
@@ -112,16 +114,18 @@ function ReviewPageInner() {
           style={{ fontSize: 19, fontWeight: 800, color: 'var(--review-accent)' }}
         >
           ♞ Chesster{' '}
-          <span style={{ color: 'var(--review-text-dim)', fontWeight: 600 }}>· Game Review</span>
+          <span style={{ color: 'var(--review-text-dim)', fontWeight: 600 }}>
+            · {t('header.subtitle')}
+          </span>
         </div>
         <button
           type="button"
           onClick={toggle}
           className="review-ghost-btn"
           style={{ padding: '6px 12px', fontSize: 13 }}
-          aria-label="Toggle theme"
+          aria-label={t('header.toggleTheme')}
         >
-          {isDark ? '☾ Dark' : '☀ Light'}
+          {isDark ? t('header.dark') : t('header.light')}
         </button>
       </header>
 
@@ -129,11 +133,9 @@ function ReviewPageInner() {
         status === 'error' ? (
           <div style={{ textAlign: 'center', padding: 48 }}>
             <div className="review-heading" style={{ fontSize: 20, fontWeight: 800 }}>
-              Review failed
+              {t('header.failedTitle')}
             </div>
-            <p style={{ opacity: 0.7, marginTop: 8 }}>
-              We couldn&apos;t analyse this game. Please try again.
-            </p>
+            <p style={{ opacity: 0.7, marginTop: 8 }}>{t('header.failedBody')}</p>
           </div>
         ) : (
           <ReviewProgress progress={progress} status={status === 'running' ? 'running' : 'queued'} />
@@ -166,8 +168,8 @@ function ReviewPageInner() {
             <ReviewSidebar
               data={data}
               mode={mode}
-              white={{ name: 'White', rating: data.estRating.w }}
-              black={{ name: 'Black', rating: data.estRating.b }}
+              white={{ name: t('players.white'), rating: data.estRating.w }}
+              black={{ name: t('players.black'), rating: data.estRating.b }}
               onStartReview={() => dispatch({ type: 'setMode', mode: 'review' })}
               currentPly={currentPly}
               onSetPly={(ply) => dispatch({ type: 'setPly', ply })}

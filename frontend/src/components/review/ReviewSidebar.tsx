@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import type { ReviewResult } from './types';
 import CoachIntro from './CoachIntro';
 import AccuracyCard from './AccuracyCard';
@@ -26,26 +27,29 @@ export interface ReviewSidebarProps {
   onExitReview: () => void;
 }
 
+/** Minimal shape of the `gameReview` translator used by {@link coachCopy}. */
+type CoachTranslate = (key: string, values?: Record<string, string | number>) => string;
+
 /** Build a short, deterministic coach greeting from the aggregates. */
-function coachCopy(data: ReviewResult): { headline: string; message: string } {
+function coachCopy(t: CoachTranslate, data: ReviewResult): { headline: string; message: string } {
   const brilliancies = data.tally.w.brilliant + data.tally.b.brilliant;
   const blunders = data.tally.w.blunder + data.tally.b.blunder;
   const best = Math.max(data.accuracy.w, data.accuracy.b).toFixed(1);
   if (brilliancies > 0) {
     return {
-      headline: 'A brilliant game!',
-      message: `You found ${brilliancies} brilliant move${brilliancies > 1 ? 's' : ''}. Step through the review to relive the key moments.`,
+      headline: t('coach.headlines.brilliant'),
+      message: t('coach.messages.brilliant', { count: brilliancies }),
     };
   }
   if (blunders === 0) {
     return {
-      headline: 'Clean and solid.',
-      message: `No blunders this game — top accuracy ${best}%. Let's look at where you could push even harder.`,
+      headline: t('coach.headlines.clean'),
+      message: t('coach.messages.clean', { best }),
     };
   }
   return {
-    headline: "Let's review this one.",
-    message: `A few turning points to learn from. Top accuracy was ${best}% — start the review to see every key moment.`,
+    headline: t('coach.headlines.review'),
+    message: t('coach.messages.review', { best }),
   };
 }
 
@@ -63,6 +67,7 @@ export default function ReviewSidebar({
   onSetPly,
   onExitReview,
 }: ReviewSidebarProps) {
+  const t = useTranslations('gameReview');
   if (mode === 'review') {
     return (
       <ReviewPanel
@@ -74,7 +79,7 @@ export default function ReviewSidebar({
     );
   }
 
-  const copy = coachCopy(data);
+  const copy = coachCopy(t, data);
 
   return (
     <aside
@@ -116,7 +121,7 @@ export default function ReviewSidebar({
         onClick={onStartReview}
         style={{ padding: '14px', fontSize: 16 }}
       >
-        Start Review →
+        {t('panel.startReview')}
       </button>
     </aside>
   );

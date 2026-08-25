@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import type { ReviewSource } from './types';
 import { startReview } from './reviewApi';
 
@@ -42,16 +43,19 @@ export interface StartReviewButtonProps {
 export default function StartReviewButton({
   game,
   source,
-  label = 'Game Review',
-  disabledTooltip = 'Finish the game to unlock Review',
+  label,
+  disabledTooltip,
   variant = 'primary',
   className,
   style,
   onError,
 }: StartReviewButtonProps) {
+  const t = useTranslations('gameReview');
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const allowed = canReview(game, source);
+  const resolvedLabel = label ?? t('startButton.label');
+  const resolvedTooltip = disabledTooltip ?? t('startButton.disabledTooltip');
 
   async function handleClick() {
     if (!allowed || loading) return;
@@ -62,7 +66,7 @@ export default function StartReviewButton({
       if (game.orientation) params.set('orientation', game.orientation);
       router.push(`/review/${review_id}?${params.toString()}`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Could not start review';
+      const message = err instanceof Error ? err.message : t('startButton.couldNotStart');
       if (onError) onError(message);
       else console.error(message);
       setLoading(false);
@@ -101,12 +105,12 @@ export default function StartReviewButton({
       data-testid="start-review-button"
       className={className}
       disabled={!allowed || loading}
-      title={!allowed ? disabledTooltip : undefined}
+      title={!allowed ? resolvedTooltip : undefined}
       aria-disabled={!allowed || loading}
       onClick={handleClick}
       style={{ ...base, ...skin, ...style }}
     >
-      {loading ? 'Starting…' : `⚡ ${label}`}
+      {loading ? t('startButton.starting') : `⚡ ${resolvedLabel}`}
     </button>
   );
 }

@@ -1,4 +1,4 @@
-export { default as ClassificationIcon, CLASSIFICATION_COLORS, CLASSIFICATION_LABELS } from './ClassificationIcon';
+export { default as ClassificationIcon, CLASSIFICATION_COLORS } from './ClassificationIcon';
 export type { Classification, ClassificationIconProps } from './ClassificationIcon';
 export { default as EvalBar, whiteFillOffset, evalLabel } from './EvalBar';
 export { default as EvalGraph, clampEvalToPawns, evalSeries, EVAL_CLAMP } from './EvalGraph';

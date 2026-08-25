@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * ClassificationIcon — single SVG badge keyed by move classification.
  *
@@ -12,6 +14,8 @@
  * palette (theme-invariant — reads correctly on both light and dark boards).
  * Used at 18px (move list), 24px (tally), and %-of-square (board).
  */
+
+import { useTranslations } from 'next-intl';
 
 export type Classification =
   | 'brilliant'
@@ -39,20 +43,6 @@ export const CLASSIFICATION_COLORS: Record<Classification, string> = {
   miss: '#FF7769',
   blunder: '#FA412D',
   forced: '#9AA0AA',
-};
-
-export const CLASSIFICATION_LABELS: Record<Classification, string> = {
-  brilliant: 'Brilliant',
-  great: 'Great',
-  best: 'Best',
-  excellent: 'Excellent',
-  good: 'Good',
-  book: 'Book',
-  inaccuracy: 'Inaccuracy',
-  mistake: 'Mistake',
-  miss: 'Miss',
-  blunder: 'Blunder',
-  forced: 'Forced',
 };
 
 /**
@@ -180,8 +170,9 @@ export default function ClassificationIcon({
   className,
   title,
 }: ClassificationIconProps) {
+  const t = useTranslations('gameReview');
   const color = CLASSIFICATION_COLORS[type];
-  const label = title ?? CLASSIFICATION_LABELS[type];
+  const label = title ?? t(`classifications.${type}`);
   const dimension = size ? `${size}px` : '100%';
 
   return (

@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import type { EngineEval, ReviewMove } from './types';
 import { CLASSIFICATION_COLORS } from './ClassificationIcon';
 
@@ -49,6 +50,7 @@ export default function EvalGraph({
   currentPly,
   onSelectPly,
 }: EvalGraphProps) {
+  const t = useTranslations('gameReview');
   const ref = useRef<SVGSVGElement | null>(null);
   const [hoverX, setHoverX] = useState<number | null>(null);
 
@@ -97,7 +99,7 @@ export default function EvalGraph({
       viewBox={`0 0 ${W} ${H}`}
       width="100%"
       role="img"
-      aria-label="Evaluation over time"
+      aria-label={t('graph.ariaLabel')}
       style={{ cursor: onSelectPly ? 'pointer' : 'default', display: 'block' }}
       onMouseMove={handleMove}
       onMouseLeave={() => setHoverX(null)}

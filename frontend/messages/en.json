@@ -2237,5 +2237,101 @@
       "uploadingShort": "…",
       "failed": "Upload failed"
     }
+  },
+  "gameReview": {
+    "header": {
+      "subtitle": "Game Review",
+      "toggleTheme": "Toggle theme",
+      "light": "☀ Light",
+      "dark": "☾ Dark",
+      "failedTitle": "Review failed",
+      "failedBody": "We couldn’t analyse this game. Please try again."
+    },
+    "classifications": {
+      "brilliant": "Brilliant",
+      "great": "Great",
+      "best": "Best",
+      "excellent": "Excellent",
+      "good": "Good",
+      "book": "Book",
+      "inaccuracy": "Inaccuracy",
+      "mistake": "Mistake",
+      "miss": "Miss",
+      "blunder": "Blunder",
+      "forced": "Forced"
+    },
+    "coach": {
+      "headlines": {
+        "brilliant": "A brilliant game!",
+        "clean": "Clean and solid.",
+        "review": "Let’s review this one."
+      },
+      "messages": {
+        "brilliant": "You found {count, plural, one {# brilliant move} other {# brilliant moves}}. Step through the review to relive the key moments.",
+        "clean": "No blunders this game — top accuracy {best}%. Let’s look at where you could push even harder.",
+        "review": "A few turning points to learn from. Top accuracy was {best}% — start the review to see every key moment."
+      },
+      "bubblePlaceholder": "Step through the game to see move-by-move coaching.",
+      "moveComments": {
+        "bookLast": "{san} is the last book move of the {opening}.",
+        "bookLastNoName": "{san} is the last book move.",
+        "bookTheory": "{san} is still theory — a well-known book move.",
+        "brilliant": "Brilliant! {san} is a stunning sacrifice that the engine loves.",
+        "great": "Great move — {san} was the only move that keeps your position together.",
+        "best": "{san} is the best move here. Nothing improves on it.",
+        "excellent": "{san} is excellent — right in line with the engine.",
+        "good": "{san} is a good, solid move.",
+        "forced": "{san} is forced — there was nothing else.",
+        "inaccuracy": "{san} is a slight inaccuracy. There was something a little sharper.",
+        "mistake": "{san} is a mistake and lets some of your advantage slip away.",
+        "miss": "{san} misses a stronger continuation that was on the board.",
+        "blunderDropsMaterial": "{san} is a blunder — it drops material. The engine had much better.",
+        "blunder": "{san} is a blunder. The engine had much better."
+      }
+    },
+    "playback": {
+      "firstMove": "First move",
+      "previousMove": "Previous move",
+      "nextMove": "Next move",
+      "lastMove": "Last move",
+      "play": "Play through",
+      "pause": "Pause",
+      "nextKeyMoment": "Next key moment",
+      "next": "Next ⚡"
+    },
+    "phases": {
+      "title": "Phases",
+      "opening": "Opening",
+      "middlegame": "Middlegame",
+      "endgame": "Endgame"
+    },
+    "progress": {
+      "queued": "Queued for review…",
+      "running": "Analysing your game…"
+    },
+    "startButton": {
+      "label": "Game Review",
+      "disabledTooltip": "Finish the game to unlock Review",
+      "couldNotStart": "Could not start review",
+      "starting": "Starting…"
+    },
+    "panel": {
+      "startReview": "Start Review →",
+      "highlights": "‹ Highlights",
+      "share": "Share",
+      "copied": "Copied!",
+      "muteSounds": "Mute sounds",
+      "unmuteSounds": "Unmute sounds",
+      "gameRating": "Game Rating"
+    },
+    "players": {
+      "white": "White",
+      "black": "Black",
+      "whiteShort": "W",
+      "blackShort": "B"
+    },
+    "graph": {
+      "ariaLabel": "Evaluation over time"
+    }
   }
 }

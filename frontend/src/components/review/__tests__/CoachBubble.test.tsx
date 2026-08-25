@@ -2,9 +2,21 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, afterEach } from 'vitest';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup } from '@testing-library/react';
+import { createTranslator } from 'next-intl';
 import CoachBubble, { coachText, evalDeltaPawns, formatDelta } from '../CoachBubble';
 import type { ReviewMove } from '../types';
+import { renderIntl } from './intl';
+import en from '../../../../messages/en.json';
+
+// Standalone translator for exercising the pure coachText() helper. Cast to the
+// helper's own translator param type: createTranslator infers a strict key union
+// from `en`, whereas coachText accepts the looser runtime `useTranslations` shape.
+const t = createTranslator({
+  locale: 'en',
+  messages: en,
+  namespace: 'gameReview',
+}) as unknown as Parameters<typeof coachText>[0];
 
 afterEach(cleanup);
 
@@ -53,23 +65,23 @@ describe('formatDelta', () => {
 describe('coachText templates', () => {
   it('names the last book move with the opening', () => {
     const m = move({ ply: 2, san: 'e6', classification: 'book' });
-    expect(coachText(m, null, { name: 'French Defense', lastBookPly: 2 })).toContain(
+    expect(coachText(t, m, null, { name: 'French Defense', lastBookPly: 2 })).toContain(
       'last book move',
     );
-    expect(coachText(m, null, { name: 'French Defense', lastBookPly: 2 })).toContain(
+    expect(coachText(t, m, null, { name: 'French Defense', lastBookPly: 2 })).toContain(
       'French Defense',
     );
   });
 
   it('calls out a brilliant sacrifice', () => {
     const m = move({ ply: 6, san: 'Bxh7+', classification: 'brilliant' });
-    expect(coachText(m, null)).toMatch(/[Bb]rilliant/);
+    expect(coachText(t, m, null)).toMatch(/[Bb]rilliant/);
   });
 
   it('flags a blunder', () => {
     const prev = move({ ply: 2, eval: { type: 'cp', value: 30 } });
     const m = move({ ply: 3, san: 'Qd2', classification: 'blunder', eval: { type: 'cp', value: -250 } });
-    expect(coachText(m, prev)).toContain('blunder');
+    expect(coachText(t, m, prev)).toContain('blunder');
   });
 });
 
@@ -77,14 +89,14 @@ describe('CoachBubble render', () => {
   it('shows the SAN, classification and a signed delta chip', () => {
     const prev = move({ ply: 2, eval: { type: 'cp', value: 30 } });
     const m = move({ ply: 3, san: 'Qd2', classification: 'blunder', eval: { type: 'cp', value: -250 } });
-    const { getByTestId } = render(<CoachBubble move={m} prev={prev} />);
+    const { getByTestId } = renderIntl(<CoachBubble move={m} prev={prev} />);
     expect(getByTestId('coach-san').textContent).toBe('Qd2');
     expect(getByTestId('coach-delta').textContent).toBe('−2.8');
     expect(getByTestId('coach-bubble').getAttribute('data-classification')).toBe('blunder');
   });
 
   it('renders a placeholder at the start position', () => {
-    const { getByTestId } = render(<CoachBubble move={null} prev={null} />);
+    const { getByTestId } = renderIntl(<CoachBubble move={null} prev={null} />);
     expect(getByTestId('coach-bubble').textContent).toMatch(/step through/i);
   });
 });
