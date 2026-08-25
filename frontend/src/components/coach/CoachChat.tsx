@@ -4,6 +4,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 import ReactMarkdown from 'react-markdown';
 import ToolIndicator from './ToolIndicator';
+import useGeminiLive from '@/hooks/useGeminiLive';
 import type { CoachMessage, BoardAction, GameResult } from '@/types/coach';
 
 interface CoachChatProps {
@@ -28,6 +29,73 @@ export default function CoachChat({
   const [toolActive, setToolActive] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  // ── Voice mode (Gemini Live) ──────────────────────────────────────────────
+  // Keep the latest FEN in a ref so the hook's getFen closure never goes stale.
+  const currentFenRef = useRef(currentFen);
+  currentFenRef.current = currentFen;
+  const getFen = useCallback(() => currentFenRef.current, []);
+
+  // Id of the in-progress voice transcript bubble per role, so streaming
+  // (final:false) chunks update the same message and final:true freezes it.
+  const voiceMsgIdRef = useRef<{ user: string | null; model: string | null }>({
+    user: null,
+    model: null,
+  });
+
+  const handleTranscript = useCallback(
+    (tr: { role: 'user' | 'model'; text: string; final: boolean }) => {
+      const mappedRole: 'user' | 'assistant' =
+        tr.role === 'user' ? 'user' : 'assistant';
+      const currentId = voiceMsgIdRef.current[tr.role];
+      if (currentId) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === currentId ? { ...m, content: m.content + tr.text } : m
+          )
+        );
+      } else {
+        const id = crypto.randomUUID();
+        voiceMsgIdRef.current[tr.role] = id;
+        setMessages((prev) => [
+          ...prev,
+          { id, role: mappedRole, content: tr.text, timestamp: new Date() },
+        ]);
+      }
+      if (tr.final) {
+        voiceMsgIdRef.current[tr.role] = null;
+      }
+    },
+    []
+  );
+
+  const {
+    status: voiceStatus,
+    isSupported: voiceSupported,
+    isActive: voiceActive,
+    error: voiceError,
+    connect: voiceConnect,
+    disconnect: voiceDisconnect,
+  } = useGeminiLive({ getFen, onTranscript: handleTranscript });
+
+  const toggleVoice = useCallback(() => {
+    if (voiceActive) {
+      voiceDisconnect();
+    } else {
+      voiceConnect();
+    }
+  }, [voiceActive, voiceConnect, voiceDisconnect]);
+
+  // Disconnect a live session on unmount without re-running on every toggle.
+  const voiceActiveRef = useRef(voiceActive);
+  voiceActiveRef.current = voiceActive;
+  useEffect(() => {
+    return () => {
+      if (voiceActiveRef.current) {
+        voiceDisconnect();
+      }
+    };
+  }, [voiceDisconnect]);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -299,6 +367,22 @@ export default function CoachChat({
 
       {/* Input */}
       <div className="border-t border-white/10 p-3">
+        {(voiceStatus === 'connecting' ||
+          voiceStatus === 'listening' ||
+          voiceStatus === 'speaking') && (
+          <div className="mb-2 flex justify-center">
+            <span
+              data-testid="voice-pill"
+              className="px-3 py-1 rounded-full text-xs bg-white/5 text-gray-300"
+            >
+              {voiceStatus === 'connecting'
+                ? t('voiceConnecting')
+                : voiceStatus === 'listening'
+                  ? t('voiceListening')
+                  : t('voiceSpeaking')}
+            </span>
+          </div>
+        )}
         <div className="flex gap-2">
           <textarea
             value={input}
@@ -329,6 +413,63 @@ export default function CoachChat({
               <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                 <path d="M1 1l14 7-14 7V9l10-1-10-1V1z" />
               </svg>
+            </button>
+          )}
+          {voiceSupported && (
+            <button
+              onClick={toggleVoice}
+              disabled={voiceStatus === 'connecting'}
+              data-testid="voice-toggle"
+              data-status={voiceStatus}
+              aria-label={voiceActive ? t('voiceStop') : t('voiceStart')}
+              title={
+                voiceStatus === 'error' && voiceError
+                  ? voiceError
+                  : voiceActive
+                    ? t('voiceStop')
+                    : t('voiceStart')
+              }
+              className={`px-4 py-2 rounded-lg transition-colors disabled:cursor-not-allowed ${
+                voiceStatus === 'listening'
+                  ? 'bg-green-500/20 text-green-400 ring-2 ring-green-400/50 animate-pulse'
+                  : voiceStatus === 'speaking'
+                    ? 'bg-blue-500/20 text-blue-300 ring-2 ring-blue-400/50 animate-pulse'
+                    : voiceStatus === 'connecting'
+                      ? 'bg-white/10 text-gray-400 animate-pulse'
+                      : voiceStatus === 'error'
+                        ? 'bg-red-500/20 text-red-400'
+                        : 'bg-white/5 hover:bg-white/10 text-gray-400'
+              }`}
+            >
+              {voiceStatus === 'connecting' ? (
+                <svg
+                  className="animate-spin"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                >
+                  <circle
+                    cx="8"
+                    cy="8"
+                    r="6"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeOpacity="0.25"
+                  />
+                  <path
+                    d="M14 8a6 6 0 00-6-6"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M8 10a2.5 2.5 0 002.5-2.5v-4a2.5 2.5 0 00-5 0v4A2.5 2.5 0 008 10z" />
+                  <path d="M12 7.5a.5.5 0 00-1 0 3 3 0 01-6 0 .5.5 0 00-1 0 4 4 0 003.5 3.97V13H6a.5.5 0 000 1h4a.5.5 0 000-1H8.5v-1.53A4 4 0 0012 7.5z" />
+                </svg>
+              )}
             </button>
           )}
         </div>
