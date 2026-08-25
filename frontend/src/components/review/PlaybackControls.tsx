@@ -1,6 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import {
+  CBGoToStartIcon,
+  CBPreviousMoveIcon,
+  CBNextMoveIcon,
+  CBGoToEndIcon,
+  CBPlayIcon,
+  CBPauseIcon,
+} from '@/components/icons/ChessBaseNavIcons';
 
 /**
  * The next key-moment ply strictly after `currentPly`, or null if none remain.
@@ -24,24 +32,26 @@ export interface PlaybackControlsProps {
   onStep: (delta: number) => void;
 }
 
-const btn: React.CSSProperties = {
+const seg: React.CSSProperties = {
+  flex: 1,
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
-  width: 40,
-  height: 40,
-  borderRadius: 10,
-  border: '1px solid var(--review-card-border)',
-  background: 'var(--review-card)',
+  height: 44,
+  border: 'none',
+  borderRight: '1px solid var(--review-card-border)',
+  background: 'transparent',
   color: 'var(--review-text)',
   cursor: 'pointer',
-  fontSize: 15,
 };
 
 /**
  * first / prev / play-through / next / last + a "Next key moment" jump.
- * Play-through auto-advances ~1 move/sec and stops at the final ply. Keyboard
- * ←/→ is wired at the page level and keeps working alongside these.
+ * Rendered flush under the board as a full-width rounded segment row that
+ * matches the ChessBase analysis-board control bar (shared CB SVG icons).
+ * Play-through auto-advances ~1 move/sec and stops at the final ply; the play
+ * button glows accent while auto-playing. Keyboard ←/→ is wired at the page
+ * level and keeps working alongside these.
  */
 export default function PlaybackControls({
   currentPly,
@@ -72,23 +82,89 @@ export default function PlaybackControls({
   return (
     <div
       data-testid="playback-controls"
-      style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center' }}
+      style={{
+        display: 'flex',
+        alignItems: 'stretch',
+        width: '100%',
+        borderRadius: 12,
+        border: '1px solid var(--review-card-border)',
+        background: 'var(--review-card)',
+        overflow: 'hidden',
+      }}
     >
-      <button type="button" aria-label="First move" data-testid="pb-first" style={btn}
-        disabled={atStart} onClick={() => onJump(0)}>⏮</button>
-      <button type="button" aria-label="Previous move" data-testid="pb-prev" style={btn}
-        disabled={atStart} onClick={() => onStep(-1)}>‹</button>
-      <button type="button" aria-label={showPlaying ? 'Pause' : 'Play through'} data-testid="pb-play" style={btn}
-        onClick={() => setPlaying((p) => !p)} disabled={atEnd && !playing}>{showPlaying ? '⏸' : '▶'}</button>
-      <button type="button" aria-label="Next move" data-testid="pb-next" style={btn}
-        disabled={atEnd} onClick={() => onStep(1)}>›</button>
-      <button type="button" aria-label="Last move" data-testid="pb-last" style={btn}
-        disabled={atEnd} onClick={() => onJump(maxPly)}>⏭</button>
+      <button
+        type="button"
+        aria-label="First move"
+        data-testid="pb-first"
+        style={{ ...seg, opacity: atStart ? 0.35 : 1 }}
+        disabled={atStart}
+        onClick={() => onJump(0)}
+      >
+        <CBGoToStartIcon sx={{ width: 18, height: 14 }} />
+      </button>
+      <button
+        type="button"
+        aria-label="Previous move"
+        data-testid="pb-prev"
+        style={{ ...seg, opacity: atStart ? 0.35 : 1 }}
+        disabled={atStart}
+        onClick={() => onStep(-1)}
+      >
+        <CBPreviousMoveIcon sx={{ width: 14, height: 15 }} />
+      </button>
+      <button
+        type="button"
+        aria-label={showPlaying ? 'Pause' : 'Play through'}
+        data-testid="pb-play"
+        style={{
+          ...seg,
+          flex: 1.4,
+          color: showPlaying ? 'var(--review-accent)' : 'var(--review-text)',
+          opacity: atEnd && !playing ? 0.35 : 1,
+        }}
+        onClick={() => setPlaying((p) => !p)}
+        disabled={atEnd && !playing}
+      >
+        {showPlaying ? (
+          <CBPauseIcon sx={{ width: 15, height: 16 }} />
+        ) : (
+          <CBPlayIcon sx={{ width: 15, height: 16 }} />
+        )}
+      </button>
+      <button
+        type="button"
+        aria-label="Next move"
+        data-testid="pb-next"
+        style={{ ...seg, opacity: atEnd ? 0.35 : 1 }}
+        disabled={atEnd}
+        onClick={() => onStep(1)}
+      >
+        <CBNextMoveIcon sx={{ width: 14, height: 15 }} />
+      </button>
+      <button
+        type="button"
+        aria-label="Last move"
+        data-testid="pb-last"
+        style={{ ...seg, opacity: atEnd ? 0.35 : 1 }}
+        disabled={atEnd}
+        onClick={() => onJump(maxPly)}
+      >
+        <CBGoToEndIcon sx={{ width: 18, height: 14 }} />
+      </button>
       <button
         type="button"
         aria-label="Next key moment"
         data-testid="pb-keymoment"
-        style={{ ...btn, width: 'auto', padding: '0 12px', gap: 6, fontSize: 13, fontWeight: 700 }}
+        style={{
+          ...seg,
+          flex: 1.6,
+          borderRight: 'none',
+          gap: 6,
+          fontSize: 13,
+          fontWeight: 700,
+          color: 'var(--review-accent)',
+          opacity: upcomingKeyMoment == null ? 0.35 : 1,
+        }}
         disabled={upcomingKeyMoment == null}
         onClick={() => upcomingKeyMoment != null && onJump(upcomingKeyMoment)}
       >

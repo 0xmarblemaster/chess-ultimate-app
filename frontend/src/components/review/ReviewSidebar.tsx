@@ -23,7 +23,6 @@ export interface ReviewSidebarProps {
   /** Review-mode wiring (Phase 4). */
   currentPly: number;
   onSetPly: (ply: number) => void;
-  onStepPly: (delta: number) => void;
   onExitReview: () => void;
 }
 
@@ -62,7 +61,6 @@ export default function ReviewSidebar({
   onStartReview,
   currentPly,
   onSetPly,
-  onStepPly,
   onExitReview,
 }: ReviewSidebarProps) {
   if (mode === 'review') {
@@ -71,7 +69,6 @@ export default function ReviewSidebar({
         data={data}
         currentPly={currentPly}
         onSetPly={onSetPly}
-        onStepPly={onStepPly}
         onExitReview={onExitReview}
       />
     );

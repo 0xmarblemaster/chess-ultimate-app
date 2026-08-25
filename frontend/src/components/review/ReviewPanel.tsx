@@ -4,7 +4,6 @@ import { useState } from 'react';
 import type { ReviewResult } from './types';
 import CoachBubble from './CoachBubble';
 import MoveList from './MoveList';
-import PlaybackControls from './PlaybackControls';
 import ReviewSounds from './ReviewSounds';
 
 const MUTE_KEY = 'review-sound-muted';
@@ -14,24 +13,22 @@ export interface ReviewPanelProps {
   /** 1-based current ply (0 = start position). */
   currentPly: number;
   onSetPly: (ply: number) => void;
-  onStepPly: (delta: number) => void;
   /** Return to the Highlights summary. */
   onExitReview: () => void;
 }
 
 /**
- * Review-mode sidebar: coach bubble → controls (playback + key-moment + share +
- * mute) → annotated move list, plus the sound player. Replaces the Phase 3
- * placeholder. One layout, both themes via the review CSS vars.
+ * Review-mode sidebar: Highlights/Share/Mute row → coach bubble → annotated
+ * move list, plus the sound player. The playback replay bar now lives under
+ * the board (page.tsx), not here. One layout, both themes via the review CSS
+ * vars.
  */
 export default function ReviewPanel({
   data,
   currentPly,
   onSetPly,
-  onStepPly,
   onExitReview,
 }: ReviewPanelProps) {
-  const maxPly = data.moves.length;
   const currentMove = currentPly >= 1 ? data.moves[currentPly - 1] : null;
   const prevMove = currentPly >= 2 ? data.moves[currentPly - 2] : null;
 
@@ -109,14 +106,6 @@ export default function ReviewPanel({
         move={currentMove}
         prev={prevMove}
         opening={{ name: data.opening?.name, lastBookPly: data.opening?.lastBookPly }}
-      />
-
-      <PlaybackControls
-        currentPly={currentPly}
-        maxPly={maxPly}
-        keyMoments={data.keyMoments}
-        onJump={onSetPly}
-        onStep={onStepPly}
       />
 
       <MoveList moves={data.moves} currentPly={currentPly} onSelect={onSetPly} />

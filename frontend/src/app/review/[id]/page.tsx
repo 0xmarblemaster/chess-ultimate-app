@@ -9,6 +9,7 @@ import {
   ReviewSidebar,
   EvalBar,
   EvalGraph,
+  PlaybackControls,
   useReviewStore,
   fetchReview,
   ReviewFetchError,
@@ -145,6 +146,15 @@ function ReviewPageInner() {
                 animationKey={currentPly}
               />
             </div>
+            {/* Replay bar glued directly under the board (both modes) so it's
+                reachable by thumb on mobile instead of buried in the sidebar. */}
+            <PlaybackControls
+              currentPly={currentPly}
+              maxPly={data.moves.length}
+              keyMoments={data.keyMoments}
+              onJump={(ply) => dispatch({ type: 'setPly', ply })}
+              onStep={(delta) => dispatch({ type: 'stepPly', delta })}
+            />
           </section>
 
           <div className="review-side-col">
@@ -156,7 +166,6 @@ function ReviewPageInner() {
               onStartReview={() => dispatch({ type: 'setMode', mode: 'review' })}
               currentPly={currentPly}
               onSetPly={(ply) => dispatch({ type: 'setPly', ply })}
-              onStepPly={(delta) => dispatch({ type: 'stepPly', delta })}
               onExitReview={() => dispatch({ type: 'setMode', mode: 'highlights' })}
             />
             <EvalGraph

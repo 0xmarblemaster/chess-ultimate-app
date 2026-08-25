@@ -1022,10 +1022,13 @@ html.dark .divide-gray-200 > :not(:last-child) { border-color: #333 !important; 
   max-width: 100%;
 }
 
-/* Eval bar tracks the board. Desktop keeps the fixed 688; the mobile block
-   below switches it to stretch to the (shrunken) board's height. */
+/* Eval bar tracks the board's true rendered height on every viewport: the
+   square board (aspect-ratio 1/1, max 520) sets the row height and the bar
+   stretches to it, so it always ends level with the board — no stale fixed
+   height leaving dead space below. */
 .review-eval-bar {
-  height: 688px;
+  height: auto;
+  align-self: stretch;
 }
 
 /* Accuracy rings row — gutter lives here (not inline) so the mobile block can
@@ -1121,13 +1124,6 @@ html.dark .divide-gray-200 > :not(:last-child) { border-color: #333 !important; 
 
   .review-side-col {
     width: 100%;
-  }
-
-  /* No fixed 688px on mobile — stretch to the board row's height so the bar
-     ends level with the board instead of leaving a tall empty gap. */
-  .review-eval-bar {
-    height: auto;
-    align-self: stretch;
   }
 
   /* Keep the two accuracy rings 2-up but tighten the gutter so they don't

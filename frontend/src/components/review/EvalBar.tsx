@@ -31,9 +31,9 @@ export interface EvalBarProps {
   evaluation: EngineEval;
   /**
    * Explicit pixel height. When omitted the bar tracks the board via the
-   * `.review-eval-bar` class — a fixed 688 on desktop, and `height:auto` +
-   * `align-self:stretch` on mobile so it matches the shrunken board's height
-   * instead of leaving a tall empty gap.
+   * `.review-eval-bar` class (`height:auto` + `align-self:stretch`) so it
+   * matches the board's true rendered height on every viewport instead of
+   * leaving a gap below.
    */
   height?: number;
 }

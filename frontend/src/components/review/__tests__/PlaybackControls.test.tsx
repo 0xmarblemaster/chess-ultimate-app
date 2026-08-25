@@ -76,4 +76,22 @@ describe('PlaybackControls', () => {
     const { getByTestId } = setup(12, 40, [5, 12]);
     expect((getByTestId('pb-keymoment') as HTMLButtonElement).disabled).toBe(true);
   });
+
+  it('play toggles to pause and glows accent while playing', () => {
+    const { getByTestId } = setup(10);
+    const play = getByTestId('pb-play') as HTMLButtonElement;
+    expect(play.getAttribute('aria-label')).toBe('Play through');
+    expect(play.style.color).toBe('var(--review-text)');
+    fireEvent.click(play);
+    expect(play.getAttribute('aria-label')).toBe('Pause');
+    expect(play.style.color).toBe('var(--review-accent)');
+  });
+
+  it('renders SVG glyphs (ChessBase icons) rather than unicode text', () => {
+    const { getByTestId } = setup(10);
+    // Each nav control now paints an <svg> icon, not a text glyph.
+    for (const id of ['pb-first', 'pb-prev', 'pb-play', 'pb-next', 'pb-last']) {
+      expect(getByTestId(id).querySelector('svg')).not.toBeNull();
+    }
+  });
 });

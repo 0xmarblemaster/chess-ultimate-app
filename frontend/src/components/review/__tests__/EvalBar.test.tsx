@@ -49,7 +49,7 @@ describe('EvalBar', () => {
       <EvalBar whiteWinPercent={50} evaluation={{ type: 'cp', value: 0 }} />,
     );
     const bar = getByTestId('eval-bar');
-    // Height must come from `.review-eval-bar` (688 desktop / stretch on mobile),
+    // Height must come from `.review-eval-bar` (stretch to the board's height),
     // not an inline value — an inline height can't be beaten by a media query.
     expect(bar.className).toContain('review-eval-bar');
     expect(bar.style.height).toBe('');
