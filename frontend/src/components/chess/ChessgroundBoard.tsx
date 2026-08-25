@@ -391,8 +391,14 @@ export default function ChessgroundBoard({
     cgRef.current?.set({ fen: fenRef.current });
   }, []);
 
+  // verticalAlign:'top' removes the inline-block baseline descender gap. Without
+  // it, this inline-block sits on its line box's baseline and reserves ~6px of
+  // leading below the board (from the parent's inherited line-height). That extra
+  // height makes square-aspect-ratio parents (e.g. ReviewBoard's
+  // [data-testid="review-board"]) render taller than wide, drifting the
+  // percentage-positioned classification tints/badge downward off their squares.
   return (
-    <div ref={wrapperRef} style={{ position: 'relative', display: 'inline-block', lineHeight: 0 }}>
+    <div ref={wrapperRef} style={{ position: 'relative', display: 'inline-block', lineHeight: 0, verticalAlign: 'top' }}>
       <div
         ref={boardRef}
         className="chessground-board"

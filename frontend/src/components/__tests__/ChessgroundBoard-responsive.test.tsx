@@ -71,4 +71,18 @@ describe('ChessgroundBoard container-based default sizing', () => {
     const board = container.querySelector('.chessground-board') as HTMLElement;
     expect(board.style.width).toBe('300px');
   });
+
+  // Regression guard: the inline-block wrapper must neutralise the baseline
+  // descender gap. Without verticalAlign:'top', square-aspect-ratio parents
+  // (ReviewBoard) grow ~6px taller than wide and the percentage-positioned
+  // classification tints/badge drift down off their squares.
+  it('wrapper neutralises the inline-block baseline gap (verticalAlign top, lineHeight 0)', () => {
+    mockClientWidth = 400;
+    const { container } = render(<ChessgroundBoard fen={FEN} viewOnly />);
+    const board = container.querySelector('.chessground-board') as HTMLElement;
+    const wrapper = board.parentElement as HTMLElement;
+    expect(wrapper.style.display).toBe('inline-block');
+    expect(wrapper.style.verticalAlign).toBe('top');
+    expect(wrapper.style.lineHeight).toBe('0');
+  });
 });
