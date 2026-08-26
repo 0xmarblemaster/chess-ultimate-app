@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { Key } from 'chessground/types';
 import { Chess } from 'chess.js';
 import type {
@@ -35,8 +35,19 @@ export function useCoachBoard(): UseCoachBoardReturn {
   const [puzzleMode, setPuzzleMode] = useState(false);
   const [puzzleState, setPuzzleState] = useState<PuzzleState | null>(null);
 
-  // Internal: list of FENs for PGN-loaded games (for navigation)
+  // Internal: list of FENs for navigation (PGN-loaded games AND manual play)
   const [pgnFens, setPgnFens] = useState<string[]>([]);
+
+  // Refs mirror the latest state so setFenFromMove can build history atomically
+  // (no stale closures) even across rapid manual moves within a single tick.
+  const fenRef = useRef(fen);
+  const pgnFensRef = useRef(pgnFens);
+  const moveIndexRef = useRef(moveIndex);
+  useEffect(() => {
+    fenRef.current = fen;
+    pgnFensRef.current = pgnFens;
+    moveIndexRef.current = moveIndex;
+  }, [fen, pgnFens, moveIndex]);
 
   const applyBoardAction = useCallback((action: BoardAction) => {
     switch (action.type) {
@@ -44,8 +55,8 @@ export function useCoachBoard(): UseCoachBoardReturn {
         setFen(action.fen);
         setArrows([]);
         setHighlights([]);
-        setPgnFens([]);
-        setMoveIndex(-1);
+        setPgnFens([action.fen]);
+        setMoveIndex(0);
         setPuzzleMode(false);
         setPuzzleState(null);
         break;
@@ -90,8 +101,8 @@ export function useCoachBoard(): UseCoachBoardReturn {
         });
         setArrows([]);
         setHighlights([]);
-        setPgnFens([]);
-        setMoveIndex(-1);
+        setPgnFens([action.fen]);
+        setMoveIndex(0);
         break;
       }
 
@@ -141,8 +152,8 @@ export function useCoachBoard(): UseCoachBoardReturn {
       case 'clear_board': {
         setFen(DEFAULT_FEN);
         setPgn('');
-        setPgnFens([]);
-        setMoveIndex(-1);
+        setPgnFens([DEFAULT_FEN]);
+        setMoveIndex(0);
         setArrows([]);
         setHighlights([]);
         setPuzzleMode(false);
@@ -229,8 +240,8 @@ export function useCoachBoard(): UseCoachBoardReturn {
   const resetBoard = useCallback(() => {
     setFen(DEFAULT_FEN);
     setPgn('');
-    setPgnFens([]);
-    setMoveIndex(-1);
+    setPgnFens([DEFAULT_FEN]);
+    setMoveIndex(0);
     setArrows([]);
     setHighlights([]);
     setPuzzleMode(false);
@@ -239,14 +250,40 @@ export function useCoachBoard(): UseCoachBoardReturn {
   }, []);
 
   const setFenFromMove = useCallback((from: Key, to: Key, promotion?: 'q' | 'r' | 'b' | 'n') => {
+    const baseFen = fenRef.current;
+    let newFen: string;
     try {
-      const chess = new Chess(fen);
+      const chess = new Chess(baseFen);
       chess.move({ from: from as string, to: to as string, promotion: promotion ?? 'q' });
-      setFen(chess.fen());
+      newFen = chess.fen();
     } catch {
       // Illegal move, ignore
+      return;
     }
-  }, [fen]);
+
+    const prevFens = pgnFensRef.current;
+    const prevIndex = moveIndexRef.current;
+
+    let newFens: string[];
+    if (prevFens.length === 0) {
+      // No history yet: seed the pre-move position as the navigable base,
+      // then append the new position.
+      newFens = [baseFen, newFen];
+    } else {
+      // Truncate any forward history, then append the new position.
+      newFens = [...prevFens.slice(0, prevIndex + 1), newFen];
+    }
+    const newIndex = newFens.length - 1;
+
+    // Keep refs in sync synchronously so rapid successive moves see fresh values.
+    fenRef.current = newFen;
+    pgnFensRef.current = newFens;
+    moveIndexRef.current = newIndex;
+
+    setFen(newFen);
+    setPgnFens(newFens);
+    setMoveIndex(newIndex);
+  }, []);
 
   return {
     fen,

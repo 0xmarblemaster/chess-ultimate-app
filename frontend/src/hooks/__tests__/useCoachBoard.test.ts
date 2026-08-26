@@ -182,6 +182,96 @@ describe('useCoachBoard', () => {
     expect(result.current.moveIndex).toBeLessThan(result.current.moveIndex + 1);
   });
 
+  it('builds a navigable history from manual moves', () => {
+    const { result } = renderHook(() => useCoachBoard());
+
+    // Play e2-e4, then e7-e5 via manual piece moves
+    act(() => {
+      result.current.setFenFromMove('e2', 'e4');
+    });
+    act(() => {
+      result.current.setFenFromMove('e7', 'e5');
+    });
+
+    const tipFen = result.current.fen;
+    expect(result.current.moveIndex).toBe(2);
+    expect(tipFen).not.toBe(DEFAULT_FEN);
+
+    // First returns to the start position
+    act(() => {
+      result.current.firstMove();
+    });
+    expect(result.current.moveIndex).toBe(0);
+    expect(result.current.fen).toBe(DEFAULT_FEN);
+
+    // Last returns to the tip
+    act(() => {
+      result.current.lastMove();
+    });
+    expect(result.current.moveIndex).toBe(2);
+    expect(result.current.fen).toBe(tipFen);
+  });
+
+  it('round-trips prev then next on manual history', () => {
+    const { result } = renderHook(() => useCoachBoard());
+
+    act(() => {
+      result.current.setFenFromMove('e2', 'e4');
+    });
+    act(() => {
+      result.current.setFenFromMove('e7', 'e5');
+    });
+
+    const tipFen = result.current.fen;
+
+    act(() => {
+      result.current.prevMove();
+    });
+    expect(result.current.moveIndex).toBe(1);
+    const midFen = result.current.fen;
+    expect(midFen).not.toBe(tipFen);
+    expect(midFen).not.toBe(DEFAULT_FEN);
+
+    act(() => {
+      result.current.nextMove();
+    });
+    expect(result.current.moveIndex).toBe(2);
+    expect(result.current.fen).toBe(tipFen);
+  });
+
+  it('truncates forward history when playing after prevMove', () => {
+    const { result } = renderHook(() => useCoachBoard());
+
+    act(() => {
+      result.current.setFenFromMove('e2', 'e4');
+    });
+    act(() => {
+      result.current.setFenFromMove('e7', 'e5');
+    });
+
+    // Step back to after 1. e4 (black to move)
+    act(() => {
+      result.current.prevMove();
+    });
+    expect(result.current.moveIndex).toBe(1);
+
+    // Play a different black move — forward history (old e5) should be discarded
+    act(() => {
+      result.current.setFenFromMove('c7', 'c5');
+    });
+
+    // History is now [start, e4, c5] — no orphan future FEN
+    expect(result.current.moveIndex).toBe(2);
+    const tipFen = result.current.fen;
+
+    act(() => {
+      result.current.nextMove();
+    });
+    // Already at tip; nothing beyond it
+    expect(result.current.moveIndex).toBe(2);
+    expect(result.current.fen).toBe(tipFen);
+  });
+
   it('validates puzzle moves correctly', () => {
     const { result } = renderHook(() => useCoachBoard());
     const puzzleFen = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
