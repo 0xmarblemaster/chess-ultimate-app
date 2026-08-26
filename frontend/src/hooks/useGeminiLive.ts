@@ -15,6 +15,8 @@ export type LiveStatus = 'idle' | 'connecting' | 'listening' | 'speaking' | 'err
 
 export interface UseGeminiLiveOptions {
   getFen?: () => string;
+  /** Current coach session id, so the minted token carries the shared conversation memory. */
+  getSessionId?: () => string | null | undefined;
   onTranscript?: (t: { role: 'user' | 'model'; text: string; final: boolean }) => void;
   onError?: (msg: string) => void;
   onStatusChange?: (s: LiveStatus) => void;
@@ -332,11 +334,12 @@ export default function useGeminiLive(
 
     try {
       const fen = optionsRef.current.getFen?.();
+      const sessionId = optionsRef.current.getSessionId?.();
       const res = await fetch('/api/coach/live-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ fen }),
+        body: JSON.stringify({ fen, session_id: sessionId ?? undefined }),
       });
       if (!res.ok) {
         throw new Error(`Live coach unavailable (${res.status})`);

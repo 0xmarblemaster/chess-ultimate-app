@@ -94,4 +94,84 @@ describe('POST /api/coach/live-token', () => {
     expect(data.error).toBe('Failed to start live session');
     errorSpy.mockRestore();
   });
+
+  // ── Shared conversation memory injection ────────────────────────────────────
+
+  const systemInstructionFromMint = () => {
+    const call = createMock.mock.calls[0][0];
+    return call.config.liveConnectConstraints.config.systemInstruction as string;
+  };
+
+  it('injects a conversation recap from Hermes when session_id is present', async () => {
+    (auth as any).mockResolvedValue({ userId: 'user_123' });
+    process.env.GEMINI_API_KEY = 'AQ.test-key';
+    createMock.mockResolvedValue({ name: 'ephemeral-token-xyz' });
+
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        messages: [
+          { role: 'user', content: 'How do I attack the king?', source: 'text' },
+          { role: 'assistant', content: 'Open lines first.', source: 'text' },
+          { role: 'user', content: 'Like this?', source: 'voice' },
+        ],
+      }),
+    });
+    global.fetch = fetchSpy as any;
+
+    const { POST } = await import('../live-token/route');
+    const response = await POST(makeRequest({ session_id: 'sess_1' }));
+
+    expect(response.status).toBe(200);
+    // Fetched the last 20 messages for this session, scoped by user.
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, opts] = fetchSpy.mock.calls[0];
+    expect(url).toContain('/api/coach/sessions/sess_1/messages');
+    expect(url).toContain('limit=20');
+    expect(opts.headers['X-User-Id']).toBe('user_123');
+
+    const instruction = systemInstructionFromMint();
+    expect(instruction).toContain('continuing an ongoing coaching conversation');
+    expect(instruction).toContain('How do I attack the king?');
+    expect(instruction).toContain('Open lines first.');
+    // Voice-sourced lines may be tagged.
+    expect(instruction).toContain('[user (spoken)] Like this?');
+  });
+
+  it('does not fetch Hermes when no session_id is provided', async () => {
+    (auth as any).mockResolvedValue({ userId: 'user_123' });
+    process.env.GEMINI_API_KEY = 'AQ.test-key';
+    createMock.mockResolvedValue({ name: 'ephemeral-token-xyz' });
+
+    const fetchSpy = vi.fn();
+    global.fetch = fetchSpy as any;
+
+    const { POST } = await import('../live-token/route');
+    const response = await POST(makeRequest({ fen: 'somefen' }));
+
+    expect(response.status).toBe(200);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(systemInstructionFromMint()).not.toContain(
+      'continuing an ongoing coaching conversation',
+    );
+  });
+
+  it('falls back to no recap (still 200) when the Hermes fetch fails', async () => {
+    (auth as any).mockResolvedValue({ userId: 'user_123' });
+    process.env.GEMINI_API_KEY = 'AQ.test-key';
+    createMock.mockResolvedValue({ name: 'ephemeral-token-xyz' });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    global.fetch = vi.fn().mockRejectedValue(new Error('hermes down')) as any;
+
+    const { POST } = await import('../live-token/route');
+    const response = await POST(makeRequest({ session_id: 'sess_1' }));
+
+    // Voice must still start even if Hermes is unreachable.
+    expect(response.status).toBe(200);
+    expect(systemInstructionFromMint()).not.toContain(
+      'continuing an ongoing coaching conversation',
+    );
+    errorSpy.mockRestore();
+  });
 });

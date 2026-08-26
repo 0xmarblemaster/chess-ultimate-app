@@ -16,6 +16,7 @@ class SessionMessage(BaseModel):
     role: str
     content: str
     timestamp: float = Field(default_factory=time.time)
+    source: str = "text"
 
 
 class Session(BaseModel):
@@ -25,8 +26,10 @@ class Session(BaseModel):
     messages: list[SessionMessage] = Field(default_factory=list)
     board_state: str = chess.STARTING_FEN
 
-    def add_message(self, role: str, content: str) -> None:
-        self.messages.append(SessionMessage(role=role, content=content))
+    def add_message(self, role: str, content: str, source: str = "text") -> None:
+        self.messages.append(
+            SessionMessage(role=role, content=content, source=source)
+        )
 
     def set_board_state(self, fen: str) -> None:
         """Update the current board state (validates FEN)."""

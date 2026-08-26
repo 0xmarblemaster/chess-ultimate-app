@@ -78,11 +78,18 @@ describe('CoachChat voice mode', () => {
     expect(screen.queryByTestId('voice-toggle')).toBeNull();
   });
 
-  it('calls connect() when clicking the mic while idle', () => {
+  it('calls connect() when clicking the mic while idle', async () => {
     const connect = vi.fn(async () => {});
     live.ret = makeReturn({ status: 'idle', isActive: false, connect });
+    // Voice ensures a session first; stub that call so connect is reached.
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: 'sess-new' }),
+    }) as unknown as typeof fetch;
     renderChat();
-    fireEvent.click(screen.getByTestId('voice-toggle'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('voice-toggle'));
+    });
     expect(connect).toHaveBeenCalledTimes(1);
   });
 
@@ -138,6 +145,155 @@ describe('CoachChat voice mode', () => {
   it('passes the live FEN through getFen', () => {
     renderChat();
     expect(live.options?.getFen?.()).toBe('startpos-fen');
+  });
+});
+
+describe('CoachChat shared conversation memory', () => {
+  let fetchSpy: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true }),
+    });
+    global.fetch = fetchSpy as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function renderChatWithSession(sessionId: string | null) {
+    return render(
+      <NextIntlClientProvider locale="en" messages={en as Record<string, unknown>}>
+        <CoachChat currentFen="fen" sessionId={sessionId} onBoardActions={() => {}} />
+      </NextIntlClientProvider>
+    );
+  }
+
+  it('exposes the current session id to the voice hook via getSessionId', () => {
+    renderChatWithSession('sess-42');
+    expect(live.options?.getSessionId?.()).toBe('sess-42');
+  });
+
+  it('persists a finalized user transcript to the shared session as voice', async () => {
+    renderChatWithSession('sess-1');
+    await act(async () => {
+      live.options?.onTranscript?.({ role: 'user', text: 'attack the king', final: true });
+    });
+
+    const call = fetchSpy.mock.calls.find(([url]) =>
+      String(url).includes('/api/coach/sessions/sess-1/messages')
+    );
+    expect(call).toBeTruthy();
+    const [, opts] = call!;
+    expect(opts.method).toBe('POST');
+    const sent = JSON.parse(opts.body);
+    expect(sent).toEqual({ role: 'user', content: 'attack the king', source: 'voice' });
+  });
+
+  it('persists a finalized coach transcript as assistant/voice', async () => {
+    renderChatWithSession('sess-1');
+    await act(async () => {
+      live.options?.onTranscript?.({ role: 'model', text: 'Open lines first.', final: true });
+    });
+
+    const call = fetchSpy.mock.calls.find(([url]) =>
+      String(url).includes('/api/coach/sessions/sess-1/messages')
+    );
+    const sent = JSON.parse(call![1].body);
+    expect(sent).toEqual({
+      role: 'assistant',
+      content: 'Open lines first.',
+      source: 'voice',
+    });
+  });
+
+  it('does NOT persist interim (non-final) transcripts', async () => {
+    renderChatWithSession('sess-1');
+    await act(async () => {
+      live.options?.onTranscript?.({ role: 'user', text: 'thinking...', final: false });
+    });
+    const call = fetchSpy.mock.calls.find(([url]) =>
+      String(url).includes('/api/coach/sessions/sess-1/messages')
+    );
+    expect(call).toBeFalsy();
+  });
+
+  it('persists the full accumulated utterance across streamed chunks', async () => {
+    renderChatWithSession('sess-1');
+    await act(async () => {
+      live.options?.onTranscript?.({ role: 'model', text: 'Let me ', final: false });
+    });
+    await act(async () => {
+      live.options?.onTranscript?.({ role: 'model', text: 'think.', final: true });
+    });
+    const call = fetchSpy.mock.calls.find(([url]) =>
+      String(url).includes('/api/coach/sessions/sess-1/messages')
+    );
+    const sent = JSON.parse(call![1].body);
+    expect(sent.content).toBe('Let me think.');
+  });
+
+  it('does not persist transcripts when there is no session id', async () => {
+    renderChatWithSession(null);
+    await act(async () => {
+      live.options?.onTranscript?.({ role: 'user', text: 'orphan', final: true });
+    });
+    const call = fetchSpy.mock.calls.find(([url]) =>
+      String(url).includes('/messages')
+    );
+    expect(call).toBeFalsy();
+  });
+
+  it('creates a session before connecting voice when none exists', async () => {
+    const onSessionCreated = vi.fn();
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ id: 'new-sess' }),
+    });
+    const connect = vi.fn(async () => {});
+    live.ret = makeReturn({ status: 'idle', isActive: false, connect });
+
+    render(
+      <NextIntlClientProvider locale="en" messages={en as Record<string, unknown>}>
+        <CoachChat
+          currentFen="fen"
+          sessionId={null}
+          onBoardActions={() => {}}
+          onSessionCreated={onSessionCreated}
+        />
+      </NextIntlClientProvider>
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('voice-toggle'));
+    });
+
+    const createCall = fetchSpy.mock.calls.find(
+      ([url, opts]) =>
+        String(url).endsWith('/api/coach/sessions') && opts?.method === 'POST'
+    );
+    expect(createCall).toBeTruthy();
+    expect(onSessionCreated).toHaveBeenCalledWith('new-sess');
+    expect(connect).toHaveBeenCalledTimes(1);
+  });
+
+  it('reuses the existing session id (no create) when one is present', async () => {
+    const connect = vi.fn(async () => {});
+    live.ret = makeReturn({ status: 'idle', isActive: false, connect });
+
+    renderChatWithSession('existing');
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('voice-toggle'));
+    });
+
+    const createCall = fetchSpy.mock.calls.find(
+      ([url, opts]) =>
+        String(url).endsWith('/api/coach/sessions') && opts?.method === 'POST'
+    );
+    expect(createCall).toBeFalsy();
+    expect(connect).toHaveBeenCalledTimes(1);
   });
 });
 

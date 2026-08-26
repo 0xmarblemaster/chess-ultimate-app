@@ -316,6 +316,12 @@ class CoachSessionCreateRequest(BaseModel):
     title: Optional[str] = None
 
 
+class CoachMessageRequest(BaseModel):
+    role: str
+    content: str
+    source: Optional[str] = None
+
+
 class CheckoutRequest(BaseModel):
     tier: str
     redirect_url: Optional[str] = None
@@ -429,6 +435,70 @@ async def coach_create_session(request: Request, body: CoachSessionCreateRequest
         "created_at": session.created_at,
         "message_count": 0,
         "board_state": session.board_state,
+    }
+
+
+@app.get("/api/coach/sessions/{session_id}/messages")
+async def coach_get_messages(
+    session_id: str, request: Request, limit: Optional[int] = None
+):
+    """Return a session's message list. Optional ?limit=N returns the last N.
+
+    Scoped to the requesting user; 404 if the session is unknown to them.
+    """
+    user_id = _get_user_id(request)
+    session = session_store.get(session_id, user_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    messages = session.messages
+    if limit is not None and limit >= 0:
+        messages = messages[-limit:] if limit > 0 else []
+
+    return {
+        "messages": [
+            {
+                "role": m.role,
+                "content": m.content,
+                "timestamp": m.timestamp,
+                "source": getattr(m, "source", "text"),
+            }
+            for m in messages
+        ]
+    }
+
+
+@app.post("/api/coach/sessions/{session_id}/messages")
+async def coach_append_message(
+    session_id: str, body: CoachMessageRequest, request: Request
+):
+    """Append a message to a session WITHOUT running an agent turn.
+
+    Used for cross-modality memory (e.g. persisting voice transcripts). Creates
+    the session if it doesn't exist, scoped to the requesting user.
+    """
+    user_id = _get_user_id(request)
+
+    if body.role not in ("user", "assistant"):
+        raise HTTPException(
+            status_code=400, detail="role must be 'user' or 'assistant'"
+        )
+
+    session = session_store.get(session_id, user_id)
+    if session is None:
+        # Never clobber a session owned by another user (the store is keyed by
+        # id alone, so create() would overwrite it). Only create when the id is
+        # genuinely free.
+        if session_store.get(session_id) is not None:
+            raise HTTPException(status_code=404, detail="Session not found")
+        session = session_store.create(user_id=user_id, session_id=session_id)
+
+    session.add_message(body.role, body.content, source=body.source or "text")
+
+    return {
+        "ok": True,
+        "session_id": session.id,
+        "message_count": len(session.messages),
     }
 
 

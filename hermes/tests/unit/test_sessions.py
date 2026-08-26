@@ -65,6 +65,16 @@ class TestSession:
         assert session.messages[0].role == "user"
         assert session.messages[1].content == "The King's Pawn opening."
 
+    def test_add_message_source_defaults_to_text(self):
+        session = Session(user_id="user1")
+        session.add_message("user", "typed")
+        assert session.messages[0].source == "text"
+
+    def test_add_message_with_source(self):
+        session = Session(user_id="user1")
+        session.add_message("user", "spoken", source="voice")
+        assert session.messages[0].source == "voice"
+
     def test_set_board_state(self):
         session = Session(user_id="user1")
         fen = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"

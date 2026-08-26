@@ -72,6 +72,139 @@ class TestCoachSessions:
 
 
 @pytest.mark.unit
+class TestCoachSessionMessages:
+    """Tests for GET/POST /api/coach/sessions/{id}/messages."""
+
+    def setup_method(self):
+        self.client = TestClient(app)
+
+    def test_get_messages_404_for_unknown_session(self):
+        resp = self.client.get(
+            "/api/coach/sessions/does-not-exist/messages", headers=USER_HEADERS
+        )
+        assert resp.status_code == 404
+
+    def test_get_messages_returns_list(self):
+        session = session_store.create(user_id="test-user-123")
+        session.add_message("user", "What is e4?")
+        session.add_message("assistant", "The King's Pawn opening.")
+
+        resp = self.client.get(
+            f"/api/coach/sessions/{session.id}/messages", headers=USER_HEADERS
+        )
+        assert resp.status_code == 200
+        messages = resp.json()["messages"]
+        assert len(messages) == 2
+        assert messages[0]["role"] == "user"
+        assert messages[0]["content"] == "What is e4?"
+        assert messages[0]["source"] == "text"
+        assert "timestamp" in messages[0]
+
+    def test_get_messages_limit(self):
+        session = session_store.create(user_id="test-user-123")
+        for i in range(5):
+            session.add_message("user", f"msg {i}")
+
+        resp = self.client.get(
+            f"/api/coach/sessions/{session.id}/messages?limit=2",
+            headers=USER_HEADERS,
+        )
+        assert resp.status_code == 200
+        messages = resp.json()["messages"]
+        assert len(messages) == 2
+        # Last N, oldest-first order preserved.
+        assert messages[0]["content"] == "msg 3"
+        assert messages[1]["content"] == "msg 4"
+
+    def test_get_messages_scoped_by_user(self):
+        session = session_store.create(user_id="test-user-123")
+        session.add_message("user", "secret")
+
+        resp = self.client.get(
+            f"/api/coach/sessions/{session.id}/messages",
+            headers={"X-User-Id": "other-user"},
+        )
+        assert resp.status_code == 404
+
+    def test_get_messages_requires_user_id(self):
+        session = session_store.create(user_id="test-user-123")
+        resp = self.client.get(f"/api/coach/sessions/{session.id}/messages")
+        assert resp.status_code == 401
+
+    def test_post_message_appends_without_agent_turn(self):
+        session = session_store.create(user_id="test-user-123")
+
+        resp = self.client.post(
+            f"/api/coach/sessions/{session.id}/messages",
+            headers=USER_HEADERS,
+            json={"role": "user", "content": "spoken hello", "source": "voice"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["ok"] is True
+        assert body["message_count"] == 1
+
+        stored = session_store.get(session.id, "test-user-123")
+        assert len(stored.messages) == 1
+        assert stored.messages[0].role == "user"
+        assert stored.messages[0].content == "spoken hello"
+        assert stored.messages[0].source == "voice"
+
+    def test_post_message_defaults_source_to_text(self):
+        session = session_store.create(user_id="test-user-123")
+        resp = self.client.post(
+            f"/api/coach/sessions/{session.id}/messages",
+            headers=USER_HEADERS,
+            json={"role": "assistant", "content": "hi"},
+        )
+        assert resp.status_code == 200
+        stored = session_store.get(session.id, "test-user-123")
+        assert stored.messages[0].source == "text"
+
+    def test_post_message_creates_session_if_missing(self):
+        resp = self.client.post(
+            "/api/coach/sessions/brand-new-id/messages",
+            headers=USER_HEADERS,
+            json={"role": "user", "content": "hello"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["session_id"] == "brand-new-id"
+        stored = session_store.get("brand-new-id", "test-user-123")
+        assert stored is not None
+        assert len(stored.messages) == 1
+
+    def test_post_message_rejects_invalid_role(self):
+        session = session_store.create(user_id="test-user-123")
+        resp = self.client.post(
+            f"/api/coach/sessions/{session.id}/messages",
+            headers=USER_HEADERS,
+            json={"role": "system", "content": "nope"},
+        )
+        assert resp.status_code == 400
+
+    def test_post_message_scoped_by_user(self):
+        session = session_store.create(user_id="test-user-123")
+        # A different user hitting the owner's id must be refused (404), never
+        # allowed to append to or clobber the owner's session.
+        resp = self.client.post(
+            f"/api/coach/sessions/{session.id}/messages",
+            headers={"X-User-Id": "other-user"},
+            json={"role": "user", "content": "intruder"},
+        )
+        assert resp.status_code == 404
+        owner_session = session_store.get(session.id, "test-user-123")
+        assert owner_session is not None
+        assert len(owner_session.messages) == 0
+
+    def test_post_message_requires_user_id(self):
+        resp = self.client.post(
+            "/api/coach/sessions/some-id/messages",
+            json={"role": "user", "content": "hi"},
+        )
+        assert resp.status_code == 401
+
+
+@pytest.mark.unit
 class TestCoachProfile:
     """Tests for GET/PUT /api/coach/profile."""
 

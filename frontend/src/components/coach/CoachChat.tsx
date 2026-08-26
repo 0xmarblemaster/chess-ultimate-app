@@ -36,11 +36,26 @@ export default function CoachChat({
   currentFenRef.current = currentFen;
   const getFen = useCallback(() => currentFenRef.current, []);
 
+  // Shared conversation memory: text and voice must use the SAME Hermes session
+  // id. Track the active id in a ref so voice callbacks read it synchronously,
+  // and keep it in sync as the sessionId prop catches up after creation.
+  const activeSessionIdRef = useRef<string | null>(sessionId);
+  useEffect(() => {
+    if (sessionId) activeSessionIdRef.current = sessionId;
+  }, [sessionId]);
+  const getSessionId = useCallback(() => activeSessionIdRef.current, []);
+
   // Id of the in-progress voice transcript bubble per role, so streaming
   // (final:false) chunks update the same message and final:true freezes it.
   const voiceMsgIdRef = useRef<{ user: string | null; model: string | null }>({
     user: null,
     model: null,
+  });
+  // Full accumulated transcript text per role, so on final we persist the whole
+  // utterance (not just the last streamed chunk) into the shared session.
+  const voiceTextRef = useRef<{ user: string; model: string }>({
+    user: '',
+    model: '',
   });
 
   const handleTranscript = useCallback(
@@ -49,6 +64,7 @@ export default function CoachChat({
         tr.role === 'user' ? 'user' : 'assistant';
       const currentId = voiceMsgIdRef.current[tr.role];
       if (currentId) {
+        voiceTextRef.current[tr.role] += tr.text;
         setMessages((prev) =>
           prev.map((m) =>
             m.id === currentId ? { ...m, content: m.content + tr.text } : m
@@ -57,13 +73,32 @@ export default function CoachChat({
       } else {
         const id = crypto.randomUUID();
         voiceMsgIdRef.current[tr.role] = id;
+        voiceTextRef.current[tr.role] = tr.text;
         setMessages((prev) => [
           ...prev,
           { id, role: mappedRole, content: tr.text, timestamp: new Date() },
         ]);
       }
       if (tr.final) {
+        // Persist the finalized utterance into the shared Hermes session so the
+        // text coach sees it too. Fire-and-forget: never disrupt the voice call.
+        const fullText = voiceTextRef.current[tr.role].trim();
+        const sid = activeSessionIdRef.current;
+        if (sid && fullText) {
+          fetch(`/api/coach/sessions/${encodeURIComponent(sid)}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              role: mappedRole,
+              content: fullText,
+              source: 'voice',
+            }),
+          }).catch((err) =>
+            console.error('[coach] transcript write-back failed:', err)
+          );
+        }
         voiceMsgIdRef.current[tr.role] = null;
+        voiceTextRef.current[tr.role] = '';
       }
     },
     []
@@ -77,7 +112,7 @@ export default function CoachChat({
     connect: voiceConnect,
     disconnect: voiceDisconnect,
     sendBoardUpdate: voiceSendBoardUpdate,
-  } = useGeminiLive({ getFen, onTranscript: handleTranscript });
+  } = useGeminiLive({ getFen, getSessionId, onTranscript: handleTranscript });
 
   // While voice mode is live, push every board change into the session so the
   // voice coach stays in sync (the connect-time token only carries the initial
@@ -97,13 +132,37 @@ export default function CoachChat({
     return () => clearTimeout(handle);
   }, [currentFen, voiceActive, voiceSendBoardUpdate]);
 
-  const toggleVoice = useCallback(() => {
+  // Make sure a Hermes session exists before voice starts, so text and voice
+  // share one conversation memory. Reuses the current session if present,
+  // otherwise creates one and lifts it to the parent.
+  const ensureVoiceSession = useCallback(async () => {
+    if (activeSessionIdRef.current) return;
+    try {
+      const res = await fetch('/api/coach/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.id) {
+          activeSessionIdRef.current = data.id;
+          onSessionCreated?.(data.id);
+        }
+      }
+    } catch (err) {
+      console.error('[coach] failed to create voice session:', err);
+    }
+  }, [onSessionCreated]);
+
+  const toggleVoice = useCallback(async () => {
     if (voiceActive) {
       voiceDisconnect();
     } else {
+      await ensureVoiceSession();
       voiceConnect();
     }
-  }, [voiceActive, voiceConnect, voiceDisconnect]);
+  }, [voiceActive, voiceConnect, voiceDisconnect, ensureVoiceSession]);
 
   // Disconnect a live session on unmount without re-running on every toggle.
   const voiceActiveRef = useRef(voiceActive);
