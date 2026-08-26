@@ -37,15 +37,16 @@ function makeReturn(overrides: Partial<UseGeminiLiveReturn> = {}): UseGeminiLive
     error: null,
     connect: vi.fn(async () => {}),
     disconnect: vi.fn(),
+    sendBoardUpdate: vi.fn(),
     ...overrides,
   };
 }
 
-function renderChat() {
+function renderChat(currentFen = 'startpos-fen') {
   return render(
     <NextIntlClientProvider locale="en" messages={en as Record<string, unknown>}>
       <CoachChat
-        currentFen="startpos-fen"
+        currentFen={currentFen}
         sessionId={null}
         onBoardActions={() => {}}
       />
@@ -137,5 +138,50 @@ describe('CoachChat voice mode', () => {
   it('passes the live FEN through getFen', () => {
     renderChat();
     expect(live.options?.getFen?.()).toBe('startpos-fen');
+  });
+});
+
+describe('CoachChat board sync', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('pushes a debounced board update when the FEN changes while voice is active', () => {
+    const sendBoardUpdate = vi.fn();
+    live.ret = makeReturn({ status: 'listening', isActive: true, sendBoardUpdate });
+
+    const { rerender } = renderChat('fen-1');
+    // Initial FEN must not be re-sent — the session anchors it on open.
+    act(() => vi.advanceTimersByTime(300));
+    expect(sendBoardUpdate).not.toHaveBeenCalled();
+
+    rerender(
+      <NextIntlClientProvider locale="en" messages={en as Record<string, unknown>}>
+        <CoachChat currentFen="fen-2" sessionId={null} onBoardActions={() => {}} />
+      </NextIntlClientProvider>
+    );
+
+    // Debounced: nothing yet before the timer fires.
+    expect(sendBoardUpdate).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(300));
+    expect(sendBoardUpdate).toHaveBeenCalledTimes(1);
+    expect(sendBoardUpdate).toHaveBeenCalledWith('fen-2');
+  });
+
+  it('does not push board updates when voice is inactive', () => {
+    const sendBoardUpdate = vi.fn();
+    live.ret = makeReturn({ status: 'idle', isActive: false, sendBoardUpdate });
+
+    const { rerender } = renderChat('fen-1');
+    rerender(
+      <NextIntlClientProvider locale="en" messages={en as Record<string, unknown>}>
+        <CoachChat currentFen="fen-2" sessionId={null} onBoardActions={() => {}} />
+      </NextIntlClientProvider>
+    );
+    act(() => vi.advanceTimersByTime(300));
+    expect(sendBoardUpdate).not.toHaveBeenCalled();
   });
 });

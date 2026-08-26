@@ -6,7 +6,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 
 // ---- @google/genai mock ----------------------------------------------------
 const g = vi.hoisted(() => ({
-  session: { sendRealtimeInput: vi.fn(), close: vi.fn() },
+  session: { sendRealtimeInput: vi.fn(), sendClientContent: vi.fn(), close: vi.fn() },
   connectArgs: { value: null as any },
   ctorArgs: { value: null as any },
 }));
@@ -98,6 +98,7 @@ function tokenOk() {
 
 beforeEach(() => {
   g.session.sendRealtimeInput.mockReset();
+  g.session.sendClientContent.mockReset();
   g.session.close.mockReset();
   g.connectArgs.value = null;
   g.ctorArgs.value = null;
@@ -217,5 +218,61 @@ describe('useGeminiLive', () => {
 
     expect(createdSources[0].stop).toHaveBeenCalled();
     expect(result.current.status).toBe('listening');
+  });
+
+  it('sends the initial FEN as a board-update turn immediately after the session opens', async () => {
+    vi.stubGlobal('fetch', tokenOk());
+    const { result } = renderHook(() => useGeminiLive({ getFen: () => 'INIT_FEN' }));
+    await act(async () => {
+      await result.current.connect();
+    });
+
+    expect(g.session.sendClientContent).toHaveBeenCalledWith({
+      turns: [
+        {
+          role: 'user',
+          parts: [
+            {
+              text: 'Board update — the CURRENT position is now (this supersedes any previous position): INIT_FEN',
+            },
+          ],
+        },
+      ],
+      turnComplete: false,
+    });
+  });
+
+  it('sendBoardUpdate() sends the FEN as a non-interrupting client turn when connected', async () => {
+    vi.stubGlobal('fetch', tokenOk());
+    const { result } = renderHook(() => useGeminiLive({ getFen: () => 'INIT_FEN' }));
+    await act(async () => {
+      await result.current.connect();
+    });
+    g.session.sendClientContent.mockClear();
+
+    act(() => {
+      result.current.sendBoardUpdate('NEW_FEN');
+    });
+
+    expect(g.session.sendClientContent).toHaveBeenCalledTimes(1);
+    expect(g.session.sendClientContent).toHaveBeenCalledWith({
+      turns: [
+        {
+          role: 'user',
+          parts: [
+            {
+              text: 'Board update — the CURRENT position is now (this supersedes any previous position): NEW_FEN',
+            },
+          ],
+        },
+      ],
+      turnComplete: false,
+    });
+  });
+
+  it('sendBoardUpdate() no-ops safely when no session is connected', () => {
+    const { result } = renderHook(() => useGeminiLive({ getFen: () => 'FEN' }));
+    expect(() => act(() => result.current.sendBoardUpdate('NEW_FEN'))).not.toThrow();
+    expect(g.session.sendClientContent).not.toHaveBeenCalled();
   });
 });

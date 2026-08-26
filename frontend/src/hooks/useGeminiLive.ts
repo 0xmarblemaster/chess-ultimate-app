@@ -27,6 +27,7 @@ export interface UseGeminiLiveReturn {
   error: string | null;
   connect: () => Promise<void>;
   disconnect: () => void;
+  sendBoardUpdate: (fen: string) => void;
 }
 
 // Gemini Live audio formats (non-negotiable, per spec).
@@ -52,6 +53,11 @@ function arrayBufferToBase64(buf: ArrayBuffer): string {
     );
   }
   return btoa(binary);
+}
+
+// Wrap a FEN in a board-update turn the live model reads as the new source of truth.
+function boardUpdateText(fen: string): string {
+  return `Board update — the CURRENT position is now (this supersedes any previous position): ${fen}`;
 }
 
 function base64ToInt16(b64: string): Int16Array {
@@ -371,6 +377,19 @@ export default function useGeminiLive(
       });
       sessionRef.current = session;
 
+      // Anchor the initial position client-side so the coach is never blind to it,
+      // regardless of whether the token's system instruction carried the FEN.
+      if (fen) {
+        try {
+          session.sendClientContent({
+            turns: [{ role: 'user', parts: [{ text: boardUpdateText(fen) }] }],
+            turnComplete: false,
+          });
+        } catch {
+          /* session may be closing */
+        }
+      }
+
       await startCapture(session);
 
       setIsActive(true);
@@ -387,6 +406,21 @@ export default function useGeminiLive(
     setStatus('idle');
   }, [cleanup, setStatus]);
 
+  // Push the current board position into the open session mid-conversation.
+  // turnComplete:false injects context without interrupting the audio turn.
+  const sendBoardUpdate = useCallback((fen: string) => {
+    const session = sessionRef.current;
+    if (!session || !fen) return;
+    try {
+      session.sendClientContent({
+        turns: [{ role: 'user', parts: [{ text: boardUpdateText(fen) }] }],
+        turnComplete: false,
+      });
+    } catch {
+      /* session may be closing */
+    }
+  }, []);
+
   // Ensure resources are released on unmount.
   useEffect(() => {
     return () => {
@@ -401,5 +435,6 @@ export default function useGeminiLive(
     error,
     connect,
     disconnect,
+    sendBoardUpdate,
   };
 }

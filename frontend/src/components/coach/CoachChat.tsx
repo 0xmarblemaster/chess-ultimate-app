@@ -76,7 +76,26 @@ export default function CoachChat({
     error: voiceError,
     connect: voiceConnect,
     disconnect: voiceDisconnect,
+    sendBoardUpdate: voiceSendBoardUpdate,
   } = useGeminiLive({ getFen, onTranscript: handleTranscript });
+
+  // While voice mode is live, push every board change into the session so the
+  // voice coach stays in sync (the connect-time token only carries the initial
+  // FEN). Debounced to coalesce premoves/takebacks; skips the initial FEN since
+  // the session already anchors it on open.
+  const voicePrimedRef = useRef(false);
+  useEffect(() => {
+    if (!voiceActive) {
+      voicePrimedRef.current = false;
+      return;
+    }
+    if (!voicePrimedRef.current) {
+      voicePrimedRef.current = true;
+      return;
+    }
+    const handle = setTimeout(() => voiceSendBoardUpdate(currentFen), 300);
+    return () => clearTimeout(handle);
+  }, [currentFen, voiceActive, voiceSendBoardUpdate]);
 
   const toggleVoice = useCallback(() => {
     if (voiceActive) {
