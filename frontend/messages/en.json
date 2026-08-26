@@ -2341,5 +2341,51 @@
     "graph": {
       "ariaLabel": "Evaluation over time"
     }
+  },
+  "ceTournaments": {
+    "title": "Tournaments",
+    "subtitle": "Chess Empire league schedule",
+    "loggedOutBanner": "Only registered app users can participate.",
+    "unverifiedBanner": "Verify your Chess Empire membership to register for tournaments.",
+    "signInToRegister": "Sign in to register",
+    "verifyMembership": "Verify your membership",
+    "loggedOutNotice": "Only registered app users can participate — sign in to register.",
+    "unverifiedNotice": "Verify your Chess Empire membership to register for tournaments.",
+    "empty": "No upcoming tournaments right now. Check back soon.",
+    "date": "Date",
+    "time": "Time",
+    "format": "Format",
+    "rounds": "Rounds",
+    "entryFee": "Entry fee",
+    "players": "Players",
+    "free": "Free",
+    "statusOpen": "Registration open",
+    "statusFull": "Full",
+    "statusClosed": "Closed",
+    "register": "Register",
+    "confirm": "Confirm",
+    "registering": "Registering…",
+    "cancelRegistration": "Cancel registration",
+    "cancelling": "Cancelling…",
+    "registered": "You're registered ✓",
+    "tournamentFull": "Tournament full",
+    "registrationClosed": "Registration closed",
+    "notNow": "Not now",
+    "confirmPrompt": "Register <b>{name}</b> for this tournament?",
+    "yourself": "yourself",
+    "errors": {
+      "full": "This tournament is full.",
+      "closed": "Registration has closed for this tournament.",
+      "duplicate": "You're already registered for this tournament.",
+      "ineligible": "You are not eligible for this tournament.",
+      "not_found": "Tournament not found.",
+      "invalid_input": "Invalid registration request.",
+      "unauthorized": "Sign in to register.",
+      "forbidden": "Only verified Chess Empire members can register.",
+      "server_error": "Registration failed. Please try again.",
+      "network": "Network error. Please try again.",
+      "registerFailed": "Registration failed. Please try again.",
+      "cancelFailed": "Could not cancel. Please try again."
+    }
   }
 }

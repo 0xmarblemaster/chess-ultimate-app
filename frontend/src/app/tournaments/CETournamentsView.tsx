@@ -12,6 +12,7 @@
  */
 import { useState } from 'react';
 import Link from 'next/link';
+import { useTranslations, useLocale } from 'next-intl';
 
 export interface CETournamentCard {
   id: string;
@@ -39,10 +40,17 @@ export type CEViewer =
 const SIGN_IN_HREF = '/sign-in?redirect_url=/tournaments';
 const VERIFY_HREF = '/dashboard';
 
-function formatDate(iso: string): string {
+/** App locale → BCP-47 tag for Intl date/number formatting. */
+const LOCALE_TAG: Record<string, string> = {
+  en: 'en-US',
+  ru: 'ru-RU',
+  kz: 'kk-KZ',
+};
+
+function formatDate(iso: string, tag: string): string {
   const d = new Date(`${iso}T00:00:00`);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString(undefined, {
+  return d.toLocaleDateString(tag, {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
@@ -55,10 +63,10 @@ function formatTime(t: string | null): string {
   return String(t).slice(0, 5);
 }
 
-function formatFee(fee: number): string {
+function formatFee(fee: number, tag: string, freeLabel: string): string {
   const n = Number(fee || 0);
-  if (n === 0) return 'Free';
-  return `${n.toLocaleString()} ₸`;
+  if (n === 0) return freeLabel;
+  return `${n.toLocaleString(tag)} ₸`;
 }
 
 function StatusBadge({
@@ -68,20 +76,21 @@ function StatusBadge({
   isFull: boolean;
   isOpen: boolean;
 }) {
+  const t = useTranslations('ceTournaments');
   const { label, className } = isFull
     ? {
-        label: 'Full',
+        label: t('statusFull'),
         className:
           'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
       }
     : isOpen
       ? {
-          label: 'Registration open',
+          label: t('statusOpen'),
           className:
             'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
         }
       : {
-          label: 'Closed',
+          label: t('statusClosed'),
           className:
             'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
         };
@@ -114,6 +123,9 @@ function TournamentCard({
   card: CETournamentCard;
   viewer: CEViewer;
 }) {
+  const t = useTranslations('ceTournaments');
+  const locale = useLocale();
+  const tag = LOCALE_TAG[locale] ?? 'en-US';
   const [registrationId, setRegistrationId] = useState<string | null>(
     card.registration_id,
   );
@@ -131,6 +143,16 @@ function TournamentCard({
     Math.round((registeredCount / Math.max(1, card.capacity)) * 100),
   );
 
+  /** Localize a server `{ error, message }` payload by code, else fall back. */
+  function resolveError(
+    data: { error?: string; message?: string },
+    fallbackKey: 'errors.registerFailed' | 'errors.cancelFailed',
+  ): string {
+    const code = data.error;
+    if (code && t.has(`errors.${code}`)) return t(`errors.${code}`);
+    return data.message || t(fallbackKey);
+  }
+
   async function doRegister() {
     setBusy(true);
     setError(null);
@@ -141,17 +163,18 @@ function TournamentCard({
       const data = (await res.json().catch(() => ({}))) as {
         registration_id?: string;
         registered_count?: number;
+        error?: string;
         message?: string;
       };
       if (!res.ok) {
-        setError(data.message || 'Registration failed. Please try again.');
+        setError(resolveError(data, 'errors.registerFailed'));
         return;
       }
       setRegistrationId(data.registration_id ?? 'registered');
       setRegisteredCount(data.registered_count ?? registeredCount + 1);
       setConfirming(false);
     } catch {
-      setError('Network error. Please try again.');
+      setError(t('errors.network'));
     } finally {
       setBusy(false);
     }
@@ -164,15 +187,18 @@ function TournamentCard({
       const res = await fetch(`/api/chess-empire/tournaments/${card.id}/register`, {
         method: 'DELETE',
       });
-      const data = (await res.json().catch(() => ({}))) as { message?: string };
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        message?: string;
+      };
       if (!res.ok) {
-        setError(data.message || 'Could not cancel. Please try again.');
+        setError(resolveError(data, 'errors.cancelFailed'));
         return;
       }
       setRegistrationId(null);
       setRegisteredCount((c) => Math.max(0, c - 1));
     } catch {
-      setError('Network error. Please try again.');
+      setError(t('errors.network'));
     } finally {
       setBusy(false);
     }
@@ -181,15 +207,11 @@ function TournamentCard({
   function onRegisterClick() {
     setError(null);
     if (viewer.state === 'logged_out') {
-      setNotice(
-        'Only registered app users can participate — sign in to register.',
-      );
+      setNotice(t('loggedOutNotice'));
       return;
     }
     if (viewer.state === 'unverified') {
-      setNotice(
-        'Verify your Chess Empire membership to register for tournaments.',
-      );
+      setNotice(t('unverifiedNotice'));
       return;
     }
     setConfirming(true);
@@ -217,13 +239,19 @@ function TournamentCard({
       )}
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
-        <DetailItem label="Date" value={formatDate(card.tournament_date)} />
-        <DetailItem label="Time" value={formatTime(card.start_time)} />
-        <DetailItem label="Format" value={card.time_format || '—'} />
-        <DetailItem label="Rounds" value={String(card.rounds)} />
-        <DetailItem label="Entry fee" value={formatFee(card.registration_fee)} />
         <DetailItem
-          label="Players"
+          label={t('date')}
+          value={formatDate(card.tournament_date, tag)}
+        />
+        <DetailItem label={t('time')} value={formatTime(card.start_time)} />
+        <DetailItem label={t('format')} value={card.time_format || '—'} />
+        <DetailItem label={t('rounds')} value={String(card.rounds)} />
+        <DetailItem
+          label={t('entryFee')}
+          value={formatFee(card.registration_fee, tag, t('free'))}
+        />
+        <DetailItem
+          label={t('players')}
           value={`${registeredCount}/${card.capacity}`}
         />
       </div>
@@ -244,7 +272,7 @@ function TournamentCard({
         {isRegistered ? (
           <div className="flex items-center justify-between gap-3">
             <span className="inline-flex items-center gap-1 text-sm font-medium text-green-600 dark:text-green-400">
-              You&apos;re registered ✓
+              {t('registered')}
             </span>
             <button
               type="button"
@@ -252,17 +280,18 @@ function TournamentCard({
               disabled={busy}
               className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
             >
-              {busy ? 'Cancelling…' : 'Cancel registration'}
+              {busy ? t('cancelling') : t('cancelRegistration')}
             </button>
           </div>
         ) : confirming && viewer.state === 'verified' ? (
           <div>
             <p className="text-sm text-gray-700 dark:text-gray-200">
-              Register{' '}
-              <span className="font-semibold">
-                {viewer.studentName || 'yourself'}
-              </span>{' '}
-              for this tournament?
+              {t.rich('confirmPrompt', {
+                name: viewer.studentName || t('yourself'),
+                b: (chunks) => (
+                  <span className="font-semibold">{chunks}</span>
+                ),
+              })}
             </p>
             <div className="flex items-center gap-2 mt-3">
               <button
@@ -272,7 +301,7 @@ function TournamentCard({
                 className="px-4 py-1.5 text-sm rounded-lg font-medium text-white disabled:opacity-50"
                 style={{ backgroundColor: 'var(--brand-primary)' }}
               >
-                {busy ? 'Registering…' : 'Confirm'}
+                {busy ? t('registering') : t('confirm')}
               </button>
               <button
                 type="button"
@@ -280,7 +309,7 @@ function TournamentCard({
                 disabled={busy}
                 className="px-3 py-1.5 text-sm rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"
               >
-                Not now
+                {t('notNow')}
               </button>
             </div>
           </div>
@@ -294,9 +323,9 @@ function TournamentCard({
           >
             {viewer.state === 'verified' && !isOpen
               ? isFull
-                ? 'Tournament full'
-                : 'Registration closed'
-              : 'Register'}
+                ? t('tournamentFull')
+                : t('registrationClosed')
+              : t('register')}
           </button>
         )}
 
@@ -309,7 +338,7 @@ function TournamentCard({
                 className="inline-block mt-1 font-medium underline"
                 style={{ color: 'var(--brand-primary)' }}
               >
-                Sign in to register →
+                {t('signInToRegister')} →
               </Link>
             )}
             {viewer.state === 'unverified' && (
@@ -318,7 +347,7 @@ function TournamentCard({
                 className="inline-block mt-1 font-medium underline"
                 style={{ color: 'var(--brand-primary)' }}
               >
-                Verify your membership →
+                {t('verifyMembership')} →
               </Link>
             )}
           </div>
@@ -339,26 +368,27 @@ export default function CETournamentsView({
   tournaments: CETournamentCard[];
   viewer: CEViewer;
 }) {
+  const t = useTranslations('ceTournaments');
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-          Tournaments
+          {t('title')}
         </h1>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Chess Empire league schedule
+          {t('subtitle')}
         </p>
       </div>
 
       {viewer.state === 'logged_out' && (
         <div className="mb-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 p-4 text-sm text-gray-700 dark:text-gray-200">
-          Only registered app users can participate.{' '}
+          {t('loggedOutBanner')}{' '}
           <Link
             href={SIGN_IN_HREF}
             className="font-medium underline"
             style={{ color: 'var(--brand-primary)' }}
           >
-            Sign in to register
+            {t('signInToRegister')}
           </Link>
           .
         </div>
@@ -366,13 +396,13 @@ export default function CETournamentsView({
 
       {viewer.state === 'unverified' && (
         <div className="mb-6 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 p-4 text-sm text-gray-700 dark:text-gray-200">
-          Verify your Chess Empire membership to register for tournaments.{' '}
+          {t('unverifiedBanner')}{' '}
           <Link
             href={VERIFY_HREF}
             className="font-medium underline"
             style={{ color: 'var(--brand-primary)' }}
           >
-            Verify your membership
+            {t('verifyMembership')}
           </Link>
           .
         </div>
@@ -381,13 +411,17 @@ export default function CETournamentsView({
       {tournaments.length === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-300 dark:border-gray-700 p-10 text-center">
           <p className="text-gray-500 dark:text-gray-400">
-            No upcoming tournaments right now. Check back soon.
+            {t('empty')}
           </p>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
-          {tournaments.map((t) => (
-            <TournamentCard key={t.id} card={t} viewer={viewer} />
+          {tournaments.map((tournament) => (
+            <TournamentCard
+              key={tournament.id}
+              card={tournament}
+              viewer={viewer}
+            />
           ))}
         </div>
       )}
