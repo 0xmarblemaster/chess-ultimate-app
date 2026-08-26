@@ -1,94 +1,83 @@
 'use client';
 
 import React from 'react';
+import { Box } from '@mui/material';
 import { useTranslations } from 'next-intl';
+import {
+  CBResetIcon,
+  CBGoToStartIcon,
+  CBPreviousMoveIcon,
+  CBNextMoveIcon,
+  CBGoToEndIcon,
+  CBFlipBoardIcon,
+} from '@/components/icons/ChessBaseNavIcons';
 
 interface CoachBoardControlsProps {
+  onReset: () => void;
   onFirst: () => void;
   onPrev: () => void;
   onNext: () => void;
   onLast: () => void;
   onFlip: () => void;
-  canGoPrev: boolean;
-  canGoNext: boolean;
+  boardSize?: number;
 }
 
 export default function CoachBoardControls({
+  onReset,
   onFirst,
   onPrev,
   onNext,
   onLast,
   onFlip,
-  canGoPrev,
-  canGoNext,
+  boardSize = 520,
 }: CoachBoardControlsProps) {
   const t = useTranslations('coach');
-  const buttonClass =
-    'px-3 py-2 rounded text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed';
-  const activeClass = 'bg-white/10 hover:bg-white/20';
 
+  // Board Control Bar — matches the canonical Database/Analysis board NAV exactly.
   return (
-    <div className="flex items-center justify-center gap-1 mt-2">
-      <button
-        onClick={onFirst}
-        disabled={!canGoPrev}
-        className={`${buttonClass} ${canGoPrev ? activeClass : ''}`}
-        title={`${t('firstMove')} (Home)`}
-        aria-label={t('firstMove')}
-      >
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-          <path d="M3 3v10h2V3H3zm3 5l8 5V3l-8 5z" />
-        </svg>
-      </button>
-
-      <button
-        onClick={onPrev}
-        disabled={!canGoPrev}
-        className={`${buttonClass} ${canGoPrev ? activeClass : ''}`}
-        title={`${t('previousMove')} (←)`}
-        aria-label={t('previousMove')}
-      >
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-          <path d="M10 3L2 8l8 5V3z" />
-        </svg>
-      </button>
-
-      <button
-        onClick={onNext}
-        disabled={!canGoNext}
-        className={`${buttonClass} ${canGoNext ? activeClass : ''}`}
-        title={`${t('nextMove')} (→)`}
-        aria-label={t('nextMove')}
-      >
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-          <path d="M6 3v10l8-5-8-5z" />
-        </svg>
-      </button>
-
-      <button
-        onClick={onLast}
-        disabled={!canGoNext}
-        className={`${buttonClass} ${canGoNext ? activeClass : ''}`}
-        title={`${t('lastMove')} (End)`}
-        aria-label={t('lastMove')}
-      >
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-          <path d="M3 3l8 5-8 5V3zm8 0v10h2V3h-2z" />
-        </svg>
-      </button>
-
-      <div className="w-px h-6 bg-white/20 mx-1" />
-
-      <button
-        onClick={onFlip}
-        className={`${buttonClass} ${activeClass}`}
-        title={`${t('flipBoard')} (F)`}
-        aria-label={t('flipBoard')}
-      >
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-          <path d="M8 1l3 4H9v3H7V5H5l3-4zM8 15l-3-4h2V8h2v3h2l-3 4z" />
-        </svg>
-      </button>
-    </div>
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255,255,255,0.95)',
+        borderRadius: 0,
+        height: 38,
+        width: boardSize,
+        overflow: 'hidden',
+      }}
+    >
+      {[
+        { icon: <CBResetIcon sx={{ width: 22, height: 22 }} />, onClick: onReset, title: t('resetBoard'), flex: 1 },
+        { icon: <CBGoToStartIcon sx={{ width: 18, height: 14 }} />, onClick: onFirst, title: t('firstMove'), flex: 1 },
+        { icon: <CBPreviousMoveIcon sx={{ width: 14, height: 15 }} />, onClick: onPrev, title: t('previousMove'), flex: 1.42 },
+        { icon: <CBNextMoveIcon sx={{ width: 14, height: 15 }} />, onClick: onNext, title: t('nextMove'), flex: 1.42 },
+        { icon: <CBGoToEndIcon sx={{ width: 18, height: 14 }} />, onClick: onLast, title: t('lastMove'), flex: 1 },
+        { icon: <CBFlipBoardIcon sx={{ width: 26, height: 22 }} />, onClick: onFlip, title: t('flipBoard'), flex: 1 },
+      ].map((btn, i) => (
+        <Box
+          key={i}
+          onClick={btn.onClick}
+          title={btn.title}
+          sx={{
+            flex: btn.flex,
+            height: 38,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            color: 'text.secondary',
+            padding: '5px',
+            transition: 'background-color 0.15s, color 0.15s',
+            '&:hover': {
+              backgroundColor: 'rgba(31,41,55,0.06)',
+              color: 'text.primary',
+            },
+          }}
+        >
+          {btn.icon}
+        </Box>
+      ))}
+    </Box>
   );
 }

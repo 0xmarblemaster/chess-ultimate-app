@@ -18,6 +18,7 @@ interface CoachBoardProps {
   pgnLength: number;
   boardSize?: number;
   onMove: (from: Key, to: Key, promotion?: 'q' | 'r' | 'b' | 'n') => void;
+  onReset: () => void;
   onFirst: () => void;
   onPrev: () => void;
   onNext: () => void;
@@ -33,9 +34,8 @@ export default function CoachBoard({
   orientation,
   puzzleMode,
   puzzleState,
-  moveIndex,
-  pgnLength,
   onMove,
+  onReset,
   onFirst,
   onPrev,
   onNext,
@@ -78,13 +78,13 @@ export default function CoachBoard({
         <PuzzleOverlay result={puzzleResult} onDismiss={handleDismissPuzzle} />
       </div>
       <CoachBoardControls
+        onReset={onReset}
         onFirst={onFirst}
         onPrev={onPrev}
         onNext={onNext}
         onLast={onLast}
         onFlip={onFlip}
-        canGoPrev={pgnLength > 0 && moveIndex > 0}
-        canGoNext={pgnLength > 0 && moveIndex < pgnLength - 1}
+        boardSize={boardSize}
       />
     </div>
   );

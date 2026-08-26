@@ -1900,6 +1900,7 @@
     "voiceSpeaking": "🔊 Coach speaking…",
     "voiceError": "Voice error",
     "voiceUnsupported": "Voice mode is not supported in this browser",
+    "resetBoard": "Reset board",
     "firstMove": "First move",
     "previousMove": "Previous move",
     "nextMove": "Next move",

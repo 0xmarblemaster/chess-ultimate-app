@@ -278,6 +278,7 @@ export default function CoachPage() {
                   moveIndex={gameMoveIndices[activeGameId] ?? -1}
                   pgnLength={activeGame.moves.length}
                   onMove={() => {}}
+                  onReset={() => setGameMoveIndices((prev) => ({ ...prev, [activeGameId]: -1 }))}
                   onFirst={() => setGameMoveIndices((prev) => ({ ...prev, [activeGameId]: -1 }))}
                   onPrev={() =>
                     setGameMoveIndices((prev) => ({
@@ -320,6 +321,7 @@ export default function CoachPage() {
                 moveIndex={board.moveIndex}
                 pgnLength={board.pgn ? board.moveIndex + 1 : 0}
                 onMove={board.setFenFromMove}
+                onReset={board.resetBoard}
                 onFirst={board.firstMove}
                 onPrev={board.prevMove}
                 onNext={board.nextMove}
