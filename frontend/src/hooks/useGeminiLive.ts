@@ -93,6 +93,16 @@ export default function useGeminiLive(
 
   const statusRef = useRef<LiveStatus>('idle');
   const sessionRef = useRef<Session | null>(null);
+  // Latest resumable session handle from the server, used to reconnect after an
+  // unexpected drop. Null until the server sends a resumable update.
+  const resumptionHandleRef = useRef<string | null>(null);
+  // Set when the user deliberately stops — suppresses auto-reconnect.
+  const userStoppedRef = useRef(false);
+  // Guards to a single automatic reconnect per user-initiated session.
+  const reconnectUsedRef = useRef(false);
+  // Bumped whenever a connection is torn down or replaced, so close/error
+  // callbacks from a stale session are ignored (they must not trigger a drop).
+  const connGenRef = useRef(0);
   const streamRef = useRef<MediaStream | null>(null);
   const captureCtxRef = useRef<AudioContext | null>(null);
   const playbackCtxRef = useRef<AudioContext | null>(null);
@@ -143,6 +153,8 @@ export default function useGeminiLive(
   }, [stopSources, setStatus]);
 
   const cleanup = useCallback(() => {
+    // Invalidate the active connection so its late close/error callbacks no-op.
+    connGenRef.current += 1;
     toolAbortRef.current.forEach((controller) => {
       try {
         controller.abort();
@@ -343,6 +355,12 @@ export default function useGeminiLive(
 
   const handleMessage = useCallback(
     (msg: LiveServerMessage) => {
+      // Keep the latest resumable handle so we can reconnect after a drop.
+      const resume = msg.sessionResumptionUpdate;
+      if (resume?.resumable && resume.newHandle) {
+        resumptionHandleRef.current = resume.newHandle;
+      }
+
       if (msg.toolCall) {
         void handleToolCall(msg.toolCall);
       }
@@ -442,19 +460,25 @@ export default function useGeminiLive(
     [flushPlayback],
   );
 
-  const connect = useCallback(async () => {
-    if (sessionRef.current) return;
-    setError(null);
-    setStatus('connecting');
+  // Lets the connection callbacks reach the drop handler without a dependency
+  // cycle (the drop handler in turn re-opens the connection).
+  const handleDropRef = useRef<(errMsg?: string) => void>(() => {});
 
-    try {
+  // Open a Live session. Pass a resumption handle to resume a dropped session
+  // (fresh token, same conversation state) instead of starting a new one.
+  const openConnection = useCallback(
+    async (resumeHandle?: string) => {
       const fen = optionsRef.current.getFen?.();
       const sessionId = optionsRef.current.getSessionId?.();
       const res = await fetch('/api/coach/live-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ fen, session_id: sessionId ?? undefined }),
+        body: JSON.stringify({
+          fen,
+          session_id: sessionId ?? undefined,
+          resume: resumeHandle ?? undefined,
+        }),
       });
       if (!res.ok) {
         throw new Error(`Live coach unavailable (${res.status})`);
@@ -472,26 +496,34 @@ export default function useGeminiLive(
         httpOptions: { apiVersion: 'v1alpha' },
       });
 
+      const config: Record<string, unknown> = {
+        responseModalities: [Modality.AUDIO],
+        inputAudioTranscription: {},
+        outputAudioTranscription: {},
+      };
+      if (resumeHandle) {
+        config.sessionResumption = { handle: resumeHandle };
+      }
+
+      // Tag this connection; later teardown bumps the counter so a stale
+      // session's close/error callback can't trigger a spurious reconnect.
+      connGenRef.current += 1;
+      const gen = connGenRef.current;
+
       const session = await ai.live.connect({
         model,
         callbacks: {
           onmessage: handleMessage,
           onerror: (e: ErrorEvent) => {
-            fail(e?.message || 'Live connection error');
+            if (gen !== connGenRef.current) return;
+            handleDropRef.current(e?.message || 'Live connection error');
           },
           onclose: () => {
-            if (statusRef.current !== 'error') {
-              cleanup();
-              setIsActive(false);
-              setStatus('idle');
-            }
+            if (gen !== connGenRef.current) return;
+            handleDropRef.current();
           },
         },
-        config: {
-          responseModalities: [Modality.AUDIO],
-          inputAudioTranscription: {},
-          outputAudioTranscription: {},
-        },
+        config,
       });
       sessionRef.current = session;
 
@@ -512,13 +544,66 @@ export default function useGeminiLive(
 
       setIsActive(true);
       setStatus('listening');
+    },
+    [handleMessage, startCapture, setStatus],
+  );
+
+  // React to a session drop: reconnect ONCE with the stored handle if the drop
+  // was unexpected; otherwise fall through to the terminal state (error on an
+  // error drop, idle on a plain close).
+  const handleDrop = useCallback(
+    (errMsg?: string) => {
+      if (userStoppedRef.current) return; // deliberate stop, handled by disconnect()
+      if (statusRef.current === 'error') return; // already surfaced a failure
+
+      const canReconnect =
+        !reconnectUsedRef.current && !!resumptionHandleRef.current;
+      if (canReconnect) {
+        reconnectUsedRef.current = true;
+        const handle = resumptionHandleRef.current as string;
+        cleanup(); // tear down the stale session + audio before reopening
+        setStatus('connecting');
+        openConnection(handle).catch((err) => {
+          const msg =
+            err instanceof Error ? err.message : 'Failed to resume live coach';
+          fail(msg);
+        });
+        return;
+      }
+
+      // No handle (or reconnect already used): terminal. The top guard already
+      // returned on an 'error' status, so a plain close falls through to idle.
+      if (errMsg !== undefined) {
+        fail(errMsg);
+      } else {
+        cleanup();
+        setIsActive(false);
+        setStatus('idle');
+      }
+    },
+    [cleanup, fail, setStatus, openConnection],
+  );
+  handleDropRef.current = handleDrop;
+
+  const connect = useCallback(async () => {
+    if (sessionRef.current) return;
+    setError(null);
+    setStatus('connecting');
+    // Fresh user-initiated session: reset resumption/reconnect state.
+    userStoppedRef.current = false;
+    reconnectUsedRef.current = false;
+    resumptionHandleRef.current = null;
+
+    try {
+      await openConnection();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to start live coach';
       fail(msg);
     }
-  }, [setStatus, handleMessage, startCapture, cleanup, fail]);
+  }, [setStatus, openConnection, fail]);
 
   const disconnect = useCallback(() => {
+    userStoppedRef.current = true;
     cleanup();
     setIsActive(false);
     setStatus('idle');

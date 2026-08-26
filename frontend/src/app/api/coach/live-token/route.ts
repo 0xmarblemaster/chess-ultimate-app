@@ -157,6 +157,9 @@ export async function POST(request: Request) {
     const liveConfig: Record<string, unknown> = {
       responseModalities: [Modality.AUDIO],
       systemInstruction,
+      // Ask the server to issue resumption handles so the client can survive a
+      // dropped connection (network blip / session time limit) and reconnect.
+      sessionResumption: {},
     };
     if (functionDeclarations.length > 0) {
       liveConfig.tools = [{ functionDeclarations }];

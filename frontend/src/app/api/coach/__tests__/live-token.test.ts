@@ -199,6 +199,19 @@ describe('POST /api/coach/live-token', () => {
     expect(config.systemInstruction).toContain('You have tools.');
   });
 
+  it('enables sessionResumption in the token constraints so the server issues handles', async () => {
+    (auth as any).mockResolvedValue({ userId: 'user_123' });
+    process.env.GEMINI_API_KEY = 'AQ.test-key';
+    createMock.mockResolvedValue({ name: 'ephemeral-token-xyz' });
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ tools: [] }) })) as any;
+
+    const { POST } = await import('../live-token/route');
+    const response = await POST(makeRequest({ fen: 'somefen' }));
+
+    expect(response.status).toBe(200);
+    expect(configFromMint().sessionResumption).toEqual({});
+  });
+
   it('mints the token without tools (still 200) when the tools fetch fails', async () => {
     (auth as any).mockResolvedValue({ userId: 'user_123' });
     process.env.GEMINI_API_KEY = 'AQ.test-key';

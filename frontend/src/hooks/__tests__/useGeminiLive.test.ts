@@ -13,6 +13,7 @@ const g = vi.hoisted(() => ({
     close: vi.fn(),
   },
   connectArgs: { value: null as any },
+  connectCalls: [] as any[],
   ctorArgs: { value: null as any },
 }));
 
@@ -24,6 +25,7 @@ vi.mock('@google/genai', () => {
       this.live = {
         connect: vi.fn(async (params: any) => {
           g.connectArgs.value = params;
+          g.connectCalls.push(params);
           return g.session;
         }),
       };
@@ -107,6 +109,7 @@ beforeEach(() => {
   g.session.sendToolResponse.mockReset();
   g.session.close.mockReset();
   g.connectArgs.value = null;
+  g.connectCalls.length = 0;
   g.ctorArgs.value = null;
   createdSources.length = 0;
   lastWorkletNode = null;
@@ -390,6 +393,97 @@ describe('useGeminiLive', () => {
     const arg = g.session.sendToolResponse.mock.calls[0][0];
     expect(arg.functionResponses[0].id).toBe('c1');
     expect(arg.functionResponses[0].response.error).toBeTruthy();
+  });
+
+  // ---- Session resumption (Phase 3) ---------------------------------------
+
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+
+  it('auto-reconnects once with the captured resumption handle on an unexpected close', async () => {
+    vi.stubGlobal('fetch', tokenOk());
+    const { result } = renderHook(() => useGeminiLive());
+    await act(async () => {
+      await result.current.connect();
+    });
+    const first = g.connectArgs.value;
+    expect(g.connectCalls.length).toBe(1);
+
+    // Server issues a resumable handle mid-session.
+    act(() => {
+      first.callbacks.onmessage({
+        sessionResumptionUpdate: { resumable: true, newHandle: 'H1' },
+      });
+    });
+
+    // Unexpected drop -> reconnect once, passing the handle.
+    await act(async () => {
+      first.callbacks.onclose();
+      await flush();
+    });
+
+    expect(g.connectCalls.length).toBe(2);
+    expect(g.connectCalls[1].config.sessionResumption).toEqual({ handle: 'H1' });
+    expect(result.current.isActive).toBe(true);
+    expect(result.current.status).toBe('listening');
+
+    // A second drop must NOT trigger another automatic reconnect.
+    const second = g.connectCalls[1];
+    await act(async () => {
+      second.callbacks.onclose();
+      await flush();
+    });
+    expect(g.connectCalls.length).toBe(2);
+    expect(result.current.status).toBe('idle');
+  });
+
+  it('does not reconnect on close when no resumable handle was captured', async () => {
+    vi.stubGlobal('fetch', tokenOk());
+    const { result } = renderHook(() => useGeminiLive());
+    await act(async () => {
+      await result.current.connect();
+    });
+    const first = g.connectArgs.value;
+
+    // Non-resumable update carries no usable handle.
+    act(() => {
+      first.callbacks.onmessage({
+        sessionResumptionUpdate: { resumable: false, newHandle: '' },
+      });
+    });
+
+    await act(async () => {
+      first.callbacks.onclose();
+      await flush();
+    });
+
+    expect(g.connectCalls.length).toBe(1); // no reconnect
+    expect(result.current.status).toBe('idle');
+  });
+
+  it('does not auto-reconnect after a deliberate user disconnect', async () => {
+    vi.stubGlobal('fetch', tokenOk());
+    const { result } = renderHook(() => useGeminiLive());
+    await act(async () => {
+      await result.current.connect();
+    });
+    const first = g.connectArgs.value;
+    act(() => {
+      first.callbacks.onmessage({
+        sessionResumptionUpdate: { resumable: true, newHandle: 'H1' },
+      });
+    });
+
+    // User stops on purpose, then a late close event arrives.
+    act(() => {
+      result.current.disconnect();
+    });
+    await act(async () => {
+      first.callbacks.onclose();
+      await flush();
+    });
+
+    expect(g.connectCalls.length).toBe(1); // stayed at the original connect
+    expect(result.current.status).toBe('idle');
   });
 
   it('toolCallCancellation: aborts the pending fetch and sends no response', async () => {
