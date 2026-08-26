@@ -27,8 +27,13 @@ from src.config import (
     get_api_key,
     PROFILE_DIR,
 )
-from src.middleware.response_envelope import wrap_response
-from src.middleware.rate_limiter import enforce_rate_limit, rate_limiter
+# load_env() must run before importing src.sessions: the global session store
+# reads SUPABASE_* at import time, and without the .env loaded persistence
+# silently degrades to in-memory (sessions would not survive restarts).
+load_env()
+
+from src.middleware.response_envelope import wrap_response  # noqa: E402
+from src.middleware.rate_limiter import enforce_rate_limit, rate_limiter  # noqa: E402
 from src.middleware.circuit_breaker import stockfish_circuit, supabase_circuit
 from src.model_router import route_model
 from src.prompt_builder import build_system_prompt
@@ -41,9 +46,6 @@ from src.billing import (
     get_subscription_status,
     handle_webhook_event,
 )
-
-# Load env vars before anything else
-load_env()
 
 # Set HERMES_HOME so the agent picks up the chess coach profile
 os.environ.setdefault("HERMES_HOME", str(PROFILE_DIR))
