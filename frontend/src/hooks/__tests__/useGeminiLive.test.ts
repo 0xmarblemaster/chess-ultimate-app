@@ -6,7 +6,12 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 
 // ---- @google/genai mock ----------------------------------------------------
 const g = vi.hoisted(() => ({
-  session: { sendRealtimeInput: vi.fn(), sendClientContent: vi.fn(), close: vi.fn() },
+  session: {
+    sendRealtimeInput: vi.fn(),
+    sendClientContent: vi.fn(),
+    sendToolResponse: vi.fn(),
+    close: vi.fn(),
+  },
   connectArgs: { value: null as any },
   ctorArgs: { value: null as any },
 }));
@@ -99,6 +104,7 @@ function tokenOk() {
 beforeEach(() => {
   g.session.sendRealtimeInput.mockReset();
   g.session.sendClientContent.mockReset();
+  g.session.sendToolResponse.mockReset();
   g.session.close.mockReset();
   g.connectArgs.value = null;
   g.ctorArgs.value = null;
@@ -274,5 +280,148 @@ describe('useGeminiLive', () => {
     const { result } = renderHook(() => useGeminiLive({ getFen: () => 'FEN' }));
     expect(() => act(() => result.current.sendBoardUpdate('NEW_FEN'))).not.toThrow();
     expect(g.session.sendClientContent).not.toHaveBeenCalled();
+  });
+
+  // ---- Tool bridge (Phase 2) ----------------------------------------------
+
+  // Route fetch: token endpoint -> token; tool endpoint -> supplied handler.
+  function routedFetch(toolHandler: (url: string, opts: any) => any) {
+    return vi.fn(async (url: string, opts: any) => {
+      if (url === '/api/coach/live-token') {
+        return {
+          ok: true,
+          json: async () => ({
+            token: 'auth_tokens/abc',
+            model: 'gemini-3.1-flash-live-preview',
+            expiresAt: '2026-01-01T00:00:00.000Z',
+          }),
+        };
+      }
+      return toolHandler(url, opts);
+    });
+  }
+
+  it('toolCall: proxies each functionCall and replies with sendToolResponse', async () => {
+    const toolPayload = {
+      result: { ok: true },
+      board_actions: [{ type: 'set_fen', fen: 'FEN2' }],
+    };
+    const fetchMock = routedFetch(() => ({ ok: true, json: async () => toolPayload }));
+    vi.stubGlobal('fetch', fetchMock);
+    const onToolResult = vi.fn();
+
+    const { result } = renderHook(() =>
+      useGeminiLive({ getSessionId: () => 'sess-9', onToolResult }),
+    );
+    await act(async () => {
+      await result.current.connect();
+    });
+
+    await act(async () => {
+      g.connectArgs.value.callbacks.onmessage({
+        toolCall: {
+          functionCalls: [{ id: 'c1', name: 'board_control', args: { action_type: 'set_fen' } }],
+        },
+      });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    // Proxy was called with the tool name, args and shared session id.
+    const toolCall = fetchMock.mock.calls.find((c: any[]) => c[0] === '/api/coach/tool');
+    expect(toolCall).toBeTruthy();
+    const body = JSON.parse((toolCall as any[])[1].body);
+    expect(body).toEqual({
+      name: 'board_control',
+      args: { action_type: 'set_fen' },
+      session_id: 'sess-9',
+    });
+
+    expect(g.session.sendToolResponse).toHaveBeenCalledWith({
+      functionResponses: [
+        { id: 'c1', name: 'board_control', response: { result: { ok: true } } },
+      ],
+    });
+    expect(onToolResult).toHaveBeenCalledWith('board_control', toolPayload);
+  });
+
+  it('toolCall: answers every functionCall in one message', async () => {
+    const fetchMock = routedFetch(() => ({ ok: true, json: async () => ({ result: 1 }) }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useGeminiLive());
+    await act(async () => {
+      await result.current.connect();
+    });
+
+    await act(async () => {
+      g.connectArgs.value.callbacks.onmessage({
+        toolCall: {
+          functionCalls: [
+            { id: 'a', name: 'tool_a', args: {} },
+            { id: 'b', name: 'tool_b', args: {} },
+          ],
+        },
+      });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    const arg = g.session.sendToolResponse.mock.calls[0][0];
+    expect(arg.functionResponses.map((r: any) => r.id).sort()).toEqual(['a', 'b']);
+  });
+
+  it('toolCall: sends an error functionResponse when the proxy fetch fails', async () => {
+    const fetchMock = routedFetch(() => {
+      throw new Error('network down');
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useGeminiLive());
+    await act(async () => {
+      await result.current.connect();
+    });
+
+    await act(async () => {
+      g.connectArgs.value.callbacks.onmessage({
+        toolCall: { functionCalls: [{ id: 'c1', name: 'board_control', args: {} }] },
+      });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    const arg = g.session.sendToolResponse.mock.calls[0][0];
+    expect(arg.functionResponses[0].id).toBe('c1');
+    expect(arg.functionResponses[0].response.error).toBeTruthy();
+  });
+
+  it('toolCallCancellation: aborts the pending fetch and sends no response', async () => {
+    let capturedSignal: AbortSignal | null = null;
+    const fetchMock = routedFetch((_url, opts) => {
+      capturedSignal = opts.signal;
+      return new Promise((_resolve, reject) => {
+        opts.signal.addEventListener('abort', () =>
+          reject(new DOMException('aborted', 'AbortError')),
+        );
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useGeminiLive());
+    await act(async () => {
+      await result.current.connect();
+    });
+
+    await act(async () => {
+      g.connectArgs.value.callbacks.onmessage({
+        toolCall: { functionCalls: [{ id: 'c1', name: 'board_control', args: {} }] },
+      });
+      await new Promise((r) => setTimeout(r, 0));
+      g.connectArgs.value.callbacks.onmessage({
+        toolCallCancellation: { ids: ['c1'] },
+      });
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(capturedSignal).not.toBeNull();
+    expect((capturedSignal as unknown as AbortSignal).aborted).toBe(true);
+    expect(g.session.sendToolResponse).not.toHaveBeenCalled();
   });
 });

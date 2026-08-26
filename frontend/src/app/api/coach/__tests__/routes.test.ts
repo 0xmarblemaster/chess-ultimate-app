@@ -109,4 +109,73 @@ describe('Coach API Routes', () => {
       expect(data.error).toBe('Unauthorized');
     });
   });
+
+  describe('POST /api/coach/tool', () => {
+    it('returns 401 when not authenticated', async () => {
+      (auth as any).mockResolvedValue({ userId: null });
+
+      const { POST } = await import('../../coach/tool/route');
+      const { NextRequest } = await import('next/server');
+      const request = new NextRequest('http://localhost:3000/api/coach/tool', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'board_control', args: {} }),
+      });
+
+      const response = await POST(request as any);
+      expect(response.status).toBe(401);
+      expect((await response.json()).error).toBe('Unauthorized');
+    });
+
+    it('returns 400 when the tool name is missing', async () => {
+      (auth as any).mockResolvedValue({ userId: 'user_123' });
+
+      const { POST } = await import('../../coach/tool/route');
+      const { NextRequest } = await import('next/server');
+      const request = new NextRequest('http://localhost:3000/api/coach/tool', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ args: {} }),
+      });
+
+      const response = await POST(request as any);
+      expect(response.status).toBe(400);
+      expect((await response.json()).error).toBe('Missing tool name');
+    });
+
+    it('forwards to Hermes with the Clerk user id and returns the tool result', async () => {
+      (auth as any).mockResolvedValue({ userId: 'user_123' });
+
+      const hermesBody = { result: { ok: true }, board_actions: [] };
+      const fetchMock = vi.fn(async () => ({
+        ok: true,
+        json: async () => hermesBody,
+      }));
+      global.fetch = fetchMock as any;
+
+      const { POST } = await import('../../coach/tool/route');
+      const { NextRequest } = await import('next/server');
+      const request = new NextRequest('http://localhost:3000/api/coach/tool', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'board_control',
+          args: { action_type: 'set_fen' },
+          session_id: 'sess-1',
+        }),
+      });
+
+      const response = await POST(request as any);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual(hermesBody);
+
+      const [url, opts] = fetchMock.mock.calls[0] as any[];
+      expect(url).toContain('/api/coach/tool/board_control');
+      expect(opts.headers['X-User-Id']).toBe('user_123');
+      expect(JSON.parse(opts.body)).toEqual({
+        args: { action_type: 'set_fen' },
+        session_id: 'sess-1',
+      });
+    });
+  });
 });

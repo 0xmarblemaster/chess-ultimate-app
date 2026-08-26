@@ -104,6 +104,43 @@ export default function CoachChat({
     []
   );
 
+  // Apply the result of a voice-driven tool call. Board actions flow through the
+  // SAME handler the text agent uses (onBoardActions -> board state), so the
+  // local FEN stays consistent for subsequent voice board-update pushes. Any
+  // game-search results are surfaced through the existing game-list renderer.
+  const handleVoiceToolResult = useCallback(
+    (name: string, result: unknown) => {
+      if (!result || typeof result !== 'object') return;
+      const data = result as { board_actions?: BoardAction[]; result?: unknown };
+
+      if (Array.isArray(data.board_actions) && data.board_actions.length > 0) {
+        onBoardActions(data.board_actions);
+      }
+
+      const inner = data.result;
+      if (
+        Array.isArray(inner) &&
+        inner.length > 0 &&
+        inner[0] &&
+        typeof inner[0] === 'object' &&
+        'white_name' in (inner[0] as Record<string, unknown>)
+      ) {
+        const games = inner as unknown as GameResult[];
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: '',
+            gameResults: games,
+            timestamp: new Date(),
+          },
+        ]);
+      }
+    },
+    [onBoardActions]
+  );
+
   const {
     status: voiceStatus,
     isSupported: voiceSupported,
@@ -112,7 +149,12 @@ export default function CoachChat({
     connect: voiceConnect,
     disconnect: voiceDisconnect,
     sendBoardUpdate: voiceSendBoardUpdate,
-  } = useGeminiLive({ getFen, getSessionId, onTranscript: handleTranscript });
+  } = useGeminiLive({
+    getFen,
+    getSessionId,
+    onTranscript: handleTranscript,
+    onToolResult: handleVoiceToolResult,
+  });
 
   // While voice mode is live, push every board change into the session so the
   // voice coach stays in sync (the connect-time token only carries the initial

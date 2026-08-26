@@ -22,6 +22,36 @@ Be direct and encouraging — believe in them, but don't let them off easy. Prai
 mistakes. You can refer to squares, pieces, threats, and simple plans out loud. Never break character or say things
 like "as a chess AI". When you are unsure what they see, ask a short question rather than lecturing.`;
 
+// Appended when tools are available, so the voice coach uses them instead of guessing.
+const COACH_TOOL_GUIDANCE = `
+
+You have tools. Use board_control to demonstrate ideas directly on the board — set positions, draw arrows,
+highlight squares, or step through moves as you explain. Use the engine and database tools (analyze the position,
+search master games, opening and position stats, the player's own games and progress) instead of guessing or
+inventing lines. Call a tool when it makes your point concrete; keep talking naturally while you do.`;
+
+/**
+ * Fetch the chess tools' Gemini functionDeclarations from Hermes. Returns [] on
+ * any failure — the voice session must never break because tools are down.
+ */
+async function fetchToolDeclarations(): Promise<unknown[]> {
+  try {
+    const res = await fetch(`${HERMES_URL}/api/coach/tools`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) {
+      console.warn('[live-token] tools fetch returned', res.status);
+      return [];
+    }
+    const data = await res.json();
+    const tools = Array.isArray(data?.tools) ? data.tools : [];
+    return tools;
+  } catch (err) {
+    console.warn('[live-token] failed to fetch tool declarations:', err);
+    return [];
+  }
+}
+
 /**
  * Build a conversation recap block from prior session messages so the voice
  * coach continues seamlessly across modalities. Returns '' if there's nothing.
@@ -107,6 +137,13 @@ export async function POST(request: Request) {
     }
   }
 
+  // Pull tool declarations from Hermes (server-side). Degrade gracefully: if
+  // Hermes is down the session still mints, just without tools.
+  const functionDeclarations = await fetchToolDeclarations();
+  if (functionDeclarations.length > 0) {
+    systemInstruction += COACH_TOOL_GUIDANCE;
+  }
+
   const now = Date.now();
   const expireTime = new Date(now + 30 * 60 * 1000).toISOString();
   const newSessionExpireTime = new Date(now + 60 * 1000).toISOString();
@@ -117,6 +154,14 @@ export async function POST(request: Request) {
       httpOptions: { apiVersion: 'v1alpha' },
     });
 
+    const liveConfig: Record<string, unknown> = {
+      responseModalities: [Modality.AUDIO],
+      systemInstruction,
+    };
+    if (functionDeclarations.length > 0) {
+      liveConfig.tools = [{ functionDeclarations }];
+    }
+
     const token = await ai.authTokens.create({
       config: {
         uses: 1,
@@ -124,10 +169,7 @@ export async function POST(request: Request) {
         newSessionExpireTime,
         liveConnectConstraints: {
           model: LIVE_MODEL,
-          config: {
-            responseModalities: [Modality.AUDIO],
-            systemInstruction,
-          },
+          config: liveConfig,
         },
         httpOptions: { apiVersion: 'v1alpha' },
       },

@@ -112,6 +112,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Hermes Chess Coach", version="1.0.0", lifespan=lifespan)
 
+# Voice tool bridge — exposes the chess tool registry to the Gemini Live coach.
+from src.tool_bridge import router as tool_bridge_router
+app.include_router(tool_bridge_router)
+
 
 # ── Request ID middleware ──────────────────────────────────────────────
 

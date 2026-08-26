@@ -66,6 +66,7 @@ describe('POST /api/coach/live-token', () => {
     (auth as any).mockResolvedValue({ userId: 'user_123' });
     process.env.GEMINI_API_KEY = 'AQ.test-key';
     createMock.mockResolvedValue({ name: 'ephemeral-token-xyz' });
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ tools: [] }) })) as any;
 
     const { POST } = await import('../live-token/route');
     const response = await POST(
@@ -84,6 +85,7 @@ describe('POST /api/coach/live-token', () => {
     (auth as any).mockResolvedValue({ userId: 'user_123' });
     process.env.GEMINI_API_KEY = 'AQ.test-key';
     createMock.mockRejectedValue(new Error('google boom'));
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({ tools: [] }) })) as any;
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const { POST } = await import('../live-token/route');
@@ -107,15 +109,20 @@ describe('POST /api/coach/live-token', () => {
     process.env.GEMINI_API_KEY = 'AQ.test-key';
     createMock.mockResolvedValue({ name: 'ephemeral-token-xyz' });
 
-    const fetchSpy = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        messages: [
-          { role: 'user', content: 'How do I attack the king?', source: 'text' },
-          { role: 'assistant', content: 'Open lines first.', source: 'text' },
-          { role: 'user', content: 'Like this?', source: 'voice' },
-        ],
-      }),
+    const fetchSpy = vi.fn(async (url: string) => {
+      if (String(url).includes('/api/coach/tools')) {
+        return { ok: true, json: async () => ({ tools: [] }) };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          messages: [
+            { role: 'user', content: 'How do I attack the king?', source: 'text' },
+            { role: 'assistant', content: 'Open lines first.', source: 'text' },
+            { role: 'user', content: 'Like this?', source: 'voice' },
+          ],
+        }),
+      };
     });
     global.fetch = fetchSpy as any;
 
@@ -124,8 +131,11 @@ describe('POST /api/coach/live-token', () => {
 
     expect(response.status).toBe(200);
     // Fetched the last 20 messages for this session, scoped by user.
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    const [url, opts] = fetchSpy.mock.calls[0];
+    const recapCall = fetchSpy.mock.calls.find((c: any[]) =>
+      String(c[0]).includes('/messages'),
+    );
+    expect(recapCall).toBeTruthy();
+    const [url, opts] = recapCall as any[];
     expect(url).toContain('/api/coach/sessions/sess_1/messages');
     expect(url).toContain('limit=20');
     expect(opts.headers['X-User-Id']).toBe('user_123');
@@ -138,22 +148,71 @@ describe('POST /api/coach/live-token', () => {
     expect(instruction).toContain('[user (spoken)] Like this?');
   });
 
-  it('does not fetch Hermes when no session_id is provided', async () => {
+  it('does not fetch the recap when no session_id is provided', async () => {
     (auth as any).mockResolvedValue({ userId: 'user_123' });
     process.env.GEMINI_API_KEY = 'AQ.test-key';
     createMock.mockResolvedValue({ name: 'ephemeral-token-xyz' });
 
-    const fetchSpy = vi.fn();
+    const fetchSpy = vi.fn(async () => ({ ok: true, json: async () => ({ tools: [] }) }));
     global.fetch = fetchSpy as any;
 
     const { POST } = await import('../live-token/route');
     const response = await POST(makeRequest({ fen: 'somefen' }));
 
     expect(response.status).toBe(200);
-    expect(fetchSpy).not.toHaveBeenCalled();
+    // Tools are still fetched, but no session message recap.
+    const recapCall = fetchSpy.mock.calls.find((c: any[]) =>
+      String(c[0]).includes('/messages'),
+    );
+    expect(recapCall).toBeUndefined();
     expect(systemInstructionFromMint()).not.toContain(
       'continuing an ongoing coaching conversation',
     );
+  });
+
+  // ── Tool declaration embedding ──────────────────────────────────────────────
+
+  const configFromMint = () =>
+    createMock.mock.calls[0][0].config.liveConnectConstraints.config;
+
+  it('embeds tool functionDeclarations from Hermes into the token constraints', async () => {
+    (auth as any).mockResolvedValue({ userId: 'user_123' });
+    process.env.GEMINI_API_KEY = 'AQ.test-key';
+    createMock.mockResolvedValue({ name: 'ephemeral-token-xyz' });
+
+    const decls = [
+      { name: 'board_control', description: 'control board', parameters: { type: 'object' } },
+    ];
+    global.fetch = vi.fn(async (url: string) => {
+      if (String(url).includes('/api/coach/tools')) {
+        return { ok: true, json: async () => ({ tools: decls }) };
+      }
+      return { ok: true, json: async () => ({ messages: [] }) };
+    }) as any;
+
+    const { POST } = await import('../live-token/route');
+    const response = await POST(makeRequest({ fen: 'somefen' }));
+
+    expect(response.status).toBe(200);
+    const config = configFromMint();
+    expect(config.tools).toEqual([{ functionDeclarations: decls }]);
+    expect(config.systemInstruction).toContain('You have tools.');
+  });
+
+  it('mints the token without tools (still 200) when the tools fetch fails', async () => {
+    (auth as any).mockResolvedValue({ userId: 'user_123' });
+    process.env.GEMINI_API_KEY = 'AQ.test-key';
+    createMock.mockResolvedValue({ name: 'ephemeral-token-xyz' });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    global.fetch = vi.fn(async () => ({ ok: false, status: 503, json: async () => ({}) })) as any;
+
+    const { POST } = await import('../live-token/route');
+    const response = await POST(makeRequest({ fen: 'somefen' }));
+
+    expect(response.status).toBe(200);
+    expect(configFromMint().tools).toBeUndefined();
+    warnSpy.mockRestore();
   });
 
   it('falls back to no recap (still 200) when the Hermes fetch fails', async () => {

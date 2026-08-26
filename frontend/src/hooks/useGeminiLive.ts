@@ -1,6 +1,11 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { GoogleGenAI, Modality } from '@google/genai';
-import type { LiveServerMessage, Session } from '@google/genai';
+import type {
+  LiveServerMessage,
+  LiveServerToolCall,
+  LiveServerToolCallCancellation,
+  Session,
+} from '@google/genai';
 
 /**
  * useGeminiLive — browser-side Gemini Live voice client for the AI Chess Coach (Phase 2).
@@ -20,6 +25,8 @@ export interface UseGeminiLiveOptions {
   onTranscript?: (t: { role: 'user' | 'model'; text: string; final: boolean }) => void;
   onError?: (msg: string) => void;
   onStatusChange?: (s: LiveStatus) => void;
+  /** Fired after a voice tool call resolves, so the UI can apply board actions / game lists. */
+  onToolResult?: (name: string, result: unknown) => void;
 }
 
 export interface UseGeminiLiveReturn {
@@ -93,6 +100,9 @@ export default function useGeminiLive(
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const playSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const nextPlayTimeRef = useRef(0);
+  // In-flight tool-call fetches, keyed by functionCall id, so a
+  // toolCallCancellation can abort them.
+  const toolAbortRef = useRef<Map<string, AbortController>>(new Map());
 
   const setStatus = useCallback((s: LiveStatus) => {
     statusRef.current = s;
@@ -133,6 +143,14 @@ export default function useGeminiLive(
   }, [stopSources, setStatus]);
 
   const cleanup = useCallback(() => {
+    toolAbortRef.current.forEach((controller) => {
+      try {
+        controller.abort();
+      } catch {
+        /* noop */
+      }
+    });
+    toolAbortRef.current.clear();
     const node = workletNodeRef.current;
     if (node) {
       try {
@@ -233,8 +251,105 @@ export default function useGeminiLive(
     [setStatus],
   );
 
+  // Cancel in-flight tool fetches the model no longer wants a response for.
+  const handleToolCancellation = useCallback(
+    (cancellation: LiveServerToolCallCancellation) => {
+      for (const id of cancellation.ids ?? []) {
+        const controller = toolAbortRef.current.get(id);
+        if (controller) {
+          try {
+            controller.abort();
+          } catch {
+            /* noop */
+          }
+          toolAbortRef.current.delete(id);
+        }
+      }
+    },
+    [],
+  );
+
+  // Run each functionCall through the /api/coach/tool proxy and reply with a
+  // functionResponse for every call — even on failure — so the session never
+  // stalls waiting on a tool.
+  const handleToolCall = useCallback(async (toolCall: LiveServerToolCall) => {
+    const calls = toolCall.functionCalls ?? [];
+    const session = sessionRef.current;
+    if (calls.length === 0 || !session) return;
+
+    const sessionId = optionsRef.current.getSessionId?.() ?? undefined;
+
+    const responses = await Promise.all(
+      calls.map(async (fc) => {
+        const controller = new AbortController();
+        if (fc.id) toolAbortRef.current.set(fc.id, controller);
+        try {
+          const res = await fetch('/api/coach/tool', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+              name: fc.name,
+              args: fc.args ?? {},
+              session_id: sessionId,
+            }),
+            signal: controller.signal,
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            return {
+              id: fc.id,
+              name: fc.name,
+              response: {
+                error:
+                  (data && (data as { error?: string }).error) ||
+                  `Tool proxy error ${res.status}`,
+              },
+            };
+          }
+          try {
+            optionsRef.current.onToolResult?.(fc.name ?? '', data);
+          } catch {
+            /* UI callback errors must not break the session */
+          }
+          return {
+            id: fc.id,
+            name: fc.name,
+            response: { result: (data as { result?: unknown }).result ?? data },
+          };
+        } catch (err) {
+          // Aborted (cancelled by the model) — drop it, no response expected.
+          if (err instanceof DOMException && err.name === 'AbortError') {
+            return null;
+          }
+          const message = err instanceof Error ? err.message : 'tool call failed';
+          return { id: fc.id, name: fc.name, response: { error: message } };
+        } finally {
+          if (fc.id) toolAbortRef.current.delete(fc.id);
+        }
+      }),
+    );
+
+    const functionResponses = responses.filter(
+      (r): r is NonNullable<typeof r> => r !== null,
+    );
+    if (functionResponses.length === 0) return;
+    try {
+      session.sendToolResponse({ functionResponses });
+    } catch {
+      /* session may be closing */
+    }
+  }, []);
+
   const handleMessage = useCallback(
     (msg: LiveServerMessage) => {
+      if (msg.toolCall) {
+        void handleToolCall(msg.toolCall);
+      }
+      if (msg.toolCallCancellation) {
+        handleToolCancellation(msg.toolCallCancellation);
+      }
+
       const sc = msg.serverContent;
       if (!sc) return;
 
@@ -267,7 +382,7 @@ export default function useGeminiLive(
         }
       }
     },
-    [flushPlayback, enqueuePlayback],
+    [flushPlayback, enqueuePlayback, handleToolCall, handleToolCancellation],
   );
 
   const fail = useCallback(

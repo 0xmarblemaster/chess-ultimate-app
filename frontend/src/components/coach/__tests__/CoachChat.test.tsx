@@ -297,6 +297,74 @@ describe('CoachChat shared conversation memory', () => {
   });
 });
 
+describe('CoachChat voice tool results', () => {
+  function renderChatWithBoardActions(onBoardActions: (a: unknown[]) => void) {
+    return render(
+      <NextIntlClientProvider locale="en" messages={en as Record<string, unknown>}>
+        <CoachChat
+          currentFen="fen"
+          sessionId="sess-1"
+          onBoardActions={onBoardActions as never}
+        />
+      </NextIntlClientProvider>
+    );
+  }
+
+  it('applies board_actions from a voice tool result through onBoardActions', () => {
+    const onBoardActions = vi.fn();
+    renderChatWithBoardActions(onBoardActions);
+
+    const actions = [{ type: 'set_fen', fen: 'FEN_FROM_TOOL' }];
+    act(() => {
+      (live.options as { onToolResult?: (n: string, r: unknown) => void })?.onToolResult?.(
+        'board_control',
+        { result: {}, board_actions: actions }
+      );
+    });
+
+    expect(onBoardActions).toHaveBeenCalledWith(actions);
+  });
+
+  it('renders game-search results returned from a voice tool call', () => {
+    const onBoardActions = vi.fn();
+    renderChatWithBoardActions(onBoardActions);
+
+    const games = [
+      {
+        id: 'g1',
+        white_name: 'Carlsen',
+        black_name: 'Nakamura',
+        result: '1-0',
+        date: '2021',
+        eco: 'C65',
+      },
+    ];
+    act(() => {
+      (live.options as { onToolResult?: (n: string, r: unknown) => void })?.onToolResult?.(
+        'search_master_games',
+        { result: games, board_actions: [] }
+      );
+    });
+
+    expect(screen.getByText('Carlsen')).toBeTruthy();
+    expect(screen.getByText('Nakamura')).toBeTruthy();
+  });
+
+  it('ignores a malformed tool result without throwing', () => {
+    const onBoardActions = vi.fn();
+    renderChatWithBoardActions(onBoardActions);
+    expect(() =>
+      act(() => {
+        (live.options as { onToolResult?: (n: string, r: unknown) => void })?.onToolResult?.(
+          'x',
+          null
+        );
+      })
+    ).not.toThrow();
+    expect(onBoardActions).not.toHaveBeenCalled();
+  });
+});
+
 describe('CoachChat board sync', () => {
   beforeEach(() => {
     vi.useFakeTimers();
