@@ -1148,6 +1148,156 @@ export async function getStudentDisplayName(studentId: string): Promise<string |
   }
 }
 
+// ---------------------------------------------------------------------------
+// Public tournaments API (Supabase edge function `tournaments-api`).
+//
+// Backs the chess-empire tenant `/tournaments` registration gate. The
+// list/detail reads are public (no key); register + cancel + the per-student
+// registration lookup require the legacy `x-api-key` header
+// (CHESS_EMPIRE_SERVICE_KEY). Response shapes mirror the deployed function
+// source at supabase/functions/tournaments-api/index.ts.
+// ---------------------------------------------------------------------------
+
+export interface CETournamentBranch {
+  id: string;
+  name: string;
+}
+
+export interface CETournament {
+  id: string;
+  branch_id: string | null;
+  branch: CETournamentBranch | null;
+  name: string;
+  info: string | null;
+  tournament_date: string;
+  start_time: string | null;
+  time_format: string | null;
+  registration_fee: number;
+  rounds: number;
+  capacity: number;
+  /** 'open' | 'closed' | 'cancelled'. */
+  status: string;
+  registered_count: number;
+}
+
+export interface CETournamentRegistration {
+  id: string;
+  tournament_id: string;
+  registered_at: string;
+}
+
+/** The RPC envelope returned by the register endpoint (`ok` + reason/details). */
+export interface CERegisterResult {
+  ok: boolean;
+  reason?: string;
+  registration_id?: string;
+  registered_count?: number;
+  capacity?: number;
+  status?: string;
+  [key: string]: unknown;
+}
+
+function tournamentsApiBase(): string {
+  return `${ceFunctionsBase()}/tournaments-api`;
+}
+
+/**
+ * List tournaments from the public endpoint. `upcoming=true` (default) returns
+ * only tournaments dated today or later. No API key — this is a public read.
+ */
+export async function listTournaments(
+  upcoming = true,
+): Promise<CETournament[]> {
+  const url = `${tournamentsApiBase()}/tournaments?upcoming=${upcoming ? 'true' : 'false'}`;
+  const resp = await ceFetch(url, { headers: { Accept: 'application/json' } });
+  const body = await expectJson<{ ok?: boolean; tournaments?: CETournament[] }>(
+    resp,
+  );
+  return Array.isArray(body.tournaments) ? body.tournaments : [];
+}
+
+/**
+ * Register a student for a tournament. Requires the service key (x-api-key).
+ * The caller MUST resolve `studentId` from the verified member — it is never
+ * accepted from an untrusted request. Returns the RPC envelope on success;
+ * throws ChessEmpireAPIError (carrying `{ ok:false, reason }`) on a non-2xx so
+ * the route can map the reason to human copy.
+ */
+export async function registerForTournament(
+  tournamentId: string,
+  studentId: string,
+  source = 'web',
+): Promise<CERegisterResult> {
+  const key = getServiceKey();
+  const url = `${tournamentsApiBase()}/tournaments/${encodeURIComponent(tournamentId)}/register`;
+  const resp = await ceFetch(url, {
+    method: 'POST',
+    headers: {
+      'x-api-key': key,
+      'x-source': source,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
+    body: JSON.stringify({ student_id: studentId }),
+  });
+  return expectJson<CERegisterResult>(resp);
+}
+
+/**
+ * Cancel a registration by its id. Requires the service key. Throws
+ * ChessEmpireAPIError on a non-2xx (e.g. 404 when the registration is gone).
+ */
+export async function cancelTournamentRegistration(
+  registrationId: string,
+): Promise<void> {
+  const key = getServiceKey();
+  const url = `${tournamentsApiBase()}/registrations/${encodeURIComponent(registrationId)}`;
+  const resp = await ceFetch(url, {
+    method: 'DELETE',
+    headers: { 'x-api-key': key, Accept: 'application/json' },
+  });
+  await expectJson<{ ok?: boolean }>(resp);
+}
+
+/**
+ * List a student's own tournament registrations. Requires the service key.
+ *
+ * This endpoint ships in parallel (Phase 3); until then it may 404 in dev — we
+ * degrade to an empty list on 404 / any non-2xx / network error so the page can
+ * still render "not registered" states rather than blowing up.
+ */
+export async function getStudentTournamentRegistrations(
+  studentId: string,
+): Promise<CETournamentRegistration[]> {
+  let key: string;
+  try {
+    key = getServiceKey();
+  } catch {
+    return [];
+  }
+  const url = `${tournamentsApiBase()}/students/${encodeURIComponent(studentId)}/registrations`;
+  let resp: Response;
+  try {
+    resp = await ceFetch(url, {
+      headers: { 'x-api-key': key, Accept: 'application/json' },
+    });
+  } catch {
+    return [];
+  }
+  if (resp.status < 200 || resp.status >= 300) return [];
+  let body: unknown;
+  try {
+    body = await resp.json();
+  } catch {
+    return [];
+  }
+  const regs =
+    body && typeof body === 'object'
+      ? (body as { registrations?: unknown }).registrations
+      : null;
+  return Array.isArray(regs) ? (regs as CETournamentRegistration[]) : [];
+}
+
 /**
  * Fetch the set of tournament_results ids that currently exist for the given
  * upload ids — used to detect deleted/re-uploaded results for reversal.

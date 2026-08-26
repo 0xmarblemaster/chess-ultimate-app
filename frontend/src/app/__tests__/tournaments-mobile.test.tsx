@@ -10,7 +10,10 @@ vi.mock('next/link', () => ({
   ),
 }));
 
-import TournamentsPage from '../tournaments/page';
+// The apex calendar (with the responsive calendar/list toggle) now lives in
+// the extracted client component; `page.tsx` is a server component that routes
+// to it on non-CE hosts. Render the calendar directly.
+import TournamentsPage from '../tournaments/TournamentsCalendar';
 
 function setWidth(w: number) {
   Object.defineProperty(window, 'innerWidth', { value: w, writable: true, configurable: true });

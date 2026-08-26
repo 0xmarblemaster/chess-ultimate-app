@@ -6,14 +6,21 @@ describe('Public Tournaments Page', () => {
     expect(typeof module.default).toBe('function');
   });
 
-  it('is a client component', async () => {
+  it('routes via a server component to the client calendar', async () => {
     const fs = await import('fs');
     const path = await import('path');
-    const content = fs.readFileSync(
+    // The page is now a server component (reads `headers()` to detect the CE
+    // tenant); the apex calendar client component was extracted verbatim.
+    const page = fs.readFileSync(
       path.resolve(__dirname, '../tournaments/page.tsx'),
       'utf-8'
     );
-    expect(content).toContain("'use client'");
+    expect(page).not.toContain("'use client'");
+    const calendar = fs.readFileSync(
+      path.resolve(__dirname, '../tournaments/TournamentsCalendar.tsx'),
+      'utf-8'
+    );
+    expect(calendar).toContain("'use client'");
   });
 });
 
