@@ -9,7 +9,9 @@
  * land after the dashboard first renders, which would otherwise strand the user
  * on the static "no link" screen.
  *
- * On every mount (initial load, `router.refresh`, or the manual Refresh button)
+ * The `children` are ALWAYS the page content (the standard Chesster dashboard) —
+ * a `no_link` user gets a fully usable app, never a full-screen waiting takeover.
+ * On top of that, on every mount (initial load, `router.refresh`, or Refresh)
  * this:
  *   1. Replays any stashed invite JWT to `/api/chess-empire/link/claim`. The
  *      server accepts an expired-but-signed JWT within a 7-day grace window, and
@@ -17,11 +19,13 @@
  *      is cleared ONLY on success or a signature-class (`invalid`) terminal —
  *      an expiry never wipes it, since the server may still accept it. A
  *      terminal 410 (expired beyond grace, no server-side pending recovery)
- *      stops the wait and shows an explicit "invite expired" screen instead.
+ *      surfaces a dismissible "invite expired" banner over the dashboard.
  *   2. Polls `/api/chess-empire/link/status` with capped exponential backoff
  *      (up to ~10 min) and `router.refresh()`es the moment the state leaves
- *      `no_link`. After the cap it shows the static screen plus a Refresh
- *      action that restarts polling; any fresh page load restarts it too.
+ *      `no_link` (so a branch student whose webhook lands late auto-upgrades
+ *      into the CE homepage). After the cap it just keeps rendering the
+ *      dashboard; a page reload restarts polling. When the server reports the
+ *      link can't recover from here, a dismissible "dead end" banner appears.
  */
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -63,7 +67,6 @@ export default function EmpireNoLinkClient({
 }) {
   const router = useRouter()
   const t = useTranslations('empire')
-  const [polling, setPolling] = useState(true)
   // Bumping this re-runs the claim + poll cycle (Refresh button / restart).
   const [runId, setRunId] = useState(0)
   const [startOverUrl, setStartOverUrl] = useState<string | null>(null)
@@ -95,7 +98,6 @@ export default function EmpireNoLinkClient({
 
     const linked = () => {
       if (cancelled) return
-      setPolling(false)
       router.refresh()
     }
 
@@ -125,10 +127,7 @@ export default function EmpireNoLinkClient({
         // the JWT (harmless, and never clear it on expiry) so a manual link or
         // coach-side action can still succeed.
         if (res.status === 410 && data?.error === 'expired') {
-          if (!cancelled) {
-            setPolling(false)
-            setExpired(true)
-          }
+          if (!cancelled) setExpired(true)
           return true
         }
       } catch {
@@ -140,7 +139,6 @@ export default function EmpireNoLinkClient({
     async function pollStatus(): Promise<void> {
       if (cancelled) return
       if (Date.now() - start >= POLL_MAX_MS) {
-        setPolling(false)
         // No stashed JWT to replay and the server says the link can't complete
         // from here — this is a dead end, not a calm wait. Show guidance.
         if (!readStoredJwt() && lastRecoverable === false) setDeadEnd(true)
@@ -183,141 +181,91 @@ export default function EmpireNoLinkClient({
   const restart = useCallback(() => {
     setExpired(false)
     setDeadEnd(false)
-    setPolling(true)
     setRunId((n) => n + 1)
   }, [])
 
-  if (expired) {
-    return (
-      <main
-        data-testid="empire-home-nolink-expired"
-        className="min-h-screen px-4 sm:px-6 lg:px-10 py-12 lg:py-20"
-        style={{ backgroundColor: '#F6F7F9', color: '#0F172A' }}
-      >
-        <div className="max-w-2xl mx-auto text-center flex flex-col items-center gap-5">
-          <div className="rounded-2xl bg-white border border-slate-200 p-8 sm:p-10 shadow-sm w-full">
-            <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
-              {t('noLinkExpiredTitle')}
-            </h1>
-            <p className="mt-3 text-slate-600 text-sm sm:text-base">
-              {t('noLinkExpiredBody')}
-            </p>
-            {startOverUrl && (
-              <a
-                data-testid="empire-nolink-expired-reopen"
-                href={startOverUrl}
-                className="mt-6 inline-block rounded-full bg-slate-900 px-5 py-2.5 font-semibold text-white hover:bg-slate-700"
-              >
-                {t('noLinkExpiredReopen')}
-              </a>
-            )}
-          </div>
-        </div>
-      </main>
-    )
-  }
+  // Close a banner without restarting polling — the dashboard stays usable and a
+  // page reload will resume the claim/poll cycle if the user wants to retry.
+  const dismissBanner = useCallback(() => {
+    setExpired(false)
+    setDeadEnd(false)
+  }, [])
 
-  if (deadEnd) {
-    return (
-      <main
-        data-testid="empire-home-nolink-deadend"
-        className="min-h-screen px-4 sm:px-6 lg:px-10 py-12 lg:py-20"
-        style={{ backgroundColor: '#F6F7F9', color: '#0F172A' }}
-      >
-        <div className="max-w-2xl mx-auto text-center flex flex-col items-center gap-5">
-          <div className="rounded-2xl bg-white border border-slate-200 p-8 sm:p-10 shadow-sm w-full">
-            <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
-              {t('noLinkDeadEndTitle')}
-            </h1>
-            <p className="mt-3 text-slate-600 text-sm sm:text-base">
-              {t('noLinkDeadEndBody')}
-            </p>
-            <div className="mt-6 flex flex-wrap items-center justify-center gap-4">
-              {startOverUrl && (
-                <a
-                  data-testid="empire-nolink-deadend-reopen"
-                  href={startOverUrl}
-                  className="inline-block rounded-full bg-slate-900 px-5 py-2.5 font-semibold text-white hover:bg-slate-700"
-                >
-                  {t('noLinkExpiredReopen')}
-                </a>
-              )}
-              <button
-                type="button"
-                data-testid="empire-nolink-deadend-refresh"
-                onClick={restart}
-                className="font-semibold text-slate-500 underline underline-offset-4 hover:text-slate-700"
-              >
-                {t('noLinkRefresh')}
-              </button>
-            </div>
-          </div>
-        </div>
-      </main>
-    )
-  }
-
-  if (polling) {
-    return (
-      <main
-        data-testid="empire-home-nolink-polling"
-        className="min-h-screen px-4 sm:px-6 lg:px-10 py-12 lg:py-20"
-        style={{ backgroundColor: '#F6F7F9', color: '#0F172A' }}
-      >
-        <div className="max-w-2xl mx-auto text-center flex flex-col items-center gap-4">
-          <div className="rounded-2xl bg-gradient-to-r from-slate-900 to-slate-700 text-white p-8 sm:p-10 shadow-sm w-full">
-            <div className="flex items-center justify-center gap-3">
-              <span
-                aria-hidden
-                className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-slate-500 border-t-white"
-              />
-              <h1 className="text-xl md:text-2xl font-semibold tracking-tight">
-                {t('settingUpProfile')}
-              </h1>
-            </div>
-            <p className="mt-3 text-slate-300 text-sm">{t('noLinkSubtitle')}</p>
-          </div>
-          {startOverUrl && (
-            <a
-              data-testid="empire-nolink-startover"
-              href={startOverUrl}
-              className="text-sm font-semibold text-slate-500 underline underline-offset-4 hover:text-slate-700"
-            >
-              {t('noLinkStartOver')}
-            </a>
-          )}
-        </div>
-      </main>
-    )
-  }
-
-  // Polling gave up (cap reached) — show the static screen, but keep an
-  // escape hatch: Refresh restarts polling, Start over re-runs onboarding.
+  // The dashboard is ALWAYS rendered. `expired`/`deadEnd` add a slim, dismissible
+  // banner over it instead of replacing the page with a full-screen takeover.
   return (
     <>
       {children}
-      <div
-        data-testid="empire-nolink-stalled"
-        className="fixed inset-x-0 bottom-0 z-40 flex flex-wrap items-center justify-center gap-3 border-t border-slate-200 bg-white/95 px-4 py-3 text-sm shadow-[0_-1px_8px_rgba(0,0,0,0.06)] backdrop-blur"
-      >
-        <button
-          type="button"
-          data-testid="empire-nolink-refresh"
-          onClick={restart}
-          className="rounded-full bg-slate-900 px-4 py-2 font-semibold text-white hover:bg-slate-700"
+      {expired && (
+        <div
+          data-testid="empire-home-nolink-expired"
+          className="fixed inset-x-0 bottom-0 z-40 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 border-t border-slate-200 bg-white/95 px-4 py-3 text-sm shadow-[0_-1px_8px_rgba(0,0,0,0.06)] backdrop-blur"
         >
-          {t('noLinkRefresh')}
-        </button>
-        {startOverUrl && (
-          <a
-            data-testid="empire-nolink-startover"
-            href={startOverUrl}
+          <p className="text-center text-slate-700">
+            <span className="font-semibold text-slate-900">
+              {t('noLinkExpiredTitle')}
+            </span>{' '}
+            {t('noLinkExpiredBody')}
+          </p>
+          {startOverUrl && (
+            <a
+              data-testid="empire-nolink-expired-reopen"
+              href={startOverUrl}
+              className="rounded-full bg-slate-900 px-4 py-1.5 font-semibold text-white hover:bg-slate-700"
+            >
+              {t('noLinkExpiredReopen')}
+            </a>
+          )}
+          <button
+            type="button"
+            data-testid="empire-nolink-expired-dismiss"
+            onClick={dismissBanner}
+            aria-label="Dismiss"
+            className="ml-1 text-lg leading-none text-slate-400 hover:text-slate-700"
+          >
+            ×
+          </button>
+        </div>
+      )}
+      {deadEnd && (
+        <div
+          data-testid="empire-home-nolink-deadend"
+          className="fixed inset-x-0 bottom-0 z-40 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 border-t border-slate-200 bg-white/95 px-4 py-3 text-sm shadow-[0_-1px_8px_rgba(0,0,0,0.06)] backdrop-blur"
+        >
+          <p className="text-center text-slate-700">
+            <span className="font-semibold text-slate-900">
+              {t('noLinkDeadEndTitle')}
+            </span>{' '}
+            {t('noLinkDeadEndBody')}
+          </p>
+          {startOverUrl && (
+            <a
+              data-testid="empire-nolink-deadend-reopen"
+              href={startOverUrl}
+              className="rounded-full bg-slate-900 px-4 py-1.5 font-semibold text-white hover:bg-slate-700"
+            >
+              {t('noLinkExpiredReopen')}
+            </a>
+          )}
+          <button
+            type="button"
+            data-testid="empire-nolink-deadend-refresh"
+            onClick={restart}
             className="font-semibold text-slate-500 underline underline-offset-4 hover:text-slate-700"
           >
-            {t('noLinkStartOver')}
-          </a>
-        )}
-      </div>
+            {t('noLinkRefresh')}
+          </button>
+          <button
+            type="button"
+            data-testid="empire-nolink-deadend-dismiss"
+            onClick={dismissBanner}
+            aria-label="Dismiss"
+            className="ml-1 text-lg leading-none text-slate-400 hover:text-slate-700"
+          >
+            ×
+          </button>
+        </div>
+      )}
     </>
   )
 }

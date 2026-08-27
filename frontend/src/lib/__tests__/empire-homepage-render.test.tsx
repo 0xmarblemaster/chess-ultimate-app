@@ -104,6 +104,10 @@ vi.mock('@/components/empire/EmpireNoLinkClient', () => ({
     <div data-testid="nolink-poller">{props.children}</div>
   ),
 }));
+vi.mock('@/app/dashboard/ChessterDashboard', () => ({
+  __esModule: true,
+  default: () => <div data-testid="chesster-dashboard" />,
+}));
 
 import { renderEmpireHomepage } from '../empire-homepage-render';
 
@@ -163,14 +167,16 @@ describe('renderEmpireHomepage — coach path', () => {
     expect(getCoachProfile).not.toHaveBeenCalled();
   });
 
-  it('wraps the no_link state in the polling client', async () => {
+  it('wraps the Chesster dashboard in the polling client for no_link', async () => {
     memberStore.state = 'no_link';
     memberStore.studentId = null;
     const result = await renderEmpireHomepage('org-1');
     expect(result.status).toBe('no_link');
-    const { getByTestId } = render(nodeOf(result));
+    const { getByTestId, queryByTestId } = render(nodeOf(result));
     expect(getByTestId('nolink-poller')).toBeTruthy();
-    expect(getByTestId('empire-home').getAttribute('data-state')).toBe('no_link');
+    // Standard Chesster dashboard, not the CE waiting screen.
+    expect(getByTestId('chesster-dashboard')).toBeTruthy();
+    expect(queryByTestId('empire-home')).toBeNull();
   });
 });
 

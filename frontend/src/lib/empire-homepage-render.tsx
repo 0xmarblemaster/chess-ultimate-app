@@ -45,7 +45,8 @@ import { computeCoachStats } from '@/lib/empire-coach-stats';
  * lets the caller (`/dashboard`) tell WHY personalization was skipped and stop
  * masking real failures behind the generic Chesster dashboard on tenant hosts:
  *  - `ok`          → render `node` (verified student / coach / pending_confirm).
- *  - `no_link`     → render `node` (the poller + "profile getting ready" screen).
+ *  - `no_link`     → render `node` (the standard Chesster dashboard wrapped in
+ *                    the background poller that auto-upgrades once a link lands).
  *  - `auth_null`   → no server-side session (stale token / signed-out).
  *  - `lookup_error`→ a required fetch threw; `error` is logged with a stable prefix.
  */
@@ -87,13 +88,16 @@ export async function renderEmpireHomepage(
   }
 
   if (membership.state === 'no_link') {
-    // Client wrapper polls for the async webhook / claim write and refreshes
-    // into the personalized page; the static screen is its post-timeout child.
+    // No membership row yet (branch webhook/claim still in flight, or a plain
+    // no-invite signup). Serve the standard Chesster dashboard — a fully usable
+    // app, not a waiting screen. The client wrapper keeps polling in the
+    // background and `router.refresh()`es into the personalized CE homepage the
+    // moment a branch link lands; a late webhook still auto-upgrades the user.
     return {
       status: 'no_link',
       node: (
         <EmpireNoLinkClient>
-          <EmpireHomePage state="no_link" studentDisplayName={null} />
+          <ChessterDashboard />
         </EmpireNoLinkClient>
       ),
     };

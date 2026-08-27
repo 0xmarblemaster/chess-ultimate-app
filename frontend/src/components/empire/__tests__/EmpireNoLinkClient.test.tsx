@@ -2,17 +2,18 @@
  * @vitest-environment jsdom
  *
  * Behavior tests for the no_link polling client:
+ *   - the children (dashboard) always render — no full-screen takeover
  *   - replays a stored invite JWT to /link/claim on mount, refreshing on success
  *   - clears storage only on a signature-class (`invalid`) terminal error
- *   - a terminal 410 (expired beyond grace) shows the expired screen, not the wait
+ *   - a terminal 410 (expired beyond grace) shows a banner OVER the children
  *   - keeps the stored JWT on an expiry 410 (a manual link may still succeed)
- *   - renders the "reopen" button on the expired screen when a welcome URL exists
+ *   - renders the "reopen" button on the expired banner when a welcome URL exists
  *   - retries the claim + poll on every fresh mount (remount restarts polling)
  *   - polls /link/status and refreshes when the state leaves no_link
- *   - shows the spinner while polling
+ *   - dead-end / expired banners are dismissible without removing the children
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, cleanup, act } from '@testing-library/react';
+import { render, screen, waitFor, cleanup, act, fireEvent } from '@testing-library/react';
 
 const refresh = vi.fn();
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
@@ -50,15 +51,16 @@ afterEach(() => {
 });
 
 describe('EmpireNoLinkClient', () => {
-  it('shows the setting-up spinner while polling', async () => {
+  it('renders the children (dashboard) while polling — no takeover', async () => {
     fetchMock.mockResolvedValue(jsonRes(200, { state: 'no_link' }));
     render(
       <EmpireNoLinkClient>
         <Static />
       </EmpireNoLinkClient>,
     );
-    expect(screen.getByTestId('empire-home-nolink-polling')).toBeTruthy();
-    expect(screen.getByText('settingUpProfile')).toBeTruthy();
+    expect(screen.getByTestId('static-message')).toBeTruthy();
+    expect(screen.queryByTestId('empire-home-nolink-expired')).toBeNull();
+    expect(screen.queryByTestId('empire-home-nolink-deadend')).toBeNull();
   });
 
   it('replays a stored JWT to /link/claim and refreshes on success', async () => {
@@ -107,10 +109,12 @@ describe('EmpireNoLinkClient', () => {
     await waitFor(() => expect(localStorage.getItem(KEY)).toBeNull());
     expect(sessionStorage.getItem(KEY)).toBeNull();
     expect(refresh).not.toHaveBeenCalled();
-    expect(screen.getByTestId('empire-home-nolink-polling')).toBeTruthy();
+    // Non-terminal: no banner, dashboard keeps rendering.
+    expect(screen.getByTestId('static-message')).toBeTruthy();
+    expect(screen.queryByTestId('empire-home-nolink-expired')).toBeNull();
   });
 
-  it('shows the expired screen (not the wait) on a terminal 410, keeping the JWT', async () => {
+  it('shows the expired banner over the children on a terminal 410, keeping the JWT', async () => {
     localStorage.setItem(KEY, 'expired.jwt.tok');
     sessionStorage.setItem(KEY, 'expired.jwt.tok');
     let claimCalls = 0;
@@ -128,11 +132,11 @@ describe('EmpireNoLinkClient', () => {
       </EmpireNoLinkClient>,
     );
 
-    // Terminal expiry → explicit expired screen, waiting card gone.
+    // Terminal expiry → banner appears, but the dashboard stays put underneath.
     await waitFor(() =>
       expect(screen.getByTestId('empire-home-nolink-expired')).toBeTruthy(),
     );
-    expect(screen.queryByTestId('empire-home-nolink-polling')).toBeNull();
+    expect(screen.getByTestId('static-message')).toBeTruthy();
     expect(screen.getByText('noLinkExpiredTitle')).toBeTruthy();
     expect(claimCalls).toBeGreaterThan(0);
     // The JWT is preserved — a manual link / coach action may still complete it.
@@ -254,14 +258,15 @@ describe('EmpireNoLinkClient', () => {
 
       expect(screen.getByTestId('empire-home-nolink-deadend')).toBeTruthy();
       expect(screen.getByText('noLinkDeadEndTitle')).toBeTruthy();
-      expect(screen.queryByTestId('empire-nolink-stalled')).toBeNull();
+      // Banner sits over the dashboard, not in place of it.
+      expect(screen.getByTestId('static-message')).toBeTruthy();
       expect(refresh).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it('keeps the calm static screen at the poll cap when recoverable:true', async () => {
+  it('keeps rendering only the dashboard at the poll cap when recoverable:true', async () => {
     vi.useFakeTimers();
     try {
       fetchMock.mockResolvedValue(jsonRes(200, { state: 'no_link', recoverable: true }));
@@ -277,9 +282,9 @@ describe('EmpireNoLinkClient', () => {
         await vi.advanceTimersByTimeAsync(11 * 60_000);
       });
 
-      // A recoverable wait is not a dead end — the calm static screen shows.
+      // A recoverable wait is not a dead end — just the dashboard, no banner.
       expect(screen.queryByTestId('empire-home-nolink-deadend')).toBeNull();
-      expect(screen.getByTestId('empire-nolink-stalled')).toBeTruthy();
+      expect(screen.queryByTestId('empire-home-nolink-expired')).toBeNull();
       expect(screen.getByTestId('static-message')).toBeTruthy();
     } finally {
       vi.useRealTimers();
@@ -307,5 +312,54 @@ describe('EmpireNoLinkClient', () => {
       String(c[0]).includes('/claim'),
     );
     expect(claimCalled).toBe(false);
+  });
+
+  it('dismisses the expired banner while leaving the dashboard in place', async () => {
+    localStorage.setItem(KEY, 'expired.jwt.tok');
+    fetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        String(url).includes('/claim')
+          ? jsonRes(410, { error: 'expired', terminal: true })
+          : jsonRes(200, { state: 'no_link' }),
+      ),
+    );
+
+    render(
+      <EmpireNoLinkClient>
+        <Static />
+      </EmpireNoLinkClient>,
+    );
+
+    const dismiss = await screen.findByTestId('empire-nolink-expired-dismiss');
+    fireEvent.click(dismiss);
+
+    expect(screen.queryByTestId('empire-home-nolink-expired')).toBeNull();
+    expect(screen.getByTestId('static-message')).toBeTruthy();
+  });
+
+  it('dismisses the dead-end banner while leaving the dashboard in place', async () => {
+    vi.useFakeTimers();
+    try {
+      fetchMock.mockResolvedValue(jsonRes(200, { state: 'no_link', recoverable: false }));
+      render(
+        <EmpireNoLinkClient>
+          <Static />
+        </EmpireNoLinkClient>,
+      );
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(11 * 60_000);
+      });
+
+      expect(screen.getByTestId('empire-home-nolink-deadend')).toBeTruthy();
+      fireEvent.click(screen.getByTestId('empire-nolink-deadend-dismiss'));
+
+      expect(screen.queryByTestId('empire-home-nolink-deadend')).toBeNull();
+      expect(screen.getByTestId('static-message')).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
