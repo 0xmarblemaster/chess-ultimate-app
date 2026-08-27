@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, fireEvent, render } from '@testing-library/react';
 
 interface ScriptedResponse {
   data?: unknown;
@@ -220,6 +220,73 @@ describe('/register server page', () => {
     // Contact email surfaced as a mailto link.
     const mailto = container.querySelector('a[href^="mailto:"]');
     expect(mailto?.getAttribute('href')).toBe('mailto:help@ce.io');
+  });
+
+  it('highlights the clicked branch in purple, then redirects after a delay', async () => {
+    vi.useFakeTimers();
+    const assignSpy = vi.fn();
+    const originalLocation = window.location;
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...originalLocation, assign: assignSpy },
+    });
+
+    try {
+      tokenScript.current = {
+        data: [
+          {
+            token: 't-branch-1',
+            external_branch_id: 'b1',
+            branch_name: 'Debut',
+            kind: 'branch',
+            expires_at: null,
+            revoked_at: null,
+            created_at: iso('2026-01-01'),
+          },
+          {
+            token: 't-branch-2',
+            external_branch_id: 'b2',
+            branch_name: 'Almaty',
+            kind: 'branch',
+            expires_at: null,
+            revoked_at: null,
+            created_at: iso('2026-01-02'),
+          },
+        ],
+        error: null,
+      };
+
+      const ui = await RegisterPage();
+      const { getByText } = render(ui);
+
+      const card = getByText('Debut').closest('a')!;
+      fireEvent.click(card);
+
+      // Selected state: purple border/ring matching the page background purple.
+      expect(card.className).toContain('border-purple-600');
+      expect(card.className).toContain('ring-purple-600');
+      expect(card.getAttribute('aria-pressed')).toBe('true');
+      // The unclicked card stays neutral.
+      const other = getByText('Almaty').closest('a')!;
+      expect(other.className).not.toContain('border-purple-600');
+
+      // Redirect only fires after the highlight delay.
+      expect(assignSpy).not.toHaveBeenCalled();
+      vi.runAllTimers();
+      expect(assignSpy).toHaveBeenCalledTimes(1);
+      expect(assignSpy.mock.calls[0][0]).toContain('/welcome/t-branch-1');
+
+      // A second click while redirecting does not queue another navigation.
+      fireEvent.click(other);
+      vi.runAllTimers();
+      expect(assignSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: originalLocation,
+      });
+      vi.useRealTimers();
+    }
   });
 
   it('renders the empty state on the apex host (no x-org-id)', async () => {

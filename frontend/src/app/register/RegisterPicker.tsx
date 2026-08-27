@@ -13,9 +13,13 @@
  */
 'use client';
 
+import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import Image from 'next/image';
 import { useBranding } from '@/contexts/OrganizationContext';
+
+/** How long the purple selected state stays visible before redirecting. */
+const SELECT_REDIRECT_DELAY_MS = 350;
 
 export interface RegisterOption {
   /** Opaque branch_invite_tokens.token — routes to `/welcome/<token>`. */
@@ -32,6 +36,20 @@ export default function RegisterPicker({ branches, online }: RegisterPickerProps
   const t = useTranslations('register');
   const branding = useBranding();
   const isEmpty = branches.length === 0 && !online;
+
+  const [selectedToken, setSelectedToken] = useState<string | null>(null);
+  const redirecting = useRef(false);
+
+  const handleSelect = (event: React.MouseEvent<HTMLAnchorElement>, token: string) => {
+    event.preventDefault();
+    if (redirecting.current) return;
+    redirecting.current = true;
+    setSelectedToken(token);
+    const href = event.currentTarget.href;
+    window.setTimeout(() => {
+      window.location.assign(href);
+    }, SELECT_REDIRECT_DELAY_MS);
+  };
 
   return (
     <div className="flex flex-col items-center justify-start pt-16 md:justify-center md:pt-0 min-h-screen bg-purple-600 md:bg-gray-50 px-4 pb-[env(safe-area-inset-bottom)]">
@@ -89,7 +107,13 @@ export default function RegisterPicker({ branches, online }: RegisterPickerProps
               <a
                 key={branch.token}
                 href={`/welcome/${encodeURIComponent(branch.token)}`}
-                className="block w-full text-center bg-white border-2 border-gray-200 rounded-2xl py-4 px-4 font-bold text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all"
+                onClick={(e) => handleSelect(e, branch.token)}
+                aria-pressed={selectedToken === branch.token}
+                className={`block w-full text-center rounded-2xl py-4 px-4 font-bold transition-all border-2 ${
+                  selectedToken === branch.token
+                    ? 'border-purple-600 ring-2 ring-purple-600 bg-purple-50 text-purple-700'
+                    : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300'
+                }`}
               >
                 {branch.branchName}
               </a>
@@ -98,7 +122,13 @@ export default function RegisterPicker({ branches, online }: RegisterPickerProps
             {online && (
               <a
                 href={`/welcome/${encodeURIComponent(online.token)}`}
-                className="block w-full rounded-2xl p-4 text-left bg-gradient-to-b from-purple-600 to-purple-700 text-white border-b-4 border-purple-800 hover:from-purple-500 hover:to-purple-600 active:border-b-2 active:translate-y-0.5 transition-all"
+                onClick={(e) => handleSelect(e, online.token)}
+                aria-pressed={selectedToken === online.token}
+                className={`block w-full rounded-2xl p-4 text-left bg-gradient-to-b from-purple-600 to-purple-700 text-white border-b-4 border-purple-800 hover:from-purple-500 hover:to-purple-600 active:border-b-2 active:translate-y-0.5 transition-all ${
+                  selectedToken === online.token
+                    ? 'ring-2 ring-purple-600 ring-offset-2'
+                    : ''
+                }`}
               >
                 <div className="flex items-center justify-between">
                   <span className="font-bold uppercase tracking-wide">
