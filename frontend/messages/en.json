@@ -2386,6 +2386,30 @@
     "notNow": "Not now",
     "confirmPrompt": "Register <b>{name}</b> for this tournament?",
     "yourself": "yourself",
+    "upcoming": "{count} upcoming",
+    "noUpcoming": "No tournaments",
+    "startAt": "Start {time}",
+    "closesAt": "Registration closes {datetime}",
+    "rosterLabel": "Roster",
+    "rosterEmpty": "No students found",
+    "capacityLabel": "Registered",
+    "countdown": {
+      "label": "Registration closes in",
+      "days": "DAYS",
+      "hours": "HOURS",
+      "minutes": "MINUTES",
+      "seconds": "SECONDS"
+    },
+    "branchNames": {
+      "Gagarin Park": "Gagarin Park",
+      "Debut": "Debut",
+      "Almaty Arena": "Almaty Arena",
+      "Halyk Arena": "Halyk Arena",
+      "Zhandosova": "Zhandosova",
+      "Abaya Rozybakieva": "Abaya Rozybakieva",
+      "Almaty 1": "Almaty 1",
+      "Almaty-1": "Almaty-1"
+    },
     "errors": {
       "full": "This tournament is full.",
       "closed": "Registration has closed for this tournament.",

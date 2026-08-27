@@ -1217,6 +1217,44 @@ export async function listTournaments(
 }
 
 /**
+ * Fetch the public roster (registered player display names, in registration
+ * order) for a tournament. Public read — no key. The edge function returns
+ * `{ ok, registrations: [{ id, source, registered_at, display_name }] }` and
+ * deliberately omits contact fields. Best-effort: any non-2xx / network error /
+ * unexpected shape degrades to `[]` so the schedule still renders.
+ */
+export async function getTournamentRoster(
+  tournamentId: string,
+): Promise<string[]> {
+  const url = `${tournamentsApiBase()}/tournaments/${encodeURIComponent(tournamentId)}/registrations`;
+  let resp: Response;
+  try {
+    resp = await ceFetch(url, { headers: { Accept: 'application/json' } });
+  } catch {
+    return [];
+  }
+  if (resp.status < 200 || resp.status >= 300) return [];
+  let body: unknown;
+  try {
+    body = await resp.json();
+  } catch {
+    return [];
+  }
+  const regs =
+    body && typeof body === 'object'
+      ? (body as { registrations?: unknown }).registrations
+      : null;
+  if (!Array.isArray(regs)) return [];
+  return regs
+    .map((r) =>
+      r && typeof r === 'object'
+        ? String((r as { display_name?: unknown }).display_name ?? '').trim()
+        : '',
+    )
+    .filter((name) => name.length > 0);
+}
+
+/**
  * Register a student for a tournament. Requires the service key (x-api-key).
  * The caller MUST resolve `studentId` from the verified member — it is never
  * accepted from an untrusted request. Returns the RPC envelope on success;

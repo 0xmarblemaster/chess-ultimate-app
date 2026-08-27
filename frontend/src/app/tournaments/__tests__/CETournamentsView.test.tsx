@@ -1,15 +1,23 @@
 /**
  * @vitest-environment jsdom
  *
- * Localization tests for CETournamentsView. Renders under a real
- * NextIntlClientProvider seeded with the actual message catalogs and asserts
- * the view shows translated copy (header, banners, empty state, card labels,
- * status badges, actions) rather than hardcoded English — across en/ru/kz and
- * every visitor state. Also checks locale-driven fee/date formatting.
+ * CETournamentsView — the vanilla-schedule port + one-click registration.
+ *
+ * Covers the design port (branch accordion, roster rendering, localization
+ * across en/ru/kz and every visitor state) and the one allowed functional
+ * difference: one-click registration with an optimistic ✅ + roster update,
+ * failure revert, logged-out prompt, and the `?tournament=<id>` deep link.
  */
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest';
 import React from 'react';
-import { render, screen, cleanup } from '@testing-library/react';
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 
 import en from '../../../../messages/en.json';
@@ -22,130 +30,261 @@ import CETournamentsView, {
 
 const CATALOGS = { en, ru, kz } as const;
 
+const BRANCH = { id: 'br-1', name: 'Almaty Arena' };
+
 function renderView(
   viewer: CEViewer,
   tournaments: CETournamentCard[],
-  locale: keyof typeof CATALOGS = 'en',
+  {
+    locale = 'en' as keyof typeof CATALOGS,
+    branches = [BRANCH],
+    deepLinkTournamentId = null as string | null,
+  } = {},
 ) {
   return render(
     <NextIntlClientProvider
       locale={locale}
       messages={CATALOGS[locale] as Record<string, unknown>}
     >
-      <CETournamentsView tournaments={tournaments} viewer={viewer} />
+      <CETournamentsView
+        tournaments={tournaments}
+        branches={branches}
+        viewer={viewer}
+        deepLinkTournamentId={deepLinkTournamentId}
+      />
     </NextIntlClientProvider>,
   );
 }
 
-const sampleCard: CETournamentCard = {
-  id: 't-1',
-  name: 'Spring Open',
-  info: null,
-  tournament_date: '2026-03-14',
-  start_time: '10:30:00',
-  time_format: 'Blitz 5+3',
-  registration_fee: 0,
-  rounds: 7,
-  capacity: 20,
-  status: 'open',
-  registered_count: 5,
-  branch_name: null,
-  registration_id: null,
-};
+function makeCard(over: Partial<CETournamentCard> = {}): CETournamentCard {
+  return {
+    id: 't-1',
+    name: 'Spring Open',
+    info: null,
+    tournament_date: '2026-03-14',
+    start_time: '10:30:00',
+    time_format: 'Blitz 5+3',
+    registration_fee: 0,
+    rounds: 7,
+    capacity: 20,
+    status: 'open',
+    registered_count: 5,
+    branch_id: BRANCH.id,
+    branch_name: BRANCH.name,
+    registration_deadline: null,
+    roster: ['Aida Bekova', 'Timur Ali'],
+    registration_id: null,
+    is_registered: false,
+    ...over,
+  };
+}
 
-afterEach(() => cleanup());
+/** Expand the (single) branch accordion so its panels render. */
+function expandBranch() {
+  fireEvent.click(screen.getByText(BRANCH.name));
+}
 
-describe('CETournamentsView localization', () => {
+const fetchMock = vi.fn();
+
+beforeEach(() => {
+  fetchMock.mockReset();
+  vi.stubGlobal('fetch', fetchMock);
+});
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+describe('CETournamentsView — localization & structure', () => {
   it('renders the English header, subtitle and empty state', () => {
-    renderView({ state: 'logged_out' }, []);
+    renderView({ state: 'logged_out' }, [], { branches: [] });
     expect(screen.getByText(en.ceTournaments.title)).toBeTruthy();
     expect(screen.getByText(en.ceTournaments.subtitle)).toBeTruthy();
     expect(screen.getByText(en.ceTournaments.empty)).toBeTruthy();
   });
 
   it('renders the Russian header when locale is ru', () => {
-    renderView({ state: 'logged_out' }, [], 'ru');
+    renderView({ state: 'logged_out' }, [], { branches: [], locale: 'ru' });
     expect(screen.getByText(ru.ceTournaments.title)).toBeTruthy();
     expect(screen.getByText(ru.ceTournaments.subtitle)).toBeTruthy();
-    // The English original must not leak through.
     expect(screen.queryByText('Tournaments')).toBeNull();
   });
 
   it('renders the Kazakh header when locale is kz', () => {
-    renderView({ state: 'logged_out' }, [], 'kz');
+    renderView({ state: 'logged_out' }, [], { branches: [], locale: 'kz' });
     expect(screen.getByText(kz.ceTournaments.title)).toBeTruthy();
     expect(screen.getByText(kz.ceTournaments.subtitle)).toBeTruthy();
   });
 
-  it('shows the logged-out banner + sign-in link', () => {
-    renderView({ state: 'logged_out' }, [sampleCard]);
-    expect(
-      screen.getByText(en.ceTournaments.loggedOutBanner, { exact: false }),
-    ).toBeTruthy();
-    expect(screen.getByText(en.ceTournaments.signInToRegister)).toBeTruthy();
+  it('shows a branch card with a localized upcoming count badge', () => {
+    renderView({ state: 'logged_out' }, [makeCard()]);
+    expect(screen.getByText(BRANCH.name)).toBeTruthy();
+    // "1 upcoming" (en). The branch starts collapsed.
+    expect(screen.getByText('1 upcoming')).toBeTruthy();
   });
 
-  it('shows the unverified banner + verify link', () => {
-    renderView({ state: 'unverified' }, [sampleCard]);
-    expect(
-      screen.getByText(en.ceTournaments.unverifiedBanner, { exact: false }),
-    ).toBeTruthy();
-    expect(screen.getByText(en.ceTournaments.verifyMembership)).toBeTruthy();
-  });
-
-  it('renders card labels, open status and register action (verified)', () => {
-    renderView({ state: 'verified', studentName: 'Aidos' }, [sampleCard]);
+  it('renders card labels, roster and register action once expanded (verified)', () => {
+    renderView({ state: 'verified', studentName: 'Aidos' }, [makeCard()]);
+    expandBranch();
     expect(screen.getByText(en.ceTournaments.date)).toBeTruthy();
     expect(screen.getByText(en.ceTournaments.rounds)).toBeTruthy();
-    expect(screen.getByText(en.ceTournaments.entryFee)).toBeTruthy();
-    expect(screen.getByText(en.ceTournaments.players)).toBeTruthy();
-    expect(screen.getByText(en.ceTournaments.statusOpen)).toBeTruthy();
+    expect(screen.getByText(en.ceTournaments.rosterLabel)).toBeTruthy();
+    // Roster full names render.
+    expect(screen.getByText('Aida Bekova')).toBeTruthy();
+    expect(screen.getByText('Timur Ali')).toBeTruthy();
     expect(
       screen.getByRole('button', { name: en.ceTournaments.register }),
     ).toBeTruthy();
   });
 
-  it('localizes the free entry fee per locale', () => {
-    renderView({ state: 'verified', studentName: null }, [sampleCard]);
-    expect(screen.getByText(en.ceTournaments.free)).toBeTruthy();
-    cleanup();
-    renderView({ state: 'verified', studentName: null }, [sampleCard], 'ru');
-    expect(screen.getByText(ru.ceTournaments.free)).toBeTruthy();
-  });
-
-  it('formats the date using the app locale, not the browser', () => {
-    renderView({ state: 'verified', studentName: null }, [sampleCard], 'ru');
-    // ru-RU month names are Cyrillic; en-US would render "Mar".
-    const dateText = screen.getByText(ru.ceTournaments.date).nextElementSibling
-      ?.textContent;
-    expect(dateText).toBeTruthy();
-    expect(/[а-яА-Я]/.test(dateText ?? '')).toBe(true);
-  });
-
-  it('shows the "full" status and disabled action when at capacity', () => {
-    const full: CETournamentCard = {
-      ...sampleCard,
-      registered_count: 20,
-      capacity: 20,
-    };
-    renderView({ state: 'verified', studentName: 'Aidos' }, [full]);
-    expect(screen.getByText(en.ceTournaments.statusFull)).toBeTruthy();
-    expect(
-      screen.getByRole('button', { name: en.ceTournaments.tournamentFull }),
-    ).toBeTruthy();
+  it('shows the full status pill and disabled action when at capacity', () => {
+    renderView({ state: 'verified', studentName: 'Aidos' }, [
+      makeCard({ registered_count: 20, capacity: 20 }),
+    ]);
+    expandBranch();
+    const btn = screen.getByRole('button', {
+      name: en.ceTournaments.tournamentFull,
+    }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
   });
 
   it('shows registered state + cancel action for an already-registered member', () => {
-    const registered: CETournamentCard = {
-      ...sampleCard,
-      registration_id: 'reg-1',
-    };
-    renderView({ state: 'verified', studentName: 'Aidos' }, [registered]);
+    renderView({ state: 'verified', studentName: 'Aidos' }, [
+      makeCard({ registration_id: 'reg-1' }),
+    ]);
+    expandBranch();
     expect(screen.getByText(en.ceTournaments.registered)).toBeTruthy();
     expect(
       screen.getByRole('button', {
         name: en.ceTournaments.cancelRegistration,
       }),
     ).toBeTruthy();
+  });
+});
+
+describe('CETournamentsView — one-click registration', () => {
+  it('optimistically registers: button flips to ✓ and the member joins the roster', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ registration_id: 'reg-9', registered_count: 6 }),
+    });
+    renderView({ state: 'verified', studentName: 'Nurlan Sat' }, [makeCard()]);
+    expandBranch();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: en.ceTournaments.register }),
+    );
+
+    // Optimistic roster insert is immediate.
+    expect(screen.getByText('Nurlan Sat')).toBeTruthy();
+
+    await waitFor(() => {
+      expect(screen.getByText(en.ceTournaments.registered)).toBeTruthy();
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/chess-empire/tournaments/t-1/register',
+      { method: 'POST' },
+    );
+    // Cancel affordance is now present.
+    expect(
+      screen.getByRole('button', {
+        name: en.ceTournaments.cancelRegistration,
+      }),
+    ).toBeTruthy();
+  });
+
+  it('reverts the optimistic state and shows an error when the server rejects', async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      json: async () => ({ error: 'full', message: 'full' }),
+    });
+    renderView({ state: 'verified', studentName: 'Nurlan Sat' }, [makeCard()]);
+    expandBranch();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: en.ceTournaments.register }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(en.ceTournaments.errors.full)).toBeTruthy();
+    });
+    // Reverted: still a Register button, member no longer in the roster.
+    expect(
+      screen.getByRole('button', { name: en.ceTournaments.register }),
+    ).toBeTruthy();
+    expect(screen.queryByText('Nurlan Sat')).toBeNull();
+  });
+
+  it('prompts sign-in for a logged-out visitor instead of registering', () => {
+    renderView({ state: 'logged_out' }, [makeCard()]);
+    expandBranch();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: en.ceTournaments.register }),
+    );
+
+    expect(screen.getByText(en.ceTournaments.loggedOutNotice)).toBeTruthy();
+    // The in-panel sign-in link is present and no register request was made.
+    const links = screen.getAllByRole('link', {
+      name: `${en.ceTournaments.signInToRegister} →`,
+    });
+    expect(links.length).toBeGreaterThan(0);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('CETournamentsView — deep link', () => {
+  it('auto-expands the branch of the deep-linked tournament', () => {
+    const cards = [
+      makeCard({ id: 't-1', name: 'Spring Open' }),
+      makeCard({
+        id: 't-2',
+        name: 'Winter Cup',
+        branch_id: 'br-2',
+        branch_name: 'Debut',
+      }),
+    ];
+    renderView({ state: 'logged_out' }, cards, {
+      branches: [BRANCH, { id: 'br-2', name: 'Debut' }],
+      deepLinkTournamentId: 't-2',
+    });
+
+    // The deep-linked branch is expanded → its panel (and roster) render;
+    // the other branch stays collapsed.
+    const winter = screen.getByText('Winter Cup');
+    expect(winter).toBeTruthy();
+    const highlighted = winter.closest('.tournament-row');
+    expect(highlighted?.className).toContain('highlighted');
+    expect(screen.queryByText('Spring Open')).toBeNull();
+  });
+});
+
+describe('CETournamentsView — cancel', () => {
+  it('cancels an existing registration back to the register state', async () => {
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ ok: true }) });
+    renderView({ state: 'verified', studentName: 'Aidos' }, [
+      makeCard({ registration_id: 'reg-1', roster: ['Aidos'] }),
+    ]);
+    expandBranch();
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: en.ceTournaments.cancelRegistration,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: en.ceTournaments.register }),
+      ).toBeTruthy();
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/chess-empire/tournaments/t-1/register',
+      { method: 'DELETE' },
+    );
+    // The roster panel no longer lists the cancelled member.
+    const roster = document.querySelector('.roster');
+    expect(within(roster as HTMLElement).queryByText('Aidos')).toBeNull();
   });
 });

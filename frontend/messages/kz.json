@@ -2386,6 +2386,30 @@
     "notNow": "Қазір емес",
     "confirmPrompt": "<b>{name}</b> осы турнирге тіркелсін бе?",
     "yourself": "өзіңізді",
+    "upcoming": "Алдағы: {count}",
+    "noUpcoming": "Турнир жоқ",
+    "startAt": "Басталу {time}",
+    "closesAt": "Тіркеу жабылады: {datetime}",
+    "rosterLabel": "Тізім",
+    "rosterEmpty": "Оқушы табылмады",
+    "capacityLabel": "Тіркелген",
+    "countdown": {
+      "label": "Тіркеу жабылғанға дейін",
+      "days": "КҮН",
+      "hours": "САҒАТ",
+      "minutes": "МИНУТ",
+      "seconds": "СЕК"
+    },
+    "branchNames": {
+      "Gagarin Park": "Гагарин паркі",
+      "Debut": "Дебют",
+      "Almaty Arena": "Алматы Арена",
+      "Halyk Arena": "Халық Арена",
+      "Zhandosova": "Жандосов",
+      "Abaya Rozybakieva": "Абай – Розыбакиев",
+      "Almaty 1": "Алматы 1",
+      "Almaty-1": "Алматы-1"
+    },
     "errors": {
       "full": "Бұл турнирде бос орын жоқ.",
       "closed": "Бұл турнирге тіркелу жабылды.",

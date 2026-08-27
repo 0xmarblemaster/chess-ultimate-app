@@ -1,9 +1,10 @@
 /**
  * Tests for GET /api/chess-empire/tournaments.
  *
- * Covers: logged-out → list with membership:'logged_out' and no registration
- * status; verified member → registration status merged per tournament; list
- * fetch failure → 502.
+ * The route returns the shared schedule snapshot (branches + per-tournament
+ * rosters + the viewer's own registration status). Covers: logged-out → no
+ * registration status; verified member → registration status + roster merged
+ * per tournament; schedule fetch failure → graceful empty (200).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -21,9 +22,15 @@ vi.mock('@/lib/chess-empire-member', () => ({
 
 const listMock = vi.fn();
 const regsMock = vi.fn();
+const rosterMock = vi.fn();
+const branchesMock = vi.fn();
+const nameMock = vi.fn();
 vi.mock('@/lib/chess-empire-client', () => ({
   listTournaments: (...args: unknown[]) => listMock(...args),
   getStudentTournamentRegistrations: (...args: unknown[]) => regsMock(...args),
+  getTournamentRoster: (...args: unknown[]) => rosterMock(...args),
+  listBranches: (...args: unknown[]) => branchesMock(...args),
+  getStudentDisplayName: (...args: unknown[]) => nameMock(...args),
 }));
 
 import { GET } from '../route';
@@ -33,6 +40,9 @@ beforeEach(() => {
   memberStore.result = { state: 'verified', studentId: 'stu-1' };
   listMock.mockReset();
   regsMock.mockReset();
+  rosterMock.mockReset().mockResolvedValue([]);
+  branchesMock.mockReset().mockResolvedValue([]);
+  nameMock.mockReset().mockResolvedValue('Stu One');
 });
 
 describe('GET /api/chess-empire/tournaments', () => {
@@ -50,7 +60,7 @@ describe('GET /api/chess-empire/tournaments', () => {
     expect(regsMock).not.toHaveBeenCalled();
   });
 
-  it('verified member → merges registration status per tournament', async () => {
+  it('verified member → merges registration status + roster per tournament', async () => {
     authStore.userId = 'user-1';
     listMock.mockResolvedValue([
       { id: 't1', name: 'Blitz' },
@@ -59,6 +69,9 @@ describe('GET /api/chess-empire/tournaments', () => {
     regsMock.mockResolvedValue([
       { id: 'reg-1', tournament_id: 't1', registered_at: 'x' },
     ]);
+    rosterMock.mockImplementation(async (id: string) =>
+      id === 't1' ? ['Aida Bekova', 'Stu One'] : [],
+    );
     const res = await GET();
     const body = (await res.json()) as {
       membership: string;
@@ -66,6 +79,8 @@ describe('GET /api/chess-empire/tournaments', () => {
         id: string;
         is_registered: boolean;
         registration_id: string | null;
+        roster: string[];
+        registered_count: number;
       }>;
     };
     expect(body.membership).toBe('verified');
@@ -74,6 +89,8 @@ describe('GET /api/chess-empire/tournaments', () => {
       is_registered: true,
       registration_id: 'reg-1',
     });
+    expect(body.tournaments[0].roster).toEqual(['Aida Bekova', 'Stu One']);
+    expect(body.tournaments[0].registered_count).toBe(2);
     expect(body.tournaments[1]).toMatchObject({
       id: 't2',
       is_registered: false,
@@ -81,9 +98,11 @@ describe('GET /api/chess-empire/tournaments', () => {
     });
   });
 
-  it('502 when the schedule fetch fails', async () => {
+  it('gracefully returns an empty schedule (200) when the fetch fails', async () => {
     listMock.mockRejectedValue(new Error('down'));
     const res = await GET();
-    expect(res.status).toBe(502);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { tournaments: unknown[] };
+    expect(body.tournaments).toEqual([]);
   });
 });

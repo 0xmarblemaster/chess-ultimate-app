@@ -2386,6 +2386,30 @@
     "notNow": "Не сейчас",
     "confirmPrompt": "Записать <b>{name}</b> на этот турнир?",
     "yourself": "себя",
+    "upcoming": "Предстоящих: {count}",
+    "noUpcoming": "Нет турниров",
+    "startAt": "Старт {time}",
+    "closesAt": "Закрытие регистрации: {datetime}",
+    "rosterLabel": "Список",
+    "rosterEmpty": "Ученики не найдены",
+    "capacityLabel": "Зарегистрировано",
+    "countdown": {
+      "label": "До закрытия регистрации",
+      "days": "ДНЕЙ",
+      "hours": "ЧАСОВ",
+      "minutes": "МИНУТ",
+      "seconds": "СЕК"
+    },
+    "branchNames": {
+      "Gagarin Park": "Гагарин Парк",
+      "Debut": "Дебют",
+      "Almaty Arena": "Алматы Арена",
+      "Halyk Arena": "Халык Арена",
+      "Zhandosova": "Жандосова",
+      "Abaya Rozybakieva": "Абая Розыбакиева",
+      "Almaty 1": "Алматы 1",
+      "Almaty-1": "Алматы-1"
+    },
     "errors": {
       "full": "На этом турнире нет свободных мест.",
       "closed": "Регистрация на этот турнир закрыта.",
