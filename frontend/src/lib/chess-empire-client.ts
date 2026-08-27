@@ -174,6 +174,26 @@ function getServiceKey(): string {
   return key;
 }
 
+/**
+ * Key for the `tournaments-api` edge function's `x-api-key` header. This is
+ * the `ce-api-…` analytics key, NOT the Supabase service key — the two are
+ * incompatible auth systems, which is why they live in separate env vars
+ * (sharing CHESS_EMPIRE_SERVICE_KEY broke registrations both ways, Aug 2026).
+ * Falls back to CHESS_EMPIRE_SERVICE_KEY for environments not yet migrated.
+ */
+function getTournamentsApiKey(): string {
+  const key =
+    process.env.CHESS_EMPIRE_TOURNAMENTS_API_KEY ||
+    process.env.CHESS_EMPIRE_SERVICE_KEY;
+  if (!key) {
+    throw new ChessEmpireAPIError(
+      500,
+      'CHESS_EMPIRE_TOURNAMENTS_API_KEY not configured',
+    );
+  }
+  return key;
+}
+
 async function ceFetch(
   url: string,
   init: RequestInit,
@@ -1154,7 +1174,7 @@ export async function getStudentDisplayName(studentId: string): Promise<string |
 // Backs the chess-empire tenant `/tournaments` registration gate. The
 // list/detail reads are public (no key); register + cancel + the per-student
 // registration lookup require the legacy `x-api-key` header
-// (CHESS_EMPIRE_SERVICE_KEY). Response shapes mirror the deployed function
+// (CHESS_EMPIRE_TOURNAMENTS_API_KEY). Response shapes mirror the deployed function
 // source at supabase/functions/tournaments-api/index.ts.
 // ---------------------------------------------------------------------------
 
@@ -1255,7 +1275,7 @@ export async function getTournamentRoster(
 }
 
 /**
- * Register a student for a tournament. Requires the service key (x-api-key).
+ * Register a student for a tournament. Requires the tournaments API key (x-api-key).
  * The caller MUST resolve `studentId` from the verified member — it is never
  * accepted from an untrusted request. Returns the RPC envelope on success;
  * throws ChessEmpireAPIError (carrying `{ ok:false, reason }`) on a non-2xx so
@@ -1266,7 +1286,7 @@ export async function registerForTournament(
   studentId: string,
   source = 'web',
 ): Promise<CERegisterResult> {
-  const key = getServiceKey();
+  const key = getTournamentsApiKey();
   const url = `${tournamentsApiBase()}/tournaments/${encodeURIComponent(tournamentId)}/register`;
   const resp = await ceFetch(url, {
     method: 'POST',
@@ -1288,7 +1308,7 @@ export async function registerForTournament(
 export async function cancelTournamentRegistration(
   registrationId: string,
 ): Promise<void> {
-  const key = getServiceKey();
+  const key = getTournamentsApiKey();
   const url = `${tournamentsApiBase()}/registrations/${encodeURIComponent(registrationId)}`;
   const resp = await ceFetch(url, {
     method: 'DELETE',
@@ -1309,7 +1329,7 @@ export async function getStudentTournamentRegistrations(
 ): Promise<CETournamentRegistration[]> {
   let key: string;
   try {
-    key = getServiceKey();
+    key = getTournamentsApiKey();
   } catch {
     return [];
   }
