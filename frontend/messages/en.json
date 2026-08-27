@@ -1693,7 +1693,7 @@
     "metaTitle": "Chess Empire — {branch}",
     "heading": "Welcome, {branch} parents and students",
     "subHeading": "Find your child's name to claim their free Chesster account.",
-    "searchPlaceholder": "Type your child's first or last name…",
+    "searchPlaceholder": "Type in English…",
     "minCharsHint": "Type at least 2 letters to search.",
     "searching": "Searching…",
     "noResults": "No matches. Double-check the spelling or contact your branch admin.",
