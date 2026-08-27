@@ -18,7 +18,7 @@ export interface SignupGuardInput {
   hasValidInvite: boolean;
   /** The welcome URL stored when onboarding started, or null. */
   storedWelcomeUrl: string | null;
-  /** Fallback landing when no welcome URL was stored (org welcome landing). */
+  /** Fallback landing when no welcome URL was stored (the branch picker). */
   fallbackUrl?: string;
   /**
    * True when the page is on a Clerk internal sub-step (OTP verify, SSO
@@ -36,7 +36,7 @@ export function computeSignupGuard({
   isWhiteLabel,
   hasValidInvite,
   storedWelcomeUrl,
-  fallbackUrl = '/',
+  fallbackUrl = '/register',
   isClerkSubStep = false,
 }: SignupGuardInput): SignupGuardDecision {
   // Clerk sub-step (e.g. verify-email-address): the invite query param is

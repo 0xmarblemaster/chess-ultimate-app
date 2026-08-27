@@ -1676,6 +1676,19 @@
       }
     }
   },
+  "register": {
+    "title": "Register",
+    "subtitle": "Choose your branch to create a free account.",
+    "branchesHeading": "Choose your branch",
+    "online": {
+      "title": "Online student",
+      "subtitle": "3 days of free access to all app features.",
+      "badge": "Free"
+    },
+    "emptyTitle": "Registration isn't open yet",
+    "emptyBody": "Please contact your branch administrator for an invite link.",
+    "contactLabel": "Contact"
+  },
   "welcome": {
     "metaTitle": "Chess Empire — {branch}",
     "heading": "Welcome, {branch} parents and students",

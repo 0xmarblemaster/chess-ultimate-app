@@ -35,14 +35,14 @@ describe('computeSignupGuard', () => {
     ).toEqual({ action: 'redirect', target: '/welcome/tok-abc?step=confirm' });
   });
 
-  it('falls back to the org welcome landing when no welcome URL is stored', () => {
+  it('falls back to the branch picker when no welcome URL is stored', () => {
     expect(
       computeSignupGuard({
         isWhiteLabel: true,
         hasValidInvite: false,
         storedWelcomeUrl: null,
       }),
-    ).toEqual({ action: 'redirect', target: '/' });
+    ).toEqual({ action: 'redirect', target: '/register' });
   });
 
   it('honors an explicit fallback URL', () => {
@@ -91,6 +91,6 @@ describe('computeSignupGuard', () => {
         storedWelcomeUrl: null,
         isClerkSubStep: false,
       }),
-    ).toEqual({ action: 'redirect', target: '/' });
+    ).toEqual({ action: 'redirect', target: '/register' });
   });
 });

@@ -93,13 +93,13 @@ describe('Sign-up bare-registration guard', () => {
     expect(sessionStorage.getItem(CE_WELCOME_URL_STORAGE_KEY)).toBeNull();
   });
 
-  it('white-label + no invite + nothing stored → redirects to org welcome landing (/)', async () => {
+  it('white-label + no invite + nothing stored → redirects to the branch picker (/register)', async () => {
     orgState.isWhiteLabel = true;
     orgState.slug = 'chess-empire';
 
     render(<SignUpPage />);
 
-    await waitFor(() => expect(routerReplace).toHaveBeenCalledWith('/'));
+    await waitFor(() => expect(routerReplace).toHaveBeenCalledWith('/register'));
     expect(screen.queryByTestId('clerk-signup')).toBeNull();
   });
 

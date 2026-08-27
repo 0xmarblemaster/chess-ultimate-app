@@ -83,4 +83,18 @@ describe('Sign-in tenant branding', () => {
     expect(img.src).toContain('cdn.example.com/acme/logo.png');
     expect(screen.getByText('[auth.signInTitle] · Acme Chess')).toBeTruthy();
   });
+
+  it('points the register footer link to /register on a white-label tenant', () => {
+    mockBranding.isWhiteLabel = true;
+    render(<SignInPage />);
+    const link = screen.getByText('[common.signUp]').closest('a') as HTMLAnchorElement;
+    expect(link.getAttribute('href')).toBe('/register');
+  });
+
+  it('points the register footer link to /sign-up on the apex domain', () => {
+    mockBranding.isWhiteLabel = false;
+    render(<SignInPage />);
+    const link = screen.getByText('[common.signUp]').closest('a') as HTMLAnchorElement;
+    expect(link.getAttribute('href')).toBe('/sign-up');
+  });
 });

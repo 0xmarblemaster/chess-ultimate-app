@@ -4,6 +4,7 @@ import { NextFetchEvent, NextRequest, NextResponse } from 'next/server'
 const isPublicRoute = createRouteMatcher([
   '/sign-in(.*)',
   '/sign-up(.*)',
+  '/register(.*)',
   '/',
   '/opponent(.*)',
   '/editor(.*)',

@@ -346,7 +346,7 @@ export default function SignInPage() {
         {/* Custom footer with sign-up link */}
         <div className="text-center mt-4">
           <span className="text-gray-400 text-sm">{t('auth.noAccount')} </span>
-          <a href="/sign-up" className="text-purple-600 font-bold text-sm hover:underline">
+          <a href={isWhiteLabel ? '/register' : '/sign-up'} className="text-purple-600 font-bold text-sm hover:underline">
             {t('common.signUp')}
           </a>
         </div>
