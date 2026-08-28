@@ -14,6 +14,7 @@ import type { UseGeminiLiveReturn, LiveStatus } from '@/hooks/useGeminiLive';
 const live = vi.hoisted(() => ({
   options: null as null | {
     getFen?: () => string;
+    getSessionId?: () => string | null | undefined;
     onTranscript?: (t: { role: 'user' | 'model'; text: string; final: boolean }) => void;
   },
   ret: null as unknown as UseGeminiLiveReturn,
@@ -35,6 +36,7 @@ function makeReturn(overrides: Partial<UseGeminiLiveReturn> = {}): UseGeminiLive
     isSupported: true,
     isActive: false,
     error: null,
+    prepare: vi.fn(async () => {}),
     connect: vi.fn(async () => {}),
     disconnect: vi.fn(),
     sendBoardUpdate: vi.fn(),
@@ -140,6 +142,69 @@ describe('CoachChat voice mode', () => {
     const btn = screen.getByTestId('voice-toggle');
     expect(btn.getAttribute('title')).toBe('Mic blocked');
     expect(btn.getAttribute('data-status')).toBe('error');
+  });
+
+  it('shows a visible error pill with the error text and a retry hint (not only the tooltip)', () => {
+    live.ret = makeReturn({ status: 'error', error: 'NotAllowedError: blocked' });
+    renderChat();
+    const pill = screen.getByTestId('voice-pill');
+    expect(pill.textContent).toContain('NotAllowedError: blocked');
+    expect(pill.textContent).toContain(coach.voiceRetryHint);
+  });
+
+  it('falls back to the generic voice-error label when no error string is present', () => {
+    live.ret = makeReturn({ status: 'error', error: null });
+    renderChat();
+    const pill = screen.getByTestId('voice-pill');
+    expect(pill.textContent).toContain(coach.voiceError);
+    expect(pill.textContent).toContain(coach.voiceRetryHint);
+  });
+
+  it('acquires the mic (prepare) before creating the session and connecting', async () => {
+    const callOrder: string[] = [];
+    const prepare = vi.fn(async () => {
+      callOrder.push('prepare');
+    });
+    const connect = vi.fn(async () => {
+      callOrder.push('connect');
+    });
+    live.ret = makeReturn({ status: 'idle', isActive: false, prepare, connect });
+    global.fetch = vi.fn(async () => {
+      callOrder.push('fetch:session');
+      return { ok: true, json: async () => ({ id: 'sess-new' }) };
+    }) as unknown as typeof fetch;
+
+    renderChat();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('voice-toggle'));
+    });
+
+    expect(callOrder).toEqual(['prepare', 'fetch:session', 'connect']);
+  });
+
+  it('does not create a session or connect when mic prepare fails', async () => {
+    const prepare = vi.fn(async () => {
+      throw new DOMException('Permission denied', 'NotAllowedError');
+    });
+    const connect = vi.fn(async () => {});
+    live.ret = makeReturn({ status: 'idle', isActive: false, prepare, connect });
+    const fetchSpy = vi.fn(async (_url?: string) => ({
+      ok: true,
+      json: async () => ({ id: 'x' }),
+    }));
+    global.fetch = fetchSpy as unknown as typeof fetch;
+
+    renderChat();
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('voice-toggle'));
+    });
+
+    expect(prepare).toHaveBeenCalledTimes(1);
+    expect(connect).not.toHaveBeenCalled();
+    const createCall = fetchSpy.mock.calls.find(([url]) =>
+      String(url).endsWith('/api/coach/sessions')
+    );
+    expect(createCall).toBeFalsy();
   });
 
   it('passes the live FEN through getFen', () => {

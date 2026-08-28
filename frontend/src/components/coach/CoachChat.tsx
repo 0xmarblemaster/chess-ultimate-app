@@ -146,6 +146,7 @@ export default function CoachChat({
     isSupported: voiceSupported,
     isActive: voiceActive,
     error: voiceError,
+    prepare: voicePrepare,
     connect: voiceConnect,
     disconnect: voiceDisconnect,
     sendBoardUpdate: voiceSendBoardUpdate,
@@ -200,11 +201,20 @@ export default function CoachChat({
   const toggleVoice = useCallback(async () => {
     if (voiceActive) {
       voiceDisconnect();
-    } else {
-      await ensureVoiceSession();
-      voiceConnect();
+      return;
     }
-  }, [voiceActive, voiceConnect, voiceDisconnect, ensureVoiceSession]);
+    // Grab the mic FIRST, inside this tap handler, before any network await.
+    // On mobile Safari the user-activation window closes after a network round
+    // trip, so acquiring the mic after ensureVoiceSession()/token fetch would
+    // make getUserMedia reject. prepare() surfaces its own error on failure.
+    try {
+      await voicePrepare();
+    } catch {
+      return;
+    }
+    await ensureVoiceSession();
+    voiceConnect();
+  }, [voiceActive, voicePrepare, voiceConnect, voiceDisconnect, ensureVoiceSession]);
 
   // Disconnect a live session on unmount without re-running on every toggle.
   const voiceActiveRef = useRef(voiceActive);
@@ -500,6 +510,19 @@ export default function CoachChat({
                 : voiceStatus === 'listening'
                   ? t('voiceListening')
                   : t('voiceSpeaking')}
+            </span>
+          </div>
+        )}
+        {/* Error state is surfaced visibly here (not only in the mic tooltip,
+            which is invisible on touch devices). Shows the real error + a
+            tap-to-retry hint. */}
+        {voiceStatus === 'error' && (
+          <div className="mb-2 flex justify-center">
+            <span
+              data-testid="voice-pill"
+              className="px-3 py-1 rounded-full text-xs bg-red-500/10 text-red-300 text-center"
+            >
+              {(voiceError || t('voiceError')) + ' · ' + t('voiceRetryHint')}
             </span>
           </div>
         )}

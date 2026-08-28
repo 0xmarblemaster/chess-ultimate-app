@@ -38,6 +38,7 @@ import useGeminiLive from '../useGeminiLive';
 
 // ---- Browser API fakes -----------------------------------------------------
 const createdSources: any[] = [];
+const createdContexts: FakeAudioContext[] = [];
 let lastWorkletNode: any = null;
 const trackStop = vi.fn();
 
@@ -45,9 +46,15 @@ class FakeAudioContext {
   destination = {};
   currentTime = 0;
   sampleRate: number;
+  // iOS starts AudioContexts suspended until resume() runs inside a gesture.
+  state: 'suspended' | 'running' | 'closed' = 'suspended';
   audioWorklet = { addModule: vi.fn(async () => {}) };
+  resume = vi.fn(async () => {
+    this.state = 'running';
+  });
   constructor(opts?: { sampleRate?: number }) {
     this.sampleRate = opts?.sampleRate ?? 48000;
+    createdContexts.push(this);
   }
   createMediaStreamSource = vi.fn(() => ({ connect: vi.fn() }));
   createBuffer = vi.fn((_ch: number, len: number, rate: number) => ({
@@ -65,7 +72,9 @@ class FakeAudioContext {
     createdSources.push(src);
     return src;
   });
-  close = vi.fn(async () => {});
+  close = vi.fn(async () => {
+    this.state = 'closed';
+  });
 }
 
 class FakeAudioWorkletNode {
@@ -112,6 +121,7 @@ beforeEach(() => {
   g.connectCalls.length = 0;
   g.ctorArgs.value = null;
   createdSources.length = 0;
+  createdContexts.length = 0;
   lastWorkletNode = null;
   trackStop.mockReset();
   installBrowserMocks();
@@ -555,5 +565,172 @@ describe('useGeminiLive', () => {
     expect(capturedSignal).not.toBeNull();
     expect((capturedSignal as unknown as AbortSignal).aborted).toBe(true);
     expect(g.session.sendToolResponse).not.toHaveBeenCalled();
+  });
+
+  // ---- Mobile gesture / audio-context hardening (voice-mobile-fix) ---------
+
+  it('requests the mic (getUserMedia) BEFORE fetching the live token', async () => {
+    const order: string[] = [];
+    const gum = vi.fn(async () => {
+      order.push('getUserMedia');
+      return fakeStream();
+    });
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia: gum },
+    });
+    const fetchMock = vi.fn(async (url: string) => {
+      order.push(`fetch:${url}`);
+      return {
+        ok: true,
+        json: async () => ({
+          token: 'auth_tokens/abc',
+          model: 'gemini-3.1-flash-live-preview',
+        }),
+      };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useGeminiLive());
+    await act(async () => {
+      await result.current.connect();
+    });
+
+    const gumIdx = order.indexOf('getUserMedia');
+    const tokenIdx = order.indexOf('fetch:/api/coach/live-token');
+    expect(gumIdx).toBeGreaterThanOrEqual(0);
+    expect(tokenIdx).toBeGreaterThan(gumIdx);
+    // The WS connect only happens after the token fetch, so it is after the mic too.
+    expect(g.connectCalls.length).toBe(1);
+  });
+
+  it('creates both AudioContexts inside the gesture and resume()s each', async () => {
+    vi.stubGlobal('fetch', tokenOk());
+    const { result } = renderHook(() => useGeminiLive());
+    await act(async () => {
+      await result.current.connect();
+    });
+
+    // One capture context + one playback context, both resumed off suspended.
+    expect(createdContexts.length).toBe(2);
+    for (const ctx of createdContexts) {
+      expect(ctx.resume).toHaveBeenCalled();
+      expect(ctx.state).toBe('running');
+    }
+  });
+
+  it('prepare() acquires the mic + contexts and is idempotent with connect()', async () => {
+    vi.stubGlobal('fetch', tokenOk());
+    const { result } = renderHook(() => useGeminiLive());
+
+    await act(async () => {
+      await result.current.prepare();
+    });
+    // Mic + both contexts grabbed by prepare, before any token fetch.
+    expect(createdContexts.length).toBe(2);
+    expect(result.current.status).toBe('connecting');
+
+    await act(async () => {
+      await result.current.connect();
+    });
+    // connect reused what prepare acquired — no extra contexts spun up.
+    expect(createdContexts.length).toBe(2);
+    expect(result.current.status).toBe('listening');
+  });
+
+  it('prepare() surfaces a blocked-mic DOMException with its name and rejects', async () => {
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn(async () => {
+          throw new DOMException('Permission denied', 'NotAllowedError');
+        }),
+      },
+    });
+    const onError = vi.fn();
+    const { result } = renderHook(() => useGeminiLive({ onError }));
+
+    await act(async () => {
+      await expect(result.current.prepare()).rejects.toBeTruthy();
+    });
+
+    expect(result.current.status).toBe('error');
+    expect(result.current.error).toContain('NotAllowedError');
+    expect(onError).toHaveBeenCalledWith(expect.stringContaining('NotAllowedError'));
+  });
+
+  it('stops the held mic tracks when the connection fails after the mic was granted', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === '/api/coach/live-token') {
+        return { ok: false, status: 500, json: async () => ({}) };
+      }
+      return { ok: true, json: async () => ({}) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useGeminiLive());
+    await act(async () => {
+      await result.current.connect();
+    });
+
+    expect(result.current.status).toBe('error');
+    // No leaked mic indicator: the granted stream's tracks were stopped.
+    expect(trackStop).toHaveBeenCalled();
+  });
+
+  it('includes the actual error detail in the error telemetry event', async () => {
+    const metricBodies: any[] = [];
+    const fetchMock = vi.fn(async (url: string, opts: any) => {
+      if (url === '/api/coach/live-token') {
+        return { ok: false, status: 503, json: async () => ({}) };
+      }
+      if (url === '/api/coach/metrics') {
+        metricBodies.push(JSON.parse(opts.body));
+      }
+      return { ok: true, json: async () => ({}) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useGeminiLive());
+    await act(async () => {
+      await result.current.connect();
+    });
+
+    const errorMetric = metricBodies.find((m) => m.event === 'error');
+    expect(errorMetric).toBeTruthy();
+    expect(errorMetric.error).toBeTruthy();
+    expect(errorMetric.error).toContain('503');
+    // The same detail is exposed to the UI for the visible status pill.
+    expect(result.current.error).toContain('503');
+  });
+
+  it('reuses the live AudioContexts on reconnect instead of closing/recreating them', async () => {
+    vi.stubGlobal('fetch', tokenOk());
+    const { result } = renderHook(() => useGeminiLive());
+    await act(async () => {
+      await result.current.connect();
+    });
+    expect(createdContexts.length).toBe(2);
+    const [captureCtx, playbackCtx] = createdContexts;
+
+    const first = g.connectArgs.value;
+    act(() => {
+      first.callbacks.onmessage({
+        sessionResumptionUpdate: { resumable: true, newHandle: 'H1' },
+      });
+    });
+    await act(async () => {
+      first.callbacks.onclose();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+
+    expect(g.connectCalls.length).toBe(2);
+    // No fresh contexts and the originals were never closed — they were reused.
+    expect(createdContexts.length).toBe(2);
+    expect(captureCtx.close).not.toHaveBeenCalled();
+    expect(playbackCtx.close).not.toHaveBeenCalled();
+    // The worklet module is only loaded once (re-adding to the same ctx throws).
+    expect(captureCtx.audioWorklet.addModule).toHaveBeenCalledTimes(1);
+    expect(result.current.status).toBe('listening');
   });
 });

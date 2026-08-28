@@ -34,6 +34,8 @@ export interface UseGeminiLiveReturn {
   isSupported: boolean;
   isActive: boolean;
   error: string | null;
+  /** Acquire mic + audio contexts inside the tap handler, before any network work. */
+  prepare: () => Promise<void>;
   connect: () => Promise<void>;
   disconnect: () => void;
   sendBoardUpdate: (fen: string) => void;
@@ -65,7 +67,23 @@ interface LiveMetricRecord {
   tool_name?: string;
   tool_ms?: number;
   prompt_bytes?: number;
+  /** Actual failure detail (DOMException name+message, or String(err)) for 'error' events. */
+  error?: string;
   ts: number;
+}
+
+// Human/telemetry-readable failure text. Preserves the DOMException name (e.g.
+// NotAllowedError) so a blocked mic is distinguishable from a network failure,
+// both in the visible status pill and in the error metric.
+function describeError(err: unknown, fallback: string): string {
+  if (err instanceof DOMException) {
+    return err.message ? `${err.name}: ${err.message}` : err.name;
+  }
+  if (err instanceof Error) {
+    return err.message || fallback;
+  }
+  const s = String(err);
+  return s && s !== '[object Object]' ? s : fallback;
 }
 
 function getAudioContextCtor(): typeof AudioContext | null {
@@ -135,6 +153,10 @@ export default function useGeminiLive(
   const playbackCtxRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
+  // The capture context the pcm-capture worklet module is currently loaded on.
+  // Re-adding the module to the same context throws ("already registered"), so
+  // on a reconnect that reuses the context we skip addModule.
+  const workletLoadedCtxRef = useRef<AudioContext | null>(null);
   const playSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const nextPlayTimeRef = useRef(0);
   // In-flight tool-call fetches, keyed by functionCall id, so a
@@ -172,6 +194,7 @@ export default function useGeminiLive(
         tool_name: partial.tool_name,
         tool_ms: partial.tool_ms,
         prompt_bytes: partial.prompt_bytes,
+        error: partial.error,
         ts: Date.now(),
       };
       try {
@@ -226,7 +249,12 @@ export default function useGeminiLive(
     }
   }, [stopSources, setStatus]);
 
-  const cleanup = useCallback(() => {
+  // Tear down the live session and audio graph. With { keepMedia: true } the
+  // mic stream and both AudioContexts are left alive (and the worklet module
+  // stays loaded) so a reconnect can reuse them without a fresh user gesture —
+  // re-acquiring them off-gesture would fail on mobile Safari.
+  const cleanup = useCallback((opts?: { keepMedia?: boolean }) => {
+    const keepMedia = opts?.keepMedia ?? false;
     // Invalidate the active connection so its late close/error callbacks no-op.
     connGenRef.current += 1;
     if (healthyTimerRef.current) {
@@ -263,7 +291,7 @@ export default function useGeminiLive(
       }
       sourceNodeRef.current = null;
     }
-    if (streamRef.current) {
+    if (!keepMedia && streamRef.current) {
       streamRef.current.getTracks().forEach((t) => {
         try {
           t.stop();
@@ -282,21 +310,24 @@ export default function useGeminiLive(
       sessionRef.current = null;
     }
     stopSources();
-    if (captureCtxRef.current) {
-      try {
-        captureCtxRef.current.close();
-      } catch {
-        /* noop */
+    if (!keepMedia) {
+      if (captureCtxRef.current) {
+        try {
+          captureCtxRef.current.close();
+        } catch {
+          /* noop */
+        }
+        captureCtxRef.current = null;
       }
-      captureCtxRef.current = null;
-    }
-    if (playbackCtxRef.current) {
-      try {
-        playbackCtxRef.current.close();
-      } catch {
-        /* noop */
+      if (playbackCtxRef.current) {
+        try {
+          playbackCtxRef.current.close();
+        } catch {
+          /* noop */
+        }
+        playbackCtxRef.current = null;
       }
-      playbackCtxRef.current = null;
+      workletLoadedCtxRef.current = null;
     }
   }, [stopSources]);
 
@@ -543,24 +574,65 @@ export default function useGeminiLive(
       setError(msg);
       optionsRef.current.onError?.(msg);
       setStatus('error');
-      reportMetric({ event: 'error' });
+      // Carry the real failure detail into telemetry so the 'error' event is
+      // diagnosable (previously it reported an empty error).
+      reportMetric({ event: 'error', error: msg });
     },
     [cleanup, setStatus, reportMetric],
   );
 
-  const startCapture = useCallback(
-    async (session: Session) => {
-      const AudioCtor = getAudioContextCtor();
-      if (!AudioCtor) throw new Error('AudioContext is not available');
+  // Acquire the mic and BOTH AudioContexts. This is the gesture-critical step:
+  // on mobile Safari the user-activation window closes after any network await,
+  // so getUserMedia + AudioContext.resume() must run before token mint / WS
+  // connect or they reject/stay suspended. Idempotent — on a reconnect it
+  // reuses the still-alive stream and contexts and just re-resumes them.
+  const acquireMedia = useCallback(async () => {
+    const AudioCtor = getAudioContextCtor();
+    if (!AudioCtor) throw new Error('AudioContext is not available');
 
-      const stream = await navigator.mediaDevices.getUserMedia({
+    // Mic first, before any await that isn't the getUserMedia prompt itself.
+    if (!streamRef.current) {
+      streamRef.current = await navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
       });
-      streamRef.current = stream;
+    }
 
-      const ctx = new AudioCtor();
-      captureCtxRef.current = ctx;
-      await ctx.audioWorklet.addModule('/worklets/pcm-capture-processor.js');
+    // Capture context (native rate for mic input).
+    if (!captureCtxRef.current) {
+      captureCtxRef.current = new AudioCtor();
+    }
+    // Playback context (fixed 24 kHz model output). Created inside the gesture
+    // too, so it isn't stuck suspended when the first model audio arrives.
+    if (!playbackCtxRef.current) {
+      playbackCtxRef.current = new AudioCtor({ sampleRate: OUTPUT_SAMPLE_RATE });
+    }
+
+    for (const ctx of [captureCtxRef.current, playbackCtxRef.current]) {
+      if (ctx.state !== 'running' && typeof ctx.resume === 'function') {
+        try {
+          await ctx.resume();
+        } catch {
+          /* already running or closing — safe to ignore */
+        }
+      }
+    }
+  }, []);
+
+  // Wire the held mic stream into the capture worklet and start streaming PCM.
+  // Assumes acquireMedia() already ran, so the stream and capture context are
+  // live — this only builds the audio graph (no getUserMedia, no ctx creation).
+  const wireCapture = useCallback(
+    async (session: Session) => {
+      const ctx = captureCtxRef.current;
+      const stream = streamRef.current;
+      if (!ctx || !stream) throw new Error('Audio capture was not initialized');
+
+      // Load the worklet module once per context; on a reused (reconnect)
+      // context it is already registered, so re-adding it would throw.
+      if (workletLoadedCtxRef.current !== ctx) {
+        await ctx.audioWorklet.addModule('/worklets/pcm-capture-processor.js');
+        workletLoadedCtxRef.current = ctx;
+      }
 
       const source = ctx.createMediaStreamSource(stream);
       const node = new AudioWorkletNode(ctx, 'pcm-capture-processor');
@@ -608,6 +680,11 @@ export default function useGeminiLive(
   // (fresh token, same conversation state) instead of starting a new one.
   const openConnection = useCallback(
     async (resumeHandle?: string) => {
+      // Mic + AudioContexts first, BEFORE the token fetch and WS connect, so
+      // the user-activation window is still open when getUserMedia runs.
+      // Idempotent: on a reconnect this reuses the live stream/contexts.
+      await acquireMedia();
+
       const fen = optionsRef.current.getFen?.();
       const sessionId = optionsRef.current.getSessionId?.();
       const tokenStart = performance.now();
@@ -694,7 +771,7 @@ export default function useGeminiLive(
         }
       }
 
-      await startCapture(session);
+      await wireCapture(session);
 
       setIsActive(true);
       setStatus('listening');
@@ -708,7 +785,7 @@ export default function useGeminiLive(
         }
       }, HEALTHY_RECONNECT_RESET_MS);
     },
-    [handleMessage, startCapture, setStatus, reportMetric],
+    [handleMessage, acquireMedia, wireCapture, setStatus, reportMetric],
   );
 
   // React to a session drop: reconnect ONCE with the stored handle if the drop
@@ -724,12 +801,13 @@ export default function useGeminiLive(
       if (canReconnect) {
         reconnectUsedRef.current = true;
         const handle = resumptionHandleRef.current as string;
-        cleanup(); // tear down the stale session + audio before reopening
+        // Tear down the stale session + audio graph but KEEP the mic stream and
+        // AudioContexts alive: reacquiring them off-gesture would fail on mobile
+        // Safari. openConnection() re-resumes and re-wires them.
+        cleanup({ keepMedia: true });
         setStatus('connecting');
         openConnection(handle).catch((err) => {
-          const msg =
-            err instanceof Error ? err.message : 'Failed to resume live coach';
-          fail(msg);
+          fail(describeError(err, 'Failed to resume live coach'));
         });
         return;
       }
@@ -743,6 +821,22 @@ export default function useGeminiLive(
     [cleanup, fail, setStatus, openConnection],
   );
   handleDropRef.current = handleDrop;
+
+  // Grab the mic + AudioContexts synchronously-first inside the user gesture,
+  // before any network work (session create, token mint). Front-loading this is
+  // what fixes mobile Safari: getUserMedia must run while user-activation is
+  // still live. connect() re-acquires idempotently, so callers may skip this.
+  const prepare = useCallback(async () => {
+    if (sessionRef.current) return;
+    setError(null);
+    setStatus('connecting');
+    try {
+      await acquireMedia();
+    } catch (err) {
+      fail(describeError(err, 'Microphone access is required for voice mode'));
+      throw err;
+    }
+  }, [acquireMedia, fail, setStatus]);
 
   const connect = useCallback(async () => {
     if (sessionRef.current) return;
@@ -760,8 +854,9 @@ export default function useGeminiLive(
     try {
       await openConnection();
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to start live coach';
-      fail(msg);
+      // If the mic was granted but connect failed, fail() -> cleanup() stops the
+      // held tracks so no mic indicator lingers.
+      fail(describeError(err, 'Failed to start live coach'));
     }
   }, [setStatus, openConnection, fail]);
 
@@ -799,6 +894,7 @@ export default function useGeminiLive(
     isSupported,
     isActive,
     error,
+    prepare,
     connect,
     disconnect,
     sendBoardUpdate,
