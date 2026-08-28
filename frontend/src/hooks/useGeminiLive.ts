@@ -46,6 +46,12 @@ const BARGE_IN_RMS = 0.05;
 // RMS above which a mic frame counts as speech — used to approximate VAD end
 // (the user's last spoken frame) as the start of the time-to-first-audio window.
 const SPEECH_RMS = 0.02;
+// Cap a single tool call so the model never waits indefinitely on a slow tool;
+// on timeout we reply with an error so it can verbally report it couldn't check.
+const TOOL_CALL_TIMEOUT_MS = 10000;
+// After this long on a healthy connection, restore the one-shot reconnect budget
+// so a later, unrelated drop can still auto-recover.
+const HEALTHY_RECONNECT_RESET_MS = 60000;
 
 // Latency telemetry contract shared with Hermes POST /api/coach/metrics.
 type LiveMetricEvent = 'connect' | 'turn' | 'tool' | 'error';
@@ -82,9 +88,10 @@ function arrayBufferToBase64(buf: ArrayBuffer): string {
   return btoa(binary);
 }
 
-// Wrap a FEN in a board-update turn the live model reads as the new source of truth.
+// Minimal per-move context line the live model reads as the new source of truth.
+// Kept terse (just the FEN) so injected board updates don't bloat the turn.
 function boardUpdateText(fen: string): string {
-  return `Board update — the CURRENT position is now (this supersedes any previous position): ${fen}`;
+  return `Current position (FEN): ${fen}`;
 }
 
 function base64ToInt16(b64: string): Int16Array {
@@ -118,6 +125,8 @@ export default function useGeminiLive(
   const userStoppedRef = useRef(false);
   // Guards to a single automatic reconnect per user-initiated session.
   const reconnectUsedRef = useRef(false);
+  // Timer that restores the reconnect budget after a stretch of healthy uptime.
+  const healthyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Bumped whenever a connection is torn down or replaced, so close/error
   // callbacks from a stale session are ignored (they must not trigger a drop).
   const connGenRef = useRef(0);
@@ -220,6 +229,10 @@ export default function useGeminiLive(
   const cleanup = useCallback(() => {
     // Invalidate the active connection so its late close/error callbacks no-op.
     connGenRef.current += 1;
+    if (healthyTimerRef.current) {
+      clearTimeout(healthyTimerRef.current);
+      healthyTimerRef.current = null;
+    }
     toolAbortRef.current.forEach((controller) => {
       try {
         controller.abort();
@@ -380,6 +393,17 @@ export default function useGeminiLive(
         if (fc.id) toolAbortRef.current.set(fc.id, controller);
         const toolStart = performance.now();
         let aborted = false;
+        // Bound the tool at 10s. A timeout aborts the same controller, so we flag
+        // it to tell a slow-tool timeout apart from a model-initiated cancel.
+        let timedOut = false;
+        const timeout = setTimeout(() => {
+          timedOut = true;
+          try {
+            controller.abort();
+          } catch {
+            /* noop */
+          }
+        }, TOOL_CALL_TIMEOUT_MS);
         try {
           const res = await fetch('/api/coach/tool', {
             method: 'POST',
@@ -415,14 +439,28 @@ export default function useGeminiLive(
             response: { result: (data as { result?: unknown }).result ?? data },
           };
         } catch (err) {
-          // Aborted (cancelled by the model) — drop it, no response expected.
           if (err instanceof DOMException && err.name === 'AbortError') {
+            // Timed out — still answer, with an error, so the model can say out
+            // loud it couldn't check instead of stalling the turn silently.
+            if (timedOut) {
+              return {
+                id: fc.id,
+                name: fc.name,
+                response: {
+                  error: `Tool "${fc.name ?? 'unknown'}" timed out after ${
+                    TOOL_CALL_TIMEOUT_MS / 1000
+                  }s`,
+                },
+              };
+            }
+            // Cancelled by the model — drop it, no response expected.
             aborted = true;
             return null;
           }
           const message = err instanceof Error ? err.message : 'tool call failed';
           return { id: fc.id, name: fc.name, response: { error: message } };
         } finally {
+          clearTimeout(timeout);
           if (fc.id) toolAbortRef.current.delete(fc.id);
           // Per-call tool latency: functionCall received → response ready.
           // Skip cancelled calls (no response is sent for them).
@@ -660,13 +698,22 @@ export default function useGeminiLive(
 
       setIsActive(true);
       setStatus('listening');
+
+      // After a stretch of healthy uptime, restore the one-shot reconnect budget
+      // so a later, unrelated drop can still auto-recover. Tied to this conn gen.
+      if (healthyTimerRef.current) clearTimeout(healthyTimerRef.current);
+      healthyTimerRef.current = setTimeout(() => {
+        if (gen === connGenRef.current) {
+          reconnectUsedRef.current = false;
+        }
+      }, HEALTHY_RECONNECT_RESET_MS);
     },
     [handleMessage, startCapture, setStatus, reportMetric],
   );
 
   // React to a session drop: reconnect ONCE with the stored handle if the drop
-  // was unexpected; otherwise fall through to the terminal state (error on an
-  // error drop, idle on a plain close).
+  // was unexpected; otherwise surface a terminal error state (deliberate stops
+  // and already-surfaced errors are filtered out at the top).
   const handleDrop = useCallback(
     (errMsg?: string) => {
       if (userStoppedRef.current) return; // deliberate stop, handled by disconnect()
@@ -687,15 +734,11 @@ export default function useGeminiLive(
         return;
       }
 
-      // No handle (or reconnect already used): terminal. The top guard already
-      // returned on an 'error' status, so a plain close falls through to idle.
-      if (errMsg !== undefined) {
-        fail(errMsg);
-      } else {
-        cleanup();
-        setIsActive(false);
-        setStatus('idle');
-      }
+      // No handle (or reconnect already used): terminal. Deliberate stops and
+      // already-surfaced errors returned at the top, so reaching here means an
+      // unexpected drop we can't recover — surface it instead of going silently
+      // idle, so the UI can prompt the user to restart.
+      fail(errMsg ?? 'Live coach disconnected. Please restart to continue.');
     },
     [cleanup, fail, setStatus, openConnection],
   );

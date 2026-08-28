@@ -240,11 +240,7 @@ describe('useGeminiLive', () => {
       turns: [
         {
           role: 'user',
-          parts: [
-            {
-              text: 'Board update — the CURRENT position is now (this supersedes any previous position): INIT_FEN',
-            },
-          ],
+          parts: [{ text: 'Current position (FEN): INIT_FEN' }],
         },
       ],
       turnComplete: false,
@@ -268,11 +264,7 @@ describe('useGeminiLive', () => {
       turns: [
         {
           role: 'user',
-          parts: [
-            {
-              text: 'Board update — the CURRENT position is now (this supersedes any previous position): NEW_FEN',
-            },
-          ],
+          parts: [{ text: 'Current position (FEN): NEW_FEN' }],
         },
       ],
       turnComplete: false,
@@ -426,19 +418,21 @@ describe('useGeminiLive', () => {
     expect(result.current.isActive).toBe(true);
     expect(result.current.status).toBe('listening');
 
-    // A second drop must NOT trigger another automatic reconnect.
+    // A second drop must NOT trigger another automatic reconnect; instead the
+    // unrecoverable disconnect surfaces as an error state.
     const second = g.connectCalls[1];
     await act(async () => {
       second.callbacks.onclose();
       await flush();
     });
     expect(g.connectCalls.length).toBe(2);
-    expect(result.current.status).toBe('idle');
+    expect(result.current.status).toBe('error');
   });
 
-  it('does not reconnect on close when no resumable handle was captured', async () => {
+  it('surfaces an error (not silent idle) on close when no resumable handle was captured', async () => {
     vi.stubGlobal('fetch', tokenOk());
-    const { result } = renderHook(() => useGeminiLive());
+    const onError = vi.fn();
+    const { result } = renderHook(() => useGeminiLive({ onError }));
     await act(async () => {
       await result.current.connect();
     });
@@ -457,7 +451,9 @@ describe('useGeminiLive', () => {
     });
 
     expect(g.connectCalls.length).toBe(1); // no reconnect
-    expect(result.current.status).toBe('idle');
+    expect(result.current.status).toBe('error');
+    expect(result.current.error).toBeTruthy();
+    expect(onError).toHaveBeenCalledOnce();
   });
 
   it('does not auto-reconnect after a deliberate user disconnect', async () => {
@@ -484,6 +480,48 @@ describe('useGeminiLive', () => {
 
     expect(g.connectCalls.length).toBe(1); // stayed at the original connect
     expect(result.current.status).toBe('idle');
+  });
+
+  it('toolCall: a fetch that never resolves times out at 10s and replies with an error functionResponse', async () => {
+    vi.useFakeTimers();
+    try {
+      // Tool fetch hangs forever, only settling (rejecting) when its signal aborts —
+      // exactly how the real fetch behaves under an AbortController timeout.
+      const fetchMock = routedFetch((_url, opts) =>
+        new Promise((_resolve, reject) => {
+          opts.signal.addEventListener('abort', () =>
+            reject(new DOMException('aborted', 'AbortError')),
+          );
+        }),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+
+      const { result } = renderHook(() => useGeminiLive());
+      await act(async () => {
+        await result.current.connect();
+      });
+
+      act(() => {
+        g.connectArgs.value.callbacks.onmessage({
+          toolCall: {
+            functionCalls: [{ id: 'c1', name: 'analyze_position', args: {} }],
+          },
+        });
+      });
+
+      // The tool never responds; advancing past 10s fires the timeout, which
+      // aborts the fetch and forces an error functionResponse.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10000);
+      });
+
+      expect(g.session.sendToolResponse).toHaveBeenCalledTimes(1);
+      const arg = g.session.sendToolResponse.mock.calls[0][0];
+      expect(arg.functionResponses[0].id).toBe('c1');
+      expect(arg.functionResponses[0].response.error).toContain('timed out');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('toolCallCancellation: aborts the pending fetch and sends no response', async () => {
