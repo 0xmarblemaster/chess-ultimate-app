@@ -27,8 +27,43 @@ const COACH_TOOL_GUIDANCE = `
 
 You have tools. Use board_control to demonstrate ideas directly on the board — set positions, draw arrows,
 highlight squares, or step through moves as you explain. Use the engine and database tools (analyze the position,
-search master games, opening and position stats, the player's own games and progress) instead of guessing or
-inventing lines. Call a tool when it makes your point concrete; keep talking naturally while you do.`;
+search master games, opening and position stats) instead of guessing or inventing lines. Call a tool when it
+makes your point concrete; keep talking naturally while you do.
+IMPORTANT for a live voice conversation: the moment you decide to call a tool, FIRST speak a brief spoken
+acknowledgment out loud (something like "let me check that" or "one sec, looking now") and THEN make the tool
+call. Never go silent while a tool runs — the player should always hear you respond right away.`;
+
+// Voice-relevant subset of the chess toolset. The full Hermes toolset (~20
+// tools) includes import/sync/link/account actions that make no sense in a live
+// spoken position review and only bloat the token constraint. Keep voice to the
+// "explain the current position / show master play" tools. Edit here to tune.
+const VOICE_TOOL_ALLOWLIST = new Set<string>([
+  'board_control',
+  'analyze_position',
+  'get_position_stats',
+  'get_opening_stats',
+  'search_master_games',
+  'get_game_pgn',
+  'compare_variations',
+  'score_position_themes',
+]);
+
+// Recap caps: keep the injected memory small so it never dominates the prompt or
+// slows the first token. Per-message truncation + message count + total bytes.
+const RECAP_MAX_MSGS = 10;
+const RECAP_MAX_CHARS_PER_MSG = 200;
+const RECAP_MAX_BYTES = 2048;
+
+/**
+ * Keep only the voice-relevant tool declarations. Anything without a string
+ * `name` in the allowlist is dropped.
+ */
+function filterVoiceTools(tools: unknown[]): unknown[] {
+  return tools.filter((t) => {
+    const name = (t as { name?: unknown })?.name;
+    return typeof name === 'string' && VOICE_TOOL_ALLOWLIST.has(name);
+  });
+}
 
 /**
  * Fetch the chess tools' Gemini functionDeclarations from Hermes. Returns [] on
@@ -53,26 +88,93 @@ async function fetchToolDeclarations(): Promise<unknown[]> {
 }
 
 /**
+ * Fetch recent session messages from Hermes for the recap block. Returns [] on
+ * any failure — a Hermes outage must never break voice.
+ */
+async function fetchRecapMessages(
+  sessionId: string,
+  userId: string,
+): Promise<Array<{ role?: string; content?: string; source?: string }>> {
+  try {
+    const res = await fetch(
+      `${HERMES_URL}/api/coach/sessions/${encodeURIComponent(sessionId)}/messages?limit=20`,
+      {
+        headers: { 'X-User-Id': userId },
+        signal: AbortSignal.timeout(5000),
+      },
+    );
+    if (!res.ok) {
+      console.error('[live-token] recap fetch returned', res.status);
+      return [];
+    }
+    const data = await res.json();
+    return Array.isArray(data?.messages) ? data.messages : [];
+  } catch (err) {
+    console.error('[live-token] failed to fetch conversation recap:', err);
+    return [];
+  }
+}
+
+/**
+ * Strip tool-call noise and markdown artifacts from a recap message so the
+ * injected memory reads as plain spoken conversation.
+ */
+function sanitizeRecapContent(raw: string): string {
+  return raw
+    // Drop fenced code blocks (often tool-call JSON / engine dumps).
+    .replace(/```[\s\S]*?```/g, ' ')
+    // Drop any tool-call markup tags.
+    .replace(/<\/?tool_call[^>]*>/gi, ' ')
+    // Strip inline code / stray backticks and markdown emphasis/heading markers.
+    .replace(/`+/g, '')
+    .replace(/[*_#>]+/g, '')
+    // Drop leading list bullets.
+    .replace(/^\s*[-•]\s+/gm, '')
+    // Collapse all whitespace (incl. newlines) to single spaces.
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * Build a conversation recap block from prior session messages so the voice
- * coach continues seamlessly across modalities. Returns '' if there's nothing.
+ * coach continues seamlessly across modalities. Capped for latency: each
+ * message truncated to 200 chars, at most 10 messages, total block ≤2KB.
+ * Returns '' if there's nothing.
  */
 function buildRecap(
   messages: Array<{ role?: string; content?: string; source?: string }>,
 ): string {
-  const lines = messages
+  let lines = messages
     .filter((m) => m && typeof m.content === 'string' && m.content.trim())
     .map((m) => {
       const label = m.role === 'user' ? 'user' : 'coach';
       const tag = m.source === 'voice' ? ' (spoken)' : '';
-      return `[${label}${tag}] ${m.content}`;
-    });
+      const text = sanitizeRecapContent(m.content as string).slice(
+        0,
+        RECAP_MAX_CHARS_PER_MSG,
+      );
+      return { line: `[${label}${tag}] ${text}`, empty: text.length === 0 };
+    })
+    .filter((x) => !x.empty)
+    // Keep only the most recent messages.
+    .slice(-RECAP_MAX_MSGS)
+    .map((x) => x.line);
+
   if (lines.length === 0) return '';
-  return (
+
+  const header =
     '\n\nYou are continuing an ongoing coaching conversation. ' +
-    'Recent conversation (oldest first):\n' +
-    lines.join('\n') +
-    '\nContinue seamlessly — do not re-introduce yourself or repeat prior explanations.'
-  );
+    'Recent conversation (oldest first):\n';
+  const footer =
+    '\nContinue seamlessly — do not re-introduce yourself or repeat prior explanations.';
+  const block = () => header + lines.join('\n') + footer;
+
+  // Enforce the total byte budget by dropping the oldest lines first.
+  while (lines.length > 1 && Buffer.byteLength(block(), 'utf8') > RECAP_MAX_BYTES) {
+    lines = lines.slice(1);
+  }
+
+  return block();
 }
 
 const jsonResponse = (body: unknown, status: number) =>
@@ -110,36 +212,24 @@ export async function POST(request: Request) {
     systemInstruction += `\nThe current board position (FEN) is: ${body.fen}. Refer to it when relevant.`;
   }
 
-  // Inject shared conversation memory: pull recent messages from Hermes so the
-  // voice coach remembers what was said via text (and prior voice). A Hermes
-  // failure must never break voice — log and fall back to no recap.
-  if (body.session_id && typeof body.session_id === 'string') {
-    try {
-      const recapRes = await fetch(
-        `${HERMES_URL}/api/coach/sessions/${encodeURIComponent(body.session_id)}/messages?limit=20`,
-        {
-          headers: { 'X-User-Id': userId },
-          signal: AbortSignal.timeout(5000),
-        },
-      );
-      if (recapRes.ok) {
-        const data = await recapRes.json();
-        const messages = Array.isArray(data?.messages) ? data.messages : [];
-        systemInstruction += buildRecap(messages);
-      } else {
-        console.error(
-          '[live-token] recap fetch returned',
-          recapRes.status,
-        );
-      }
-    } catch (err) {
-      console.error('[live-token] failed to fetch conversation recap:', err);
-    }
-  }
+  // Fetch shared conversation memory (recap) and the tool declarations from
+  // Hermes in parallel — both are independent 5s-timeout calls, so running them
+  // concurrently shaves latency off the token mint. Both degrade gracefully:
+  // a Hermes outage yields no recap / no tools but still mints the session.
+  const sessionId =
+    body.session_id && typeof body.session_id === 'string'
+      ? body.session_id
+      : null;
+  const [recapMessages, rawTools] = await Promise.all([
+    sessionId ? fetchRecapMessages(sessionId, userId) : Promise.resolve([]),
+    fetchToolDeclarations(),
+  ]);
 
-  // Pull tool declarations from Hermes (server-side). Degrade gracefully: if
-  // Hermes is down the session still mints, just without tools.
-  const functionDeclarations = await fetchToolDeclarations();
+  // Inject the capped conversation recap so the voice coach continues seamlessly.
+  systemInstruction += buildRecap(recapMessages);
+
+  // Curate the toolset down to the voice-relevant allowlist before embedding.
+  const functionDeclarations = filterVoiceTools(rawTools);
   if (functionDeclarations.length > 0) {
     systemInstruction += COACH_TOOL_GUIDANCE;
   }

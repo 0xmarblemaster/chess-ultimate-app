@@ -246,4 +246,220 @@ describe('POST /api/coach/live-token', () => {
     );
     errorSpy.mockRestore();
   });
+
+  // ── Recap capping (latency: ≤10 msgs, 200 chars/msg, ≤2KB, no markdown) ─────
+
+  // Route Hermes fetches: recap messages via /messages, empty tools otherwise.
+  const routeRecap = (messages: unknown[]) =>
+    vi.fn(async (url: string) => {
+      if (String(url).includes('/messages')) {
+        return { ok: true, json: async () => ({ messages }) };
+      }
+      return { ok: true, json: async () => ({ tools: [] }) };
+    });
+
+  // Extract just the recap block from the system instruction for tight assertions.
+  const recapBlockFromMint = () => {
+    const instruction = systemInstructionFromMint();
+    const start = instruction.indexOf('\n\nYou are continuing');
+    if (start === -1) return '';
+    return instruction.slice(start);
+  };
+
+  it('keeps at most 10 recap messages (the most recent ones)', async () => {
+    (auth as any).mockResolvedValue({ userId: 'user_123' });
+    process.env.GEMINI_API_KEY = 'AQ.test-key';
+    createMock.mockResolvedValue({ name: 'ephemeral-token-xyz' });
+
+    const messages = Array.from({ length: 15 }, (_, i) => ({
+      role: i % 2 === 0 ? 'user' : 'assistant',
+      content: `message number ${i}`,
+      source: 'text',
+    }));
+    global.fetch = routeRecap(messages) as any;
+
+    const { POST } = await import('../live-token/route');
+    await POST(makeRequest({ session_id: 'sess_1' }));
+
+    const block = recapBlockFromMint();
+    const lineCount = (block.match(/\[(user|coach)/g) || []).length;
+    expect(lineCount).toBe(10);
+    // Oldest were dropped; newest kept.
+    expect(block).toContain('message number 14');
+    expect(block).not.toContain('message number 4');
+  });
+
+  it('truncates each recap message to 200 characters', async () => {
+    (auth as any).mockResolvedValue({ userId: 'user_123' });
+    process.env.GEMINI_API_KEY = 'AQ.test-key';
+    createMock.mockResolvedValue({ name: 'ephemeral-token-xyz' });
+
+    const messages = [{ role: 'user', content: 'A'.repeat(300), source: 'text' }];
+    global.fetch = routeRecap(messages) as any;
+
+    const { POST } = await import('../live-token/route');
+    await POST(makeRequest({ session_id: 'sess_1' }));
+
+    const block = recapBlockFromMint();
+    expect(block).toContain('A'.repeat(200));
+    expect(block).not.toContain('A'.repeat(201));
+  });
+
+  it('caps the total recap block at 2KB', async () => {
+    (auth as any).mockResolvedValue({ userId: 'user_123' });
+    process.env.GEMINI_API_KEY = 'AQ.test-key';
+    createMock.mockResolvedValue({ name: 'ephemeral-token-xyz' });
+
+    const messages = Array.from({ length: 10 }, (_, i) => ({
+      role: 'user',
+      content: `${i} ` + 'X'.repeat(500),
+      source: 'text',
+    }));
+    global.fetch = routeRecap(messages) as any;
+
+    const { POST } = await import('../live-token/route');
+    await POST(makeRequest({ session_id: 'sess_1' }));
+
+    const block = recapBlockFromMint();
+    expect(Buffer.byteLength(block, 'utf8')).toBeLessThanOrEqual(2048);
+  });
+
+  it('strips markdown and tool-call noise from recap messages', async () => {
+    (auth as any).mockResolvedValue({ userId: 'user_123' });
+    process.env.GEMINI_API_KEY = 'AQ.test-key';
+    createMock.mockResolvedValue({ name: 'ephemeral-token-xyz' });
+
+    const messages = [
+      {
+        role: 'assistant',
+        content: '**Bold** and `code` and\n```json\n{"tool":"x"}\n```\n# Heading',
+        source: 'text',
+      },
+    ];
+    global.fetch = routeRecap(messages) as any;
+
+    const { POST } = await import('../live-token/route');
+    await POST(makeRequest({ session_id: 'sess_1' }));
+
+    const block = recapBlockFromMint();
+    expect(block).not.toContain('**');
+    expect(block).not.toContain('```');
+    expect(block).not.toContain('`');
+    expect(block).not.toContain('#');
+    expect(block).not.toContain('{"tool":"x"}');
+    expect(block).toContain('Bold');
+  });
+
+  // ── Voice tool allowlist ────────────────────────────────────────────────────
+
+  it('filters the toolset down to the voice allowlist, dropping import/account tools', async () => {
+    (auth as any).mockResolvedValue({ userId: 'user_123' });
+    process.env.GEMINI_API_KEY = 'AQ.test-key';
+    createMock.mockResolvedValue({ name: 'ephemeral-token-xyz' });
+
+    const decls = [
+      { name: 'board_control' },
+      { name: 'analyze_position' },
+      { name: 'get_position_stats' },
+      { name: 'get_opening_stats' },
+      { name: 'search_master_games' },
+      // Excluded: import / sync / link / account tools.
+      { name: 'chesscom_game_import' },
+      { name: 'lichess_game_import' },
+      { name: 'link_platform' },
+      { name: 'get_user_games' },
+      { name: 'get_user_progress' },
+    ];
+    global.fetch = vi.fn(async (url: string) => {
+      if (String(url).includes('/api/coach/tools')) {
+        return { ok: true, json: async () => ({ tools: decls }) };
+      }
+      return { ok: true, json: async () => ({ messages: [] }) };
+    }) as any;
+
+    const { POST } = await import('../live-token/route');
+    const response = await POST(makeRequest({ fen: 'somefen' }));
+
+    expect(response.status).toBe(200);
+    const kept = configFromMint().tools[0].functionDeclarations.map(
+      (d: any) => d.name,
+    );
+    expect(kept).toContain('board_control');
+    expect(kept).toContain('analyze_position');
+    expect(kept).toContain('search_master_games');
+    expect(kept).not.toContain('chesscom_game_import');
+    expect(kept).not.toContain('lichess_game_import');
+    expect(kept).not.toContain('link_platform');
+    expect(kept).not.toContain('get_user_games');
+    expect(kept.length).toBeLessThanOrEqual(8);
+  });
+
+  it('embeds no tools (and no tool guidance) when none survive the allowlist', async () => {
+    (auth as any).mockResolvedValue({ userId: 'user_123' });
+    process.env.GEMINI_API_KEY = 'AQ.test-key';
+    createMock.mockResolvedValue({ name: 'ephemeral-token-xyz' });
+
+    const decls = [{ name: 'chesscom_game_import' }, { name: 'sync_ratings' }];
+    global.fetch = vi.fn(async (url: string) => {
+      if (String(url).includes('/api/coach/tools')) {
+        return { ok: true, json: async () => ({ tools: decls }) };
+      }
+      return { ok: true, json: async () => ({ messages: [] }) };
+    }) as any;
+
+    const { POST } = await import('../live-token/route');
+    const response = await POST(makeRequest({ fen: 'somefen' }));
+
+    expect(response.status).toBe(200);
+    expect(configFromMint().tools).toBeUndefined();
+    expect(configFromMint().systemInstruction).not.toContain('You have tools.');
+  });
+
+  it('adds the acknowledge-before-tool guidance when voice tools are present', async () => {
+    (auth as any).mockResolvedValue({ userId: 'user_123' });
+    process.env.GEMINI_API_KEY = 'AQ.test-key';
+    createMock.mockResolvedValue({ name: 'ephemeral-token-xyz' });
+
+    global.fetch = vi.fn(async (url: string) => {
+      if (String(url).includes('/api/coach/tools')) {
+        return { ok: true, json: async () => ({ tools: [{ name: 'board_control' }] }) };
+      }
+      return { ok: true, json: async () => ({ messages: [] }) };
+    }) as any;
+
+    const { POST } = await import('../live-token/route');
+    await POST(makeRequest({ fen: 'somefen' }));
+
+    const instruction = systemInstructionFromMint();
+    expect(instruction).toContain('You have tools.');
+    // Must instruct a spoken acknowledgment before the tool call.
+    expect(instruction.toLowerCase()).toContain('acknowledgment');
+  });
+
+  // ── Parallelized Hermes fetches ─────────────────────────────────────────────
+
+  it('fetches the recap and tools concurrently (not serialized)', async () => {
+    (auth as any).mockResolvedValue({ userId: 'user_123' });
+    process.env.GEMINI_API_KEY = 'AQ.test-key';
+    createMock.mockResolvedValue({ name: 'ephemeral-token-xyz' });
+
+    let inFlight = 0;
+    let maxInFlight = 0;
+    global.fetch = vi.fn(async (url: string) => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((r) => setTimeout(r, 5));
+      inFlight -= 1;
+      if (String(url).includes('/api/coach/tools')) {
+        return { ok: true, json: async () => ({ tools: [] }) };
+      }
+      return { ok: true, json: async () => ({ messages: [] }) };
+    }) as any;
+
+    const { POST } = await import('../live-token/route');
+    await POST(makeRequest({ session_id: 'sess_1' }));
+
+    // Both Hermes calls overlapped.
+    expect(maxInFlight).toBe(2);
+  });
 });
