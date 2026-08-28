@@ -26,6 +26,7 @@ import type { GamificationProfile } from '@/lib/gamification/profile';
 import type { LegionStanding, StudentProximity } from '@/lib/gamification/standings';
 import Achievements from './Achievements';
 import PendingConfirmBanner from './PendingConfirmBanner';
+import TournamentCtaBanner from './TournamentCtaBanner';
 
 export type EmpireHomeState = 'verified' | 'pending_confirm' | 'no_link';
 
@@ -476,6 +477,8 @@ export default async function EmpireHomePage(props: EmpireHomePageProps) {
             </div>
           </div>
         </section>
+
+        <TournamentCtaBanner />
 
         {/* Stat pills */}
         <div className="grid grid-cols-2 gap-3">

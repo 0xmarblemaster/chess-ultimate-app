@@ -26,6 +26,10 @@ vi.mock('next-intl/server', () => ({
   },
 }));
 
+vi.mock('next-intl', () => ({
+  useTranslations: () => (key: string) => key,
+}));
+
 vi.mock('../PendingConfirmBanner', () => ({
   __esModule: true,
   default: () => null,

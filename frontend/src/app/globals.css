@@ -1132,3 +1132,20 @@ html.dark .divide-gray-200 > :not(:last-child) { border-color: #333 !important; 
     gap: 8px;
   }
 }
+
+/* Diagonal shimmer sweep for the Empire tournament CTA banner. A single
+   translucent gradient band slides across the card roughly every 3s. The
+   overlay is absolutely positioned and pointer-events:none, so it never
+   shifts layout or intercepts the banner's click. */
+@keyframes tournament-cta-shimmer {
+  0% { transform: translateX(-150%); }
+  100% { transform: translateX(150%); }
+}
+
+.tournament-cta-shimmer {
+  animation: tournament-cta-shimmer 3s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tournament-cta-shimmer { animation: none; }
+}

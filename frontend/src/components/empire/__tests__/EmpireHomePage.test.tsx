@@ -18,6 +18,10 @@ vi.mock('next-intl/server', () => ({
   },
 }));
 
+vi.mock('next-intl', () => ({
+  useTranslations: () => (key: string) => key,
+}));
+
 vi.mock('../PendingConfirmBanner', () => ({
   __esModule: true,
   default: ({ displayName }: { displayName: string }) => (
@@ -145,6 +149,25 @@ describe('EmpireHomePage — verified state', () => {
     expect(queryByTestId('empire-achievements-grid')).toBeNull();
     expect(queryByTestId('empire-continue-cta')).toBeNull();
     expect(queryByTestId('empire-trend-empty')).toBeNull();
+  });
+
+  it('mounts the tournament CTA banner between the hero and the stat pills', async () => {
+    const ui = await EmpireHomePage({
+      state: 'verified',
+      studentDisplayName: 'Ali',
+      profile: aliProfile,
+      ratings: [],
+      rank: emptyRank,
+    });
+    const { getByTestId } = render(ui);
+    const hero = getByTestId('empire-hero');
+    const banner = getByTestId('empire-tournament-cta');
+    expect(banner).toBeTruthy();
+    expect(banner.getAttribute('href')).toBe('/tournaments');
+    // Sits after the hero in document order.
+    expect(
+      hero.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it('renders the CE photo_url as the hero avatar when present', async () => {
