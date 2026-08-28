@@ -179,7 +179,13 @@ export async function POST(request: Request) {
     });
 
     return jsonResponse(
-      { token: token.name, model: LIVE_MODEL, expiresAt: expireTime },
+      {
+        token: token.name,
+        model: LIVE_MODEL,
+        expiresAt: expireTime,
+        // Byte size of the assembled system prompt, for client latency telemetry.
+        promptBytes: Buffer.byteLength(systemInstruction, 'utf8'),
+      },
       200,
     );
   } catch (err) {

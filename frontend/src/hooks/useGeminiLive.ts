@@ -43,6 +43,24 @@ export interface UseGeminiLiveReturn {
 const OUTPUT_SAMPLE_RATE = 24000;
 // RMS above which local mic activity counts as barge-in while the model is speaking.
 const BARGE_IN_RMS = 0.05;
+// RMS above which a mic frame counts as speech — used to approximate VAD end
+// (the user's last spoken frame) as the start of the time-to-first-audio window.
+const SPEECH_RMS = 0.02;
+
+// Latency telemetry contract shared with Hermes POST /api/coach/metrics.
+type LiveMetricEvent = 'connect' | 'turn' | 'tool' | 'error';
+interface LiveMetricRecord {
+  sessionId?: string;
+  turn: number;
+  event: LiveMetricEvent;
+  ttfa_ms?: number;
+  connect_ms?: number;
+  token_ms?: number;
+  tool_name?: string;
+  tool_ms?: number;
+  prompt_bytes?: number;
+  ts: number;
+}
 
 function getAudioContextCtor(): typeof AudioContext | null {
   if (typeof window === 'undefined') return null;
@@ -114,11 +132,56 @@ export default function useGeminiLive(
   // toolCallCancellation can abort them.
   const toolAbortRef = useRef<Map<string, AbortController>>(new Map());
 
+  // ── Latency instrumentation ────────────────────────────────────────────────
+  // Turn counter for per-turn TTFA records.
+  const turnRef = useRef(0);
+  // performance.now() of the user's most recent spoken (above-threshold) mic
+  // frame — approximates VAD end, the start of the time-to-first-audio window.
+  const lastUserSpeechAtRef = useRef<number | null>(null);
+  // True while we're still waiting for the first model audio chunk of a turn,
+  // so TTFA is measured once per turn (reset when playback drains / on barge-in).
+  const firstAudioPendingRef = useRef(true);
+
   const setStatus = useCallback((s: LiveStatus) => {
     statusRef.current = s;
     setStatusState(s);
     optionsRef.current.onStatusChange?.(s);
   }, []);
+
+  // Fire-and-forget a latency record to Hermes via the metrics proxy. This runs
+  // OFF the audio hot path: never awaited, fully wrapped in try/catch, so a slow
+  // or failing metrics endpoint can never delay or break voice.
+  const reportMetric = useCallback(
+    (partial: Partial<LiveMetricRecord> & { event: LiveMetricEvent }) => {
+      const record: LiveMetricRecord = {
+        sessionId: optionsRef.current.getSessionId?.() ?? undefined,
+        turn: partial.turn ?? turnRef.current,
+        event: partial.event,
+        ttfa_ms: partial.ttfa_ms,
+        connect_ms: partial.connect_ms,
+        token_ms: partial.token_ms,
+        tool_name: partial.tool_name,
+        tool_ms: partial.tool_ms,
+        prompt_bytes: partial.prompt_bytes,
+        ts: Date.now(),
+      };
+      try {
+        console.debug('[live-metrics]', record);
+        void fetch('/api/coach/metrics', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(record),
+          keepalive: true,
+        }).catch(() => {
+          /* telemetry only — swallow */
+        });
+      } catch {
+        /* telemetry must never break the audio path */
+      }
+    },
+    [],
+  );
 
   // Detect capability once mounted (SSR-safe).
   useEffect(() => {
@@ -147,6 +210,8 @@ export default function useGeminiLive(
   // Barge-in: flush playback and hand the floor back to the user.
   const flushPlayback = useCallback(() => {
     stopSources();
+    // The interrupted turn is over — arm TTFA measurement for the next one.
+    firstAudioPendingRef.current = true;
     if (statusRef.current === 'speaking') {
       setStatus('listening');
     }
@@ -234,6 +299,22 @@ export default function useGeminiLive(
 
       const int16 = base64ToInt16(b64);
       if (int16.length === 0) return;
+
+      // First audio chunk of a turn: record time-to-first-audio (VAD end →
+      // first model audio). Measured once per turn, before any decode work.
+      if (firstAudioPendingRef.current) {
+        firstAudioPendingRef.current = false;
+        const startedAt = lastUserSpeechAtRef.current;
+        if (startedAt !== null) {
+          turnRef.current += 1;
+          reportMetric({
+            event: 'turn',
+            turn: turnRef.current,
+            ttfa_ms: Math.round(performance.now() - startedAt),
+          });
+        }
+      }
+
       const float = new Float32Array(int16.length);
       for (let i = 0; i < int16.length; i++) {
         float[i] = int16[i] / 0x8000;
@@ -256,11 +337,13 @@ export default function useGeminiLive(
       src.onended = () => {
         playSourcesRef.current.delete(src);
         if (playSourcesRef.current.size === 0 && statusRef.current === 'speaking') {
+          // Model finished this turn — arm TTFA measurement for the next one.
+          firstAudioPendingRef.current = true;
           setStatus('listening');
         }
       };
     },
-    [setStatus],
+    [setStatus, reportMetric],
   );
 
   // Cancel in-flight tool fetches the model no longer wants a response for.
@@ -295,6 +378,8 @@ export default function useGeminiLive(
       calls.map(async (fc) => {
         const controller = new AbortController();
         if (fc.id) toolAbortRef.current.set(fc.id, controller);
+        const toolStart = performance.now();
+        let aborted = false;
         try {
           const res = await fetch('/api/coach/tool', {
             method: 'POST',
@@ -332,12 +417,22 @@ export default function useGeminiLive(
         } catch (err) {
           // Aborted (cancelled by the model) — drop it, no response expected.
           if (err instanceof DOMException && err.name === 'AbortError') {
+            aborted = true;
             return null;
           }
           const message = err instanceof Error ? err.message : 'tool call failed';
           return { id: fc.id, name: fc.name, response: { error: message } };
         } finally {
           if (fc.id) toolAbortRef.current.delete(fc.id);
+          // Per-call tool latency: functionCall received → response ready.
+          // Skip cancelled calls (no response is sent for them).
+          if (!aborted) {
+            reportMetric({
+              event: 'tool',
+              tool_name: fc.name ?? undefined,
+              tool_ms: Math.round(performance.now() - toolStart),
+            });
+          }
         }
       }),
     );
@@ -351,7 +446,7 @@ export default function useGeminiLive(
     } catch {
       /* session may be closing */
     }
-  }, []);
+  }, [reportMetric]);
 
   const handleMessage = useCallback(
     (msg: LiveServerMessage) => {
@@ -410,8 +505,9 @@ export default function useGeminiLive(
       setError(msg);
       optionsRef.current.onError?.(msg);
       setStatus('error');
+      reportMetric({ event: 'error' });
     },
-    [cleanup, setStatus],
+    [cleanup, setStatus, reportMetric],
   );
 
   const startCapture = useCallback(
@@ -436,6 +532,12 @@ export default function useGeminiLive(
       node.port.onmessage = (ev: MessageEvent) => {
         const data = ev.data as { pcm: ArrayBuffer; rms: number };
         if (!data?.pcm) return;
+
+        // Track the user's last spoken frame as the TTFA window start (VAD end
+        // approximation). The mic streams continuously, so gate on speech energy.
+        if (data.rms > SPEECH_RMS) {
+          lastUserSpeechAtRef.current = performance.now();
+        }
 
         // Local barge-in: user speaks over the coach.
         if (data.rms > BARGE_IN_RMS && statusRef.current === 'speaking') {
@@ -470,6 +572,7 @@ export default function useGeminiLive(
     async (resumeHandle?: string) => {
       const fen = optionsRef.current.getFen?.();
       const sessionId = optionsRef.current.getSessionId?.();
+      const tokenStart = performance.now();
       const res = await fetch('/api/coach/live-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -483,10 +586,12 @@ export default function useGeminiLive(
       if (!res.ok) {
         throw new Error(`Live coach unavailable (${res.status})`);
       }
-      const { token, model } = (await res.json()) as {
+      const { token, model, promptBytes } = (await res.json()) as {
         token?: string;
         model?: string;
+        promptBytes?: number;
       };
+      const tokenMs = Math.round(performance.now() - tokenStart);
       if (!token || !model) {
         throw new Error('Invalid live-token response');
       }
@@ -510,6 +615,7 @@ export default function useGeminiLive(
       connGenRef.current += 1;
       const gen = connGenRef.current;
 
+      const connectStart = performance.now();
       const session = await ai.live.connect({
         model,
         callbacks: {
@@ -525,7 +631,17 @@ export default function useGeminiLive(
         },
         config,
       });
+      const connectMs = Math.round(performance.now() - connectStart);
       sessionRef.current = session;
+
+      // Record connect-phase latency (token mint + WebSocket setup). Off the
+      // hot path — a fresh turn's TTFA is measured separately.
+      reportMetric({
+        event: 'connect',
+        token_ms: tokenMs,
+        connect_ms: connectMs,
+        prompt_bytes: typeof promptBytes === 'number' ? promptBytes : undefined,
+      });
 
       // Anchor the initial position client-side so the coach is never blind to it,
       // regardless of whether the token's system instruction carried the FEN.
@@ -545,7 +661,7 @@ export default function useGeminiLive(
       setIsActive(true);
       setStatus('listening');
     },
-    [handleMessage, startCapture, setStatus],
+    [handleMessage, startCapture, setStatus, reportMetric],
   );
 
   // React to a session drop: reconnect ONCE with the stored handle if the drop
@@ -593,6 +709,10 @@ export default function useGeminiLive(
     userStoppedRef.current = false;
     reconnectUsedRef.current = false;
     resumptionHandleRef.current = null;
+    // Reset latency instrumentation for the new session.
+    turnRef.current = 0;
+    lastUserSpeechAtRef.current = null;
+    firstAudioPendingRef.current = true;
 
     try {
       await openConnection();
