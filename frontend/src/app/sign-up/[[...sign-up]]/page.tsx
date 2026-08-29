@@ -146,7 +146,6 @@ export default function SignUpPage() {
 
   return (
     <div className="auth-light relative flex flex-col items-center justify-start pt-16 md:justify-center md:pt-0 min-h-screen bg-purple-600 md:bg-gray-50 px-4 pb-[env(safe-area-inset-bottom)]">
-      <LanguageSwitcher variant="auth" currentLocale={locale} className="absolute top-4 right-4 z-50" />
       {/* Hide default Clerk branding and apply Duolingo-style design */}
       <style dangerouslySetInnerHTML={{ __html: `
         /* Hide Clerk branding */
@@ -464,7 +463,8 @@ export default function SignUpPage() {
         }
       `}} />
 
-      <div className="w-full max-w-md bg-white md:bg-transparent rounded-3xl md:rounded-none p-4 md:p-0 mt-4 md:mt-0 shadow-xl md:shadow-none">
+      <div className="relative w-full max-w-md bg-white md:bg-transparent rounded-3xl md:rounded-none p-4 md:p-0 mt-4 md:mt-0 shadow-xl md:shadow-none">
+        <LanguageSwitcher variant="auth" currentLocale={locale} className="absolute top-4 right-4 z-50" />
         {/* Tenant-aware branding above the form */}
         <div className="text-center mb-4 md:mb-6">
           <div className="bg-white rounded-full inline-flex items-center justify-center shadow-lg w-24 h-24 md:w-28 md:h-28 overflow-hidden">
