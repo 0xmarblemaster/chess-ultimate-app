@@ -764,6 +764,46 @@ html.dark .landing-light .border-gray-100 { border-color: #f3f4f6 !important; }
 html.dark .landing-light .border-purple-200 { border-color: #e9d5ff !important; }
 html.dark .landing-light .from-purple-600 { --tw-gradient-from: #9333ea !important; }
 
+/* Auth pages (/sign-in, /sign-up) are light-only. Their inline Clerk <style>
+   blocks key off the semantic CSS variables, which html.dark flips dark, and
+   the blanket html.dark overrides below (.bg-white, input, text-*) repaint the
+   card, inputs, logo circle and headings. Restore every light value under a
+   scoped .auth-light guard so the auth card always renders fully light even
+   when the app is in dark mode. Do NOT weaken the blanket rules — other pages
+   depend on them. Keep in sync with the sign-in / sign-up page.tsx files. */
+html.dark .auth-light {
+  --surface-card: #FFFFFF;
+  --surface-card-hover: #F4F4F5;
+  --surface-input: #FFFFFF;
+  --text-primary: #18181B;
+  --text-tertiary: #A1A1AA;
+  --border-default: #e5e7eb;
+  --border-strong: #D4D4D8;
+}
+html.dark .auth-light .bg-white { background-color: #ffffff !important; }
+html.dark .auth-light .bg-gray-200 { background-color: #e5e7eb !important; }
+html.dark .auth-light .bg-purple-50 { background-color: #faf5ff !important; }
+html.dark .auth-light .text-gray-800 { color: #1f2937 !important; }
+html.dark .auth-light .text-gray-700 { color: #374151 !important; }
+html.dark .auth-light .text-gray-500 { color: #6b7280 !important; }
+html.dark .auth-light .text-gray-400 { color: #9ca3af !important; }
+html.dark .auth-light .text-purple-700 { color: #7e22ce !important; }
+html.dark .auth-light .text-purple-600 { color: #9333ea !important; }
+html.dark .auth-light .border-gray-200 { border-color: #e5e7eb !important; }
+html.dark .auth-light .hover\:bg-gray-50:hover { background-color: #f9fafb !important; }
+/* Clerk inputs are <input> elements — the blanket html.dark input rule below
+   outspecifies the inline .cl-formFieldInput, so restore them explicitly. */
+html.dark .auth-light input,
+html.dark .auth-light textarea,
+html.dark .auth-light select {
+  background-color: #ffffff !important;
+  color: #18181B !important;
+  border-color: #e5e7eb !important;
+}
+html.dark .auth-light input:focus {
+  border-color: var(--primary, #8B5CF6) !important;
+}
+
 /* Placeholder and input styling */
 html.dark input, html.dark textarea, html.dark select {
   background-color: #1a1a1a !important;

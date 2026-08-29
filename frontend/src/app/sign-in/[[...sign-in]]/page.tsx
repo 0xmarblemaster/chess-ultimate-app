@@ -14,7 +14,7 @@ export default function SignInPage() {
     : t('auth.signInTitle')
 
   return (
-    <div className="flex flex-col items-center justify-start pt-16 md:justify-center md:pt-0 min-h-screen bg-purple-600 md:bg-gray-50 px-4 pb-[env(safe-area-inset-bottom)]">
+    <div className="auth-light flex flex-col items-center justify-start pt-16 md:justify-center md:pt-0 min-h-screen bg-purple-600 md:bg-gray-50 px-4 pb-[env(safe-area-inset-bottom)]">
       {/* Hide default Clerk branding and apply Duolingo-style design */}
       <style dangerouslySetInnerHTML={{ __html: `
         /* Hide Clerk branding */
