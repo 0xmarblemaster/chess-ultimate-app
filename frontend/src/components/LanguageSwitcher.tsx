@@ -6,7 +6,7 @@ import { setLocale } from '@/app/actions/setLocale'
 
 interface LanguageSwitcherProps {
   currentLocale: string
-  variant?: 'default' | 'minimal'
+  variant?: 'default' | 'minimal' | 'auth'
   className?: string
   dropUp?: boolean
 }
@@ -65,6 +65,37 @@ export default function LanguageSwitcher({
                 }`}
               >
                 <span className="text-xl">{localeFlags[locale]}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (variant === 'auth') {
+    return (
+      <div ref={dropdownRef} className={`relative ${className}`}>
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/90 text-gray-800 md:bg-gray-100 md:text-gray-600 hover:bg-white md:hover:bg-gray-200 transition-colors text-sm font-semibold shadow-sm"
+          aria-label="Change language"
+        >
+          <span>🌐 {currentLocale === 'kz' ? 'KZ' : currentLocale.toUpperCase()}</span>
+        </button>
+
+        {isOpen && (
+          <div className="absolute top-full right-0 mt-2 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden z-50 min-w-[160px]">
+            {locales.map((locale) => (
+              <button
+                key={locale}
+                onClick={() => handleLocaleChange(locale)}
+                className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-purple-50 transition-colors ${
+                  currentLocale === locale ? 'bg-purple-100 text-purple-700' : 'text-gray-700'
+                }`}
+              >
+                <span className="text-lg">{localeFlags[locale]}</span>
+                <span className="font-medium">{localeNames[locale]}</span>
               </button>
             ))}
           </div>

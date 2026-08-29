@@ -16,7 +16,12 @@ vi.mock('@clerk/nextjs', () => ({
 
 vi.mock('next-intl', () => ({
   useTranslations: () => (key: string) => `[${key}]`,
+  useLocale: () => 'en',
 }));
+
+// The auth-variant LanguageSwitcher imports the setLocale server action, which
+// pulls in next/headers — stub it so the page renders in jsdom.
+vi.mock('@/app/actions/setLocale', () => ({ setLocale: vi.fn() }));
 
 vi.mock('next/image', () => ({
   __esModule: true,
@@ -127,6 +132,16 @@ describe('Sign-up bare-registration guard', () => {
 
     expect(screen.getByTestId('clerk-signup')).toBeTruthy();
     expect(routerReplace).not.toHaveBeenCalled();
+  });
+
+  it('renders the auth-variant language switcher button', () => {
+    orgState.isWhiteLabel = false;
+
+    render(<SignUpPage />);
+
+    const btn = screen.getByRole('button', { name: 'Change language' });
+    expect(btn).toBeTruthy();
+    expect(btn.textContent).toContain('EN');
   });
 
   it('white-label + Clerk sub-step + dropped invite query → proceeds (the bug)', async () => {

@@ -1,12 +1,14 @@
 'use client'
 
 import { SignIn } from '@clerk/nextjs'
-import { useTranslations } from 'next-intl'
+import { useLocale, useTranslations } from 'next-intl'
 import Image from 'next/image'
+import LanguageSwitcher from '@/components/LanguageSwitcher'
 import { useBranding, useOrganization } from '@/contexts/OrganizationContext'
 
 export default function SignInPage() {
   const t = useTranslations()
+  const locale = useLocale()
   const branding = useBranding()
   const { isWhiteLabel } = useOrganization()
   const heading = isWhiteLabel
@@ -14,7 +16,8 @@ export default function SignInPage() {
     : t('auth.signInTitle')
 
   return (
-    <div className="auth-light flex flex-col items-center justify-start pt-16 md:justify-center md:pt-0 min-h-screen bg-purple-600 md:bg-gray-50 px-4 pb-[env(safe-area-inset-bottom)]">
+    <div className="auth-light relative flex flex-col items-center justify-start pt-16 md:justify-center md:pt-0 min-h-screen bg-purple-600 md:bg-gray-50 px-4 pb-[env(safe-area-inset-bottom)]">
+      <LanguageSwitcher variant="auth" currentLocale={locale} className="absolute top-4 right-4 z-50" />
       {/* Hide default Clerk branding and apply Duolingo-style design */}
       <style dangerouslySetInnerHTML={{ __html: `
         /* Hide Clerk branding */

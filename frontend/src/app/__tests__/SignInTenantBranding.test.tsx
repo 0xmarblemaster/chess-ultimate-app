@@ -13,7 +13,12 @@ vi.mock('@clerk/nextjs', () => ({
 // Mock next-intl: useTranslations returns a function that echoes the key.
 vi.mock('next-intl', () => ({
   useTranslations: () => (key: string) => `[${key}]`,
+  useLocale: () => 'en',
 }));
+
+// The auth-variant LanguageSwitcher imports the setLocale server action, which
+// pulls in next/headers — stub it so the page renders in jsdom.
+vi.mock('@/app/actions/setLocale', () => ({ setLocale: vi.fn() }));
 
 // Mock next/image so we don't hit Next's resolver in tests.
 vi.mock('next/image', () => ({
@@ -96,5 +101,13 @@ describe('Sign-in tenant branding', () => {
     render(<SignInPage />);
     const link = screen.getByText('[common.signUp]').closest('a') as HTMLAnchorElement;
     expect(link.getAttribute('href')).toBe('/sign-up');
+  });
+
+  it('renders the auth-variant language switcher button', () => {
+    mockBranding.isWhiteLabel = false;
+    render(<SignInPage />);
+    const btn = screen.getByRole('button', { name: 'Change language' });
+    expect(btn).toBeTruthy();
+    expect(btn.textContent).toContain('EN');
   });
 });
