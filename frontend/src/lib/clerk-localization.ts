@@ -1,7 +1,20 @@
+import { ruRU, kkKZ } from '@clerk/localizations';
+
 // Clerk localization templates per locale. `${appName}` is interpolated
 // at request time from the tenant's brand name (apex falls back to
 // "Chesster"), so chess-empire.chesster.io renders "Sign in to Chess Empire"
 // instead of leaking the Chesster name into the auth modal.
+//
+// Each template is layered on top of Clerk's official translation for that
+// locale (en has no base — English is Clerk's default), so buttons, links,
+// error messages, and verification screens are translated too. kk-KZ is
+// community-contributed with gaps; missing keys fall back to English.
+
+const clerkBaseLocales: Record<string, Record<string, unknown> | undefined> = {
+  en: undefined,
+  ru: ruRU as unknown as Record<string, unknown>,
+  kz: kkKZ as unknown as Record<string, unknown>,
+};
 
 const clerkLocalizationTemplates: Record<string, Record<string, unknown>> = {
   en: {
@@ -84,11 +97,39 @@ function interpolateAppName<T>(value: T, appName: string): T {
   return value;
 }
 
+function deepMerge(
+  base: Record<string, unknown>,
+  override: Record<string, unknown>,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...base };
+  for (const [k, v] of Object.entries(override)) {
+    const existing = out[k];
+    if (
+      v !== null &&
+      typeof v === 'object' &&
+      !Array.isArray(v) &&
+      existing !== null &&
+      typeof existing === 'object' &&
+      !Array.isArray(existing)
+    ) {
+      out[k] = deepMerge(
+        existing as Record<string, unknown>,
+        v as Record<string, unknown>,
+      );
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
 export function buildClerkLocalization(
   locale: string,
   appName: string,
 ): Record<string, unknown> {
   const template =
     clerkLocalizationTemplates[locale] || clerkLocalizationTemplates.en;
-  return interpolateAppName(template, appName);
+  const base = clerkBaseLocales[locale];
+  const merged = base ? deepMerge(base, template) : template;
+  return interpolateAppName(merged, appName);
 }
