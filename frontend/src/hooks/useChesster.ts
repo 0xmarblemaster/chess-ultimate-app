@@ -248,7 +248,7 @@ export default function useChesster(fen: string) {
 
       let data: any;
       try {
-        data = await apiFetch<any>(`/api/chat/history/${conversationId}`, {
+        data = await apiFetch<any>(`/api/coach/history/${conversationId}`, {
           method: "GET",
           headers: {
             Authorization: `Bearer ${token}`,
@@ -303,7 +303,7 @@ export default function useChesster(fen: string) {
 
       let data: any;
       try {
-        data = await apiFetch<any>(`/api/chat/analysis`, {
+        data = await apiFetch<any>(`/api/coach/analysis`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -393,8 +393,8 @@ export default function useChesster(fen: string) {
                             mode === 'game' ? 'game' :
                             mode === 'puzzle' ? 'puzzle' : 'general';
 
-        // Route through Next.js orchestrator (Mastra + Clawdbot + fallback)
-        const response = await fetch(`/api/chat/stream`, {
+        // Route through the Hermes coach analysis stream proxy
+        const response = await fetch(`/api/coach/analysis/stream`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
