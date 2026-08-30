@@ -34,7 +34,11 @@ from src.config import (
 load_env()
 
 from src.middleware.response_envelope import wrap_response  # noqa: E402
-from src.middleware.rate_limiter import enforce_rate_limit, rate_limiter  # noqa: E402
+from src.middleware.rate_limiter import (  # noqa: E402
+    enforce_rate_limit,
+    rate_limiter,
+    get_user_tier,
+)
 from src.middleware.circuit_breaker import stockfish_circuit, supabase_circuit
 from src.model_router import route_model
 from src.prompt_builder import build_system_prompt
@@ -565,6 +569,321 @@ async def coach_append_message(
         "ok": True,
         "session_id": session.id,
         "message_count": len(session.messages),
+    }
+
+
+# ── /api/coach/analysis* routes ────────────────────────────────────────
+#
+# These mirror the Flask /api/chat/analysis contract (backend/api/chat.py) so
+# the frontend can swap its base path drop-in. A Hermes "session" IS the
+# conversation, so `conversation_id` maps 1:1 onto a session id. They reuse the
+# existing agentic loop, session persistence, rate limiter, and board-analysis
+# injection — no parallel LLM path.
+
+
+def _validate_analysis_body(data: Optional[dict]):
+    """Validate an analysis request body against the Flask contract.
+
+    Returns (fen, query, conversation_id, context_type) on success, or a
+    JSONResponse (400) to return directly on failure.
+    """
+    if not data or "fen" not in data or "query" not in data:
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "error": "Missing required fields: fen, query"},
+        )
+    fen = data["fen"]
+    query = (data.get("query") or "").strip()
+    conversation_id = data.get("conversation_id")
+    context_type = data.get("context_type", "analysis")
+
+    if not query:
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "error": "Query cannot be empty"},
+        )
+    if len(query) > 2000:
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "error": "Query too long (max 2000 characters)"},
+        )
+    return fen, query, conversation_id, context_type
+
+
+def _check_analysis_rate_limit(request: Request, user_id: str):
+    """Enforce the per-user rate limit for analysis calls.
+
+    Returns the limiter info dict when allowed, or a JSONResponse (429) matching
+    the Flask contract ({"success": false, "error": ..., "rate_limited": true}).
+    """
+    tier = get_user_tier(request)
+    allowed, info = rate_limiter.check(user_id, tier)
+    if not allowed:
+        return JSONResponse(
+            status_code=429,
+            content={
+                "success": False,
+                "error": (
+                    f"Rate limit exceeded for {tier} tier. "
+                    f"Limit: {info['limit']} requests per minute."
+                ),
+                "rate_limited": True,
+            },
+        )
+    return info
+
+
+def _resolve_analysis_session(user_id: str, conversation_id: Optional[str]):
+    """Reuse an owned conversation or create a new one.
+
+    Returns the session, or a JSONResponse (404) if a conversation_id was given
+    that the user does not own.
+    """
+    if conversation_id:
+        session = session_store.get(conversation_id, user_id)
+        if session is None:
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "success": False,
+                    "error": "Conversation not found or access denied",
+                },
+            )
+        return session
+    return session_store.create(user_id=user_id)
+
+
+def _prepare_analysis_turn(session, fen: str, query: str):
+    """Set the board, record the user message, and build the agent inputs.
+
+    Returns (agent, augmented_message). The system prompt is built with the FEN
+    so the <board_analysis> tactical context is auto-injected.
+    """
+    if fen:
+        try:
+            session.set_board_state(fen)
+        except ValueError:
+            pass  # ignore invalid FEN, keep existing board state
+
+    session.add_message("user", query)
+
+    profile = load_user_profile(session.user_id)
+    system_prompt = build_system_prompt(
+        soul_content=_soul_content,
+        user_profile=profile,
+        board_fen=session.board_state,
+    )
+    model = _resolve_model(None, query)
+
+    # Prepend recent conversation history (excluding the just-added user message)
+    # so multi-turn analysis threads keep context — mirrors coach_chat.
+    history_messages = session.messages[:-1]
+    if history_messages:
+        recent = history_messages[-20:]
+        history_text = "\n".join(f"[{m.role}]: {m.content}" for m in recent)
+        augmented = (
+            f"Previous conversation:\n{history_text}\n\nCurrent message:\n{query}"
+        )
+    else:
+        augmented = query
+
+    agent = _create_agent(
+        model=model, system_prompt=system_prompt, session_id=session.id
+    )
+    return agent, augmented
+
+
+async def _stream_agent_tokens(agent, message: str):
+    """Run agent.chat in an executor, bridging its token callback to the loop.
+
+    Yields ("delta", text) as tokens arrive, then a terminal ("result", text)
+    or ("error", message). Reuses the same queue-bridge pattern as coach_chat.
+    """
+    loop = asyncio.get_event_loop()
+    queue: asyncio.Queue = asyncio.Queue()
+    sentinel = object()
+
+    def _on_delta(text):
+        if text:
+            loop.call_soon_threadsafe(queue.put_nowait, ("delta", text))
+
+    def _run():
+        try:
+            result = agent.chat(message, stream_callback=_on_delta)
+            loop.call_soon_threadsafe(queue.put_nowait, ("result", result))
+        except Exception as exc:  # noqa: BLE001 — surfaced as a terminal item
+            loop.call_soon_threadsafe(queue.put_nowait, ("error", str(exc)))
+        finally:
+            loop.call_soon_threadsafe(queue.put_nowait, sentinel)
+
+    future = loop.run_in_executor(None, _run)
+    while True:
+        item = await queue.get()
+        if item is sentinel:
+            break
+        yield item
+    await future  # ensure the executor thread has fully unwound
+
+
+@app.post("/api/coach/analysis")
+async def coach_analysis(request: Request):
+    """Non-streaming position/game analysis — mirrors Flask /api/chat/analysis."""
+    user_id = _get_user_id(request)
+
+    try:
+        data = await request.json()
+    except Exception:
+        data = None
+
+    validated = _validate_analysis_body(data)
+    if isinstance(validated, JSONResponse):
+        return validated
+    fen, query, conversation_id, _context_type = validated
+
+    limited = _check_analysis_rate_limit(request, user_id)
+    if isinstance(limited, JSONResponse):
+        return limited
+    usage_info = limited
+
+    session = _resolve_analysis_session(user_id, conversation_id)
+    if isinstance(session, JSONResponse):
+        return session
+
+    agent, augmented = _prepare_analysis_turn(session, fen, query)
+
+    loop = asyncio.get_event_loop()
+    try:
+        response_text = await loop.run_in_executor(None, agent.chat, augmented)
+    except Exception as exc:
+        logger.error("Analysis agent error: %s", exc, exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": f"Agent error: {exc}"},
+        )
+
+    if not response_text:
+        response_text = "I wasn't able to generate a response. Please try again."
+
+    session.add_message("assistant", response_text)
+    tokens_used = len(response_text) // 4
+
+    return {
+        "success": True,
+        "response": response_text,
+        "conversation_id": session.id,
+        "tokens_used": tokens_used,
+        "usage": {
+            "hourly_remaining": usage_info["remaining"],
+            "daily_remaining": usage_info["remaining"],
+            "tier": usage_info["tier"],
+        },
+    }
+
+
+@app.post("/api/coach/analysis/stream")
+async def coach_analysis_stream(request: Request):
+    """Streaming position/game analysis — mirrors Flask /api/chat/analysis/stream.
+
+    Emits `{"delta": ...}` per token, then a final
+    `{"done": true, "conversation_id": ..., "tokens_used": ...}`. On failure a
+    single `{"error": ...}` frame is emitted instead of the trailing done event.
+    """
+    user_id = _get_user_id(request)
+
+    try:
+        data = await request.json()
+    except Exception:
+        data = None
+
+    validated = _validate_analysis_body(data)
+    if isinstance(validated, JSONResponse):
+        return validated
+    fen, query, conversation_id, _context_type = validated
+
+    limited = _check_analysis_rate_limit(request, user_id)
+    if isinstance(limited, JSONResponse):
+        return limited
+
+    session = _resolve_analysis_session(user_id, conversation_id)
+    if isinstance(session, JSONResponse):
+        return session
+
+    agent, augmented = _prepare_analysis_turn(session, fen, query)
+
+    async def event_stream():
+        streamed_any = False
+        result_text = None
+        error_msg = None
+
+        async for kind, payload in _stream_agent_tokens(agent, augmented):
+            if kind == "delta":
+                streamed_any = True
+                yield _sse({"delta": payload})
+            elif kind == "result":
+                result_text = payload
+            elif kind == "error":
+                error_msg = payload
+
+        if error_msg is not None:
+            yield _sse({"error": f"Agent error: {error_msg}"})
+            return
+
+        response_text = (
+            result_text or "I wasn't able to generate a response. Please try again."
+        )
+
+        # If no tokens streamed (tool-only turn / no callback support), emit the
+        # full text once so concatenated deltas reconstruct the whole message.
+        if not streamed_any:
+            yield _sse({"delta": response_text})
+
+        session.add_message("assistant", response_text)
+        tokens_used = len(response_text) // 4
+
+        yield _sse(
+            {
+                "done": True,
+                "conversation_id": session.id,
+                "tokens_used": tokens_used,
+            }
+        )
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@app.get("/api/coach/history/{conversation_id}")
+async def coach_history(conversation_id: str, request: Request):
+    """Return a conversation's messages — mirrors Flask /api/chat/history/<id>.
+
+    Thin wrapper over the same session persistence used by
+    /api/coach/sessions/{id}/messages; 404 if the user does not own it.
+    """
+    user_id = _get_user_id(request)
+    session = session_store.get(conversation_id, user_id)
+    if session is None:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "success": False,
+                "error": "Conversation not found or access denied",
+            },
+        )
+
+    updated_at = (
+        session.messages[-1].timestamp if session.messages else session.created_at
+    )
+    return {
+        "success": True,
+        "conversation": {
+            "id": session.id,
+            "type": "analysis",
+            "created_at": session.created_at,
+            "updated_at": updated_at,
+        },
+        "messages": [
+            {"role": m.role, "content": m.content, "timestamp": m.timestamp}
+            for m in session.messages
+        ],
     }
 
 
