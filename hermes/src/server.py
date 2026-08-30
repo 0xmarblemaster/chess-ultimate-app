@@ -4,6 +4,7 @@ Exposes an OpenAI-compatible /v1/chat/completions endpoint
 backed by Hermes AIAgent with the chess coach persona.
 """
 
+import json
 import logging
 import os
 import shutil
@@ -15,7 +16,7 @@ from typing import Any, Optional
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from src.config import (
@@ -341,9 +342,20 @@ def _get_user_id(request: Request) -> str:
     return user_id
 
 
+def _sse(data: dict) -> str:
+    """Serialize a dict as a single SSE `data:` frame."""
+    return f"data: {json.dumps(data)}\n\n"
+
+
 @app.post("/api/coach/chat")
 async def coach_chat(body: CoachChatRequest, request: Request):
-    """Coach chat endpoint — accepts message, optional FEN and session_id."""
+    """Coach chat endpoint — streams the agent's reply as SSE token events.
+
+    Emits, in order: one `{"delta": ...}` frame per streamed text chunk, then
+    (if present) `{"board_actions": [...]}` and `{"game_results": [...]}`, and
+    finally `{"done": true, "session_id": ...}`. On failure a single
+    `{"error": ...}` frame is emitted instead of the trailing events.
+    """
     user_id = _get_user_id(request)
 
     # Rate limiting
@@ -396,23 +408,71 @@ async def coach_chat(body: CoachChatRequest, request: Request):
     agent.tool_complete_callback = _on_tool_complete
 
     loop = asyncio.get_event_loop()
-    try:
-        response_text = await loop.run_in_executor(None, agent.chat, augmented_message)
-    except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Agent error: {exc}")
 
-    if not response_text:
-        response_text = "I wasn't able to generate a response. Please try again."
+    async def event_stream():
+        # Bridge the agent's synchronous, executor-thread token callback onto the
+        # event loop via a thread-safe queue so tokens stream out as they arrive.
+        queue: asyncio.Queue = asyncio.Queue()
+        sentinel = object()
+        streamed_any = False
 
-    session.add_message("assistant", response_text)
-    envelope = wrap_response(response_text, tool_results=tool_results)
+        def _on_delta(text):
+            if text:
+                loop.call_soon_threadsafe(queue.put_nowait, ("delta", text))
 
-    return {
-        "message": envelope["message"],
-        "board_actions": envelope.get("board_actions", []),
-        "game_results": envelope.get("game_results", []),
-        "session_id": session.id,
-    }
+        def _run():
+            try:
+                result = agent.chat(augmented_message, stream_callback=_on_delta)
+                loop.call_soon_threadsafe(queue.put_nowait, ("result", result))
+            except Exception as exc:  # noqa: BLE001 — surfaced as an SSE error frame
+                loop.call_soon_threadsafe(queue.put_nowait, ("error", str(exc)))
+            finally:
+                loop.call_soon_threadsafe(queue.put_nowait, sentinel)
+
+        future = loop.run_in_executor(None, _run)
+
+        result_text = None
+        error_msg = None
+        while True:
+            item = await queue.get()
+            if item is sentinel:
+                break
+            kind, payload = item
+            if kind == "delta":
+                streamed_any = True
+                yield _sse({"delta": payload})
+            elif kind == "result":
+                result_text = payload
+            elif kind == "error":
+                error_msg = payload
+        await future  # ensure the executor thread has fully unwound
+
+        if error_msg is not None:
+            yield _sse({"error": f"Agent error: {error_msg}"})
+            return
+
+        response_text = result_text or "I wasn't able to generate a response. Please try again."
+
+        # If the agent produced no token stream (no callback support / tool-only
+        # turn), fall back to emitting the completed text as a single delta so the
+        # concatenated deltas always reconstruct the full assistant message.
+        if not streamed_any:
+            yield _sse({"delta": response_text})
+
+        session.add_message("assistant", response_text)
+        envelope = wrap_response(response_text, tool_results=tool_results)
+
+        board_actions = envelope.get("board_actions", [])
+        if board_actions:
+            yield _sse({"board_actions": board_actions})
+
+        game_results = envelope.get("game_results", [])
+        if game_results:
+            yield _sse({"game_results": game_results})
+
+        yield _sse({"done": True, "session_id": session.id})
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @app.get("/api/coach/sessions")

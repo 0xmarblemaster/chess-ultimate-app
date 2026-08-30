@@ -1,5 +1,6 @@
 """Unit tests for /api/coach/* FastAPI routes."""
 
+import json
 from unittest.mock import patch, MagicMock
 
 import pytest
@@ -7,15 +8,18 @@ from fastapi.testclient import TestClient
 
 from src.server import app
 from src.sessions import session_store, Session
+from src.middleware.rate_limiter import rate_limiter
 from src.user_profile import UserProfile
 
 
 @pytest.fixture(autouse=True)
 def _clear_sessions():
-    """Clear session store between tests."""
+    """Clear session store and rate-limit state between tests."""
     session_store._sessions.clear()
+    rate_limiter.reset()
     yield
     session_store._sessions.clear()
+    rate_limiter.reset()
 
 
 USER_HEADERS = {"X-User-Id": "test-user-123"}
@@ -273,16 +277,30 @@ class TestCoachProfile:
         assert resp.status_code == 401
 
 
+def _parse_sse(text: str) -> list[dict]:
+    """Parse an SSE response body into a list of decoded `data:` frames."""
+    events = []
+    for line in text.splitlines():
+        if line.startswith("data: "):
+            events.append(json.loads(line[len("data: "):]))
+    return events
+
+
+def _deltas(events: list[dict]) -> str:
+    """Concatenate all `delta` frames into the full message."""
+    return "".join(e["delta"] for e in events if "delta" in e)
+
+
 @pytest.mark.unit
 class TestCoachChat:
-    """Tests for POST /api/coach/chat."""
+    """Tests for POST /api/coach/chat (SSE token streaming)."""
 
     def setup_method(self):
         self.client = TestClient(app)
 
     @patch("src.server._create_agent")
     @patch("src.server.load_user_profile")
-    def test_chat_basic(self, mock_profile, mock_agent):
+    def test_chat_streams_event_stream_content_type(self, mock_profile, mock_agent):
         mock_profile.return_value = UserProfile(user_id="test-user-123")
         agent_instance = MagicMock()
         agent_instance.chat.return_value = "The Sicilian Defense is a strong reply to 1.e4."
@@ -294,15 +312,57 @@ class TestCoachChat:
             json={"message": "What is the Sicilian Defense?"},
         )
         assert resp.status_code == 200
-        body = resp.json()
-        assert "message" in body
-        assert "board_actions" in body
-        assert "session_id" in body
-        assert body["message"] == "The Sicilian Defense is a strong reply to 1.e4."
+        assert resp.headers["content-type"].startswith("text/event-stream")
 
     @patch("src.server._create_agent")
     @patch("src.server.load_user_profile")
-    def test_chat_creates_session(self, mock_profile, mock_agent):
+    def test_chat_deltas_reconstruct_message(self, mock_profile, mock_agent):
+        mock_profile.return_value = UserProfile(user_id="test-user-123")
+        full = "The Sicilian Defense is a strong reply to 1.e4."
+        agent_instance = MagicMock()
+        agent_instance.chat.return_value = full
+        mock_agent.return_value = agent_instance
+
+        resp = self.client.post(
+            "/api/coach/chat",
+            headers=USER_HEADERS,
+            json={"message": "What is the Sicilian Defense?"},
+        )
+        events = _parse_sse(resp.text)
+        assert _deltas(events) == full
+
+    @patch("src.server._create_agent")
+    @patch("src.server.load_user_profile")
+    def test_chat_streams_real_tokens_via_callback(self, mock_profile, mock_agent):
+        """When the agent supports a stream callback, real tokens stream through
+        and still concatenate to the final message."""
+        mock_profile.return_value = UserProfile(user_id="test-user-123")
+        chunks = ["The ", "Sicilian ", "Defense."]
+
+        def _chat(message, stream_callback=None):
+            for c in chunks:
+                if stream_callback:
+                    stream_callback(c)
+            return "".join(chunks)
+
+        agent_instance = MagicMock()
+        agent_instance.chat.side_effect = _chat
+        mock_agent.return_value = agent_instance
+
+        resp = self.client.post(
+            "/api/coach/chat",
+            headers=USER_HEADERS,
+            json={"message": "What is the Sicilian Defense?"},
+        )
+        events = _parse_sse(resp.text)
+        delta_frames = [e for e in events if "delta" in e]
+        # Each chunk arrived as its own delta frame (real token streaming).
+        assert [e["delta"] for e in delta_frames] == chunks
+        assert _deltas(events) == "".join(chunks)
+
+    @patch("src.server._create_agent")
+    @patch("src.server.load_user_profile")
+    def test_chat_final_done_event_has_session_id(self, mock_profile, mock_agent):
         mock_profile.return_value = UserProfile(user_id="test-user-123")
         agent_instance = MagicMock()
         agent_instance.chat.return_value = "Hello!"
@@ -313,10 +373,34 @@ class TestCoachChat:
             headers=USER_HEADERS,
             json={"message": "Hi"},
         )
-        session_id = resp.json()["session_id"]
+        events = _parse_sse(resp.text)
+        done = events[-1]
+        assert done.get("done") is True
+        assert done.get("session_id")
+        session = session_store.get(done["session_id"], "test-user-123")
+        assert session is not None
+
+    @patch("src.server._create_agent")
+    @patch("src.server.load_user_profile")
+    def test_chat_persists_assistant_message(self, mock_profile, mock_agent):
+        mock_profile.return_value = UserProfile(user_id="test-user-123")
+        full = "The King's Pawn opening."
+        agent_instance = MagicMock()
+        agent_instance.chat.return_value = full
+        mock_agent.return_value = agent_instance
+
+        resp = self.client.post(
+            "/api/coach/chat",
+            headers=USER_HEADERS,
+            json={"message": "What is e4?"},
+        )
+        events = _parse_sse(resp.text)
+        session_id = events[-1]["session_id"]
         session = session_store.get(session_id, "test-user-123")
         assert session is not None
         assert len(session.messages) == 2  # user + assistant
+        assert session.messages[-1].role == "assistant"
+        assert session.messages[-1].content == full
 
     @patch("src.server._create_agent")
     @patch("src.server.load_user_profile")
@@ -333,7 +417,7 @@ class TestCoachChat:
             json={"message": "Analyze this", "fen": fen},
         )
         assert resp.status_code == 200
-        session_id = resp.json()["session_id"]
+        session_id = _parse_sse(resp.text)[-1]["session_id"]
         session = session_store.get(session_id, "test-user-123")
         assert session.board_state == fen
 
@@ -352,7 +436,37 @@ class TestCoachChat:
             json={"message": "Continue", "session_id": session.id},
         )
         assert resp.status_code == 200
-        assert resp.json()["session_id"] == session.id
+        assert _parse_sse(resp.text)[-1]["session_id"] == session.id
+
+    @patch("src.server._create_agent")
+    @patch("src.server.load_user_profile")
+    def test_chat_emits_board_actions(self, mock_profile, mock_agent):
+        mock_profile.return_value = UserProfile(user_id="test-user-123")
+        agent_instance = MagicMock()
+        agent_instance.chat.return_value = "Let me show you."
+
+        def _on_chat(message, stream_callback=None):
+            # Simulate a tool emitting a board action captured by the callback.
+            agent_instance.tool_complete_callback(
+                "call-1",
+                "highlight_squares",
+                {},
+                json.dumps({"type": "highlight_squares", "squares": ["e4"]}),
+            )
+            return "Let me show you."
+
+        agent_instance.chat.side_effect = _on_chat
+        mock_agent.return_value = agent_instance
+
+        resp = self.client.post(
+            "/api/coach/chat",
+            headers=USER_HEADERS,
+            json={"message": "Show me the center"},
+        )
+        events = _parse_sse(resp.text)
+        board_events = [e for e in events if "board_actions" in e]
+        assert board_events
+        assert board_events[0]["board_actions"][0]["type"] == "highlight_squares"
 
     def test_chat_requires_user_id(self):
         resp = self.client.post(
@@ -377,6 +491,8 @@ class TestCoachChat:
             json={"message": "Привет", "locale": "ru"},
         )
         assert resp.status_code == 200
+        # Drain the stream so the endpoint runs to completion.
+        _parse_sse(resp.text)
         mock_prompt.assert_called_once()
         call_kwargs = mock_prompt.call_args
         assert call_kwargs.kwargs.get("locale") == "ru"
@@ -397,13 +513,14 @@ class TestCoachChat:
             json={"message": "Hello"},
         )
         assert resp.status_code == 200
+        _parse_sse(resp.text)
         mock_prompt.assert_called_once()
         call_kwargs = mock_prompt.call_args
         assert call_kwargs.kwargs.get("locale") is None
 
     @patch("src.server._create_agent")
     @patch("src.server.load_user_profile")
-    def test_chat_agent_error(self, mock_profile, mock_agent):
+    def test_chat_agent_error_emits_error_frame(self, mock_profile, mock_agent):
         mock_profile.return_value = UserProfile(user_id="test-user-123")
         agent_instance = MagicMock()
         agent_instance.chat.side_effect = RuntimeError("model unavailable")
@@ -414,7 +531,14 @@ class TestCoachChat:
             headers=USER_HEADERS,
             json={"message": "Hello"},
         )
-        assert resp.status_code == 502
+        # The stream itself opens successfully; the failure is an SSE error frame.
+        assert resp.status_code == 200
+        events = _parse_sse(resp.text)
+        error_events = [e for e in events if "error" in e]
+        assert error_events
+        assert "model unavailable" in error_events[0]["error"]
+        # No trailing done event when the agent fails.
+        assert not any("done" in e for e in events)
 
 
 @pytest.mark.unit
