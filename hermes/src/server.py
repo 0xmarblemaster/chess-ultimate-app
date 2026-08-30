@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from typing import Any, Optional
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -51,6 +51,7 @@ from src.billing import (
     get_subscription_status,
     handle_webhook_event,
 )
+from src.voice_metrics import MAX_BODY_BYTES, record_metric
 
 # Set HERMES_HOME so the agent picks up the chess coach profile
 os.environ.setdefault("HERMES_HOME", str(PROFILE_DIR))
@@ -920,6 +921,29 @@ async def coach_usage(request: Request):
     """Get LLM token usage breakdown for the current user."""
     user_id = _get_user_id(request)
     return cost_monitor.get_user_usage(user_id)
+
+
+# ── Voice latency metrics ingest ───────────────────────────────────────
+
+
+@app.post("/api/coach/metrics")
+async def coach_metrics(request: Request):
+    """Ingest a voice-latency beacon from the coach client.
+
+    Best-effort: bad fields are clamped or dropped and the endpoint always
+    returns 204 (never a 5xx), so a broken beacon never disrupts the client.
+    """
+    user_id = _get_user_id(request)  # match the other /api/coach/* endpoints
+
+    raw = await request.body()
+    if raw and len(raw) <= MAX_BODY_BYTES:
+        try:
+            payload = json.loads(raw)
+        except (json.JSONDecodeError, ValueError):
+            payload = None
+        record_metric(payload)
+
+    return Response(status_code=204)
 
 
 # ── Analytics endpoint ─────────────────────────────────────────────────

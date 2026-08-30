@@ -6,6 +6,8 @@ session board_state sync.
 """
 
 import json
+import threading
+import time
 from unittest.mock import patch
 
 import pytest
@@ -166,6 +168,39 @@ class TestToolDispatch:
         )
         assert resp.status_code == 200
         assert session.board_state == fen
+
+    def test_slow_dispatch_does_not_block_event_loop(self):
+        # A slow synchronous tool must run off the event loop, so a concurrent
+        # request (here /health) stays responsive while it's in flight.
+        started = threading.Event()
+
+        def _slow_dispatch(name, args, **kwargs):
+            started.set()
+            time.sleep(2.0)
+            return json.dumps({"ok": True})
+
+        health_ms = {}
+
+        def _fire_slow():
+            self.client.post(
+                "/api/coach/tool/board_control",
+                headers=USER_HEADERS,
+                json={"args": {"action_type": "set_fen"}},
+            )
+
+        with patch.object(tool_bridge.registry, "dispatch", side_effect=_slow_dispatch):
+            worker = threading.Thread(target=_fire_slow)
+            worker.start()
+            assert started.wait(timeout=2.0), "slow dispatch never started"
+            t0 = time.perf_counter()
+            resp = self.client.get("/health")
+            health_ms["elapsed"] = (time.perf_counter() - t0) * 1000
+            worker.join(timeout=5.0)
+
+        assert resp.status_code == 200
+        assert health_ms["elapsed"] < 500, (
+            f"/health blocked for {health_ms['elapsed']:.0f}ms during slow dispatch"
+        )
 
     def test_board_state_sync_scoped_to_user(self):
         # A session owned by another user must not be mutated.

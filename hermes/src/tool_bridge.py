@@ -19,6 +19,7 @@ from typing import Any, Optional
 import chess
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
 from src.board_protocol import ActionType
 from src.sessions import session_store
@@ -193,9 +194,12 @@ async def coach_tool_dispatch(name: str, body: ToolDispatchRequest, request: Req
 
     args = _override_identity_args(name, body.args or {}, user_id)
 
-    # registry.dispatch catches handler exceptions and returns a JSON error
-    # string, so this never raises for tool-internal failures.
-    raw = registry.dispatch(name, args)
+    # registry.dispatch is synchronous and can block for seconds (e.g. a
+    # Stockfish analysis at depth 18). Run it off the event loop so slow tools
+    # don't freeze concurrent requests such as /health. It catches handler
+    # exceptions and returns a JSON error string, so this never raises for
+    # tool-internal failures.
+    raw = await run_in_threadpool(registry.dispatch, name, args)
 
     try:
         parsed = json.loads(raw) if isinstance(raw, str) else raw
