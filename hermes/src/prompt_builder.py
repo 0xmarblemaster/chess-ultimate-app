@@ -93,6 +93,16 @@ def build_system_prompt(
     board_lines = []
     if board_fen:
         board_lines.append(f"Current position (FEN): {board_fen}")
+        # Auto-inject structured tactical board analysis so every coach turn
+        # with a FEN gets pins/hanging/semi-protected context without relying
+        # on an optional tool call. Defensive: invalid FEN must not crash.
+        try:
+            from src.tools.tactical_board import build_board_analysis
+            analysis = build_board_analysis(board_fen)
+            if analysis:
+                board_lines.append(analysis)
+        except Exception:
+            logger.debug("Board analysis injection failed", exc_info=True)
     if move_history:
         moves_str = " ".join(
             f"{i // 2 + 1}. {move}" if i % 2 == 0 else move
