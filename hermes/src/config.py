@@ -65,3 +65,13 @@ def get_model_config(config: dict = None) -> dict:
 def get_api_key() -> str:
     """Get the HERMES_API_KEY for request authentication."""
     return os.environ.get("HERMES_API_KEY", "")
+
+
+# Mastra CCP (chess-coach-protocol) analysis service. Hermes calls this HTTP
+# endpoint to reuse Mastra's PositionPrompter for board analysis, falling back
+# to the local Python port on any failure.
+MASTRA_CCP_URL = os.environ.get(
+    "MASTRA_CCP_URL", "http://localhost:3000/api/position-analysis"
+)
+# Short timeout (seconds) so a slow/unreachable Mastra never blocks a coach turn.
+MASTRA_CCP_TIMEOUT = float(os.environ.get("MASTRA_CCP_TIMEOUT", "2.0"))

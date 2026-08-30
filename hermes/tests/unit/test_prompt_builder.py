@@ -1,12 +1,26 @@
 """Unit tests for system prompt builder."""
 
+import httpx
 import chess
 import pytest
 
+import src.prompt_builder as prompt_builder
 from src.prompt_builder import build_system_prompt, LOCALE_TO_LANGUAGE
 from src.user_profile import UserProfile
 
 MOCK_SOUL = "# Chess Coach\nYou are a chess coach."
+
+CCP_BLOCK = "<detailed_board_analysis>MASTRA CCP fusion here</detailed_board_analysis>"
+LOCAL_BLOCK = "LOCAL PYTHON PORT ANALYSIS"
+
+
+class _FakeResponse:
+    def __init__(self, status_code, payload):
+        self.status_code = status_code
+        self._payload = payload
+
+    def json(self):
+        return self._payload
 
 
 @pytest.mark.unit
@@ -107,3 +121,83 @@ class TestPromptBuilder:
     def test_prompt_contains_example_fen(self):
         prompt = build_system_prompt(soul_content=MOCK_SOUL)
         assert "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4" in prompt
+
+
+@pytest.mark.unit
+class TestCcpAnalysisInjection:
+    """Board analysis prefers the Mastra CCP service, falls back to local port."""
+
+    def test_ccp_service_success_uses_mastra_block(self, monkeypatch):
+        # CCP returns a valid analysis -> Mastra block appears...
+        def fake_post(url, json=None, timeout=None):
+            return _FakeResponse(200, {"valid": True, "board_analysis": CCP_BLOCK})
+
+        monkeypatch.setattr(httpx, "post", fake_post)
+
+        # ...and the local port must NOT be consulted.
+        def boom(fen):
+            raise AssertionError("local build_board_analysis must not be called")
+
+        import src.tools.tactical_board as tactical_board
+        monkeypatch.setattr(tactical_board, "build_board_analysis", boom)
+
+        prompt = build_system_prompt(
+            soul_content=MOCK_SOUL, board_fen=chess.STARTING_FEN
+        )
+        assert CCP_BLOCK in prompt
+
+    def test_ccp_failure_falls_back_to_local_port(self, monkeypatch):
+        # CCP raises (timeout/connection/non-200) -> fall back to local port.
+        def fake_post(url, json=None, timeout=None):
+            raise httpx.ConnectError("boom")
+
+        monkeypatch.setattr(httpx, "post", fake_post)
+
+        import src.tools.tactical_board as tactical_board
+        monkeypatch.setattr(
+            tactical_board, "build_board_analysis", lambda fen: LOCAL_BLOCK
+        )
+
+        prompt = build_system_prompt(
+            soul_content=MOCK_SOUL, board_fen=chess.STARTING_FEN
+        )
+        assert LOCAL_BLOCK in prompt
+        assert CCP_BLOCK not in prompt
+
+    def test_ccp_non200_falls_back_to_local_port(self, monkeypatch):
+        monkeypatch.setattr(
+            httpx, "post", lambda *a, **k: _FakeResponse(503, {"error": "down"})
+        )
+        import src.tools.tactical_board as tactical_board
+        monkeypatch.setattr(
+            tactical_board, "build_board_analysis", lambda fen: LOCAL_BLOCK
+        )
+        prompt = build_system_prompt(
+            soul_content=MOCK_SOUL, board_fen=chess.STARTING_FEN
+        )
+        assert LOCAL_BLOCK in prompt
+
+    def test_both_paths_failing_does_not_raise(self, monkeypatch):
+        # Invalid FEN with both paths failing -> build_prompt returns cleanly.
+        def fake_post(url, json=None, timeout=None):
+            raise httpx.ConnectError("boom")
+
+        monkeypatch.setattr(httpx, "post", fake_post)
+
+        import src.tools.tactical_board as tactical_board
+
+        def boom(fen):
+            raise ValueError("bad fen")
+
+        monkeypatch.setattr(tactical_board, "build_board_analysis", boom)
+
+        prompt = build_system_prompt(
+            soul_content=MOCK_SOUL, board_fen="not-a-valid-fen"
+        )
+        assert "Chess Coach" in prompt
+
+    def test_fetch_ccp_analysis_helper_returns_none_on_invalid_body(self, monkeypatch):
+        monkeypatch.setattr(
+            httpx, "post", lambda *a, **k: _FakeResponse(200, {"valid": False, "board_analysis": ""})
+        )
+        assert prompt_builder._fetch_ccp_analysis(chess.STARTING_FEN) is None
