@@ -6,12 +6,28 @@ from src import config, tool_bridge
 from src.tool_selector import (
     CORE_TOOLS,
     PANEL_SUPPRESSED_TOOLS,
+    select_openai_tool_subset,
     select_tool_subset,
 )
 
 
 def _decl(name, description=""):
     return {"name": name, "description": description, "parameters": {}}
+
+
+def _oai(name, description=""):
+    """OpenAI-format tool dict mirroring what AIAgent puts in `agent.tools`."""
+    return {
+        "type": "function",
+        "function": {
+            "name": name,
+            "description": description,
+            "parameters": {
+                "type": "object",
+                "properties": {name + "_arg": {"type": "string"}},
+            },
+        },
+    }
 
 
 SAMPLE = [
@@ -66,6 +82,63 @@ class TestSelectToolSubset:
         a = select_tool_subset(SAMPLE, "opening repertoire", topk=4)
         b = select_tool_subset(SAMPLE, "opening repertoire", topk=4)
         assert _names(a) == _names(b)
+
+
+OAI_SAMPLE = [_oai(d["name"], d["description"]) for d in SAMPLE]
+
+
+def _oai_names(tools):
+    return [t["function"]["name"] for t in tools]
+
+
+@pytest.mark.unit
+class TestSelectOpenAIToolSubset:
+    def test_core_always_present(self):
+        subset = select_openai_tool_subset(OAI_SAMPLE, "tell me about the weather", topk=3)
+        for core in CORE_TOOLS:
+            assert core in _oai_names(subset)
+
+    def test_openai_shape_and_parameters_preserved(self):
+        subset = select_openai_tool_subset(OAI_SAMPLE, "opening repertoire", topk=5)
+        for t in subset:
+            assert t["type"] == "function"
+            assert t["function"]["name"]
+            # Full parameters schema survives the round-trip.
+            assert t["function"]["parameters"]["type"] == "object"
+            assert t["function"]["parameters"]["properties"]
+
+    def test_object_identity_preserved(self):
+        subset = select_openai_tool_subset(OAI_SAMPLE, "opening", topk=5)
+        originals = {id(t) for t in OAI_SAMPLE}
+        # Every returned dict is one of the original objects (not a copy).
+        for t in subset:
+            assert id(t) in originals
+
+    def test_length_bounded_by_topk_plus_core(self):
+        subset = select_openai_tool_subset(OAI_SAMPLE, "opening", topk=3)
+        assert len(subset) <= 3 + len(CORE_TOOLS)
+
+    def test_deterministic(self):
+        a = select_openai_tool_subset(OAI_SAMPLE, "opening repertoire", topk=4)
+        b = select_openai_tool_subset(OAI_SAMPLE, "opening repertoire", topk=4)
+        assert _oai_names(a) == _oai_names(b)
+
+    def test_panel_mode_drops_suppressed(self):
+        subset = select_openai_tool_subset(OAI_SAMPLE, "analyze this position", topk=5, mode="panel")
+        for name in PANEL_SUPPRESSED_TOOLS:
+            assert name not in _oai_names(subset)
+        assert "analyze_position" in _oai_names(subset)
+
+    def test_parity_with_flat_selector(self):
+        """Same underlying tools -> identical name set as the flat selector."""
+        for query, mode in [
+            ("what opening should I use vs the Sicilian", "full"),
+            ("what are my recurring weaknesses", "full"),
+            ("analyze this position", "panel"),
+        ]:
+            flat = select_tool_subset(SAMPLE, query, topk=5, mode=mode)
+            oai = select_openai_tool_subset(OAI_SAMPLE, query, topk=5, mode=mode)
+            assert _names(flat) == _oai_names(oai)
 
 
 @pytest.mark.unit

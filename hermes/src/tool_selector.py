@@ -44,6 +44,37 @@ def _score(query_tokens: set, declaration: dict) -> int:
     return len(query_tokens & haystack)
 
 
+def _select_flat(
+    declarations: list,
+    query: str,
+    topk: int,
+    mode: str,
+    core: frozenset,
+    panel_suppressed: frozenset,
+) -> list:
+    """Core scoring/selection over flat dicts (each has ``name``/``description``).
+
+    Shared by :func:`select_tool_subset` (flat declarations) and
+    :func:`select_openai_tool_subset` (flat proxies). Keeps the tokenizer,
+    scorer, core-first ordering, and ``panel`` suppression logic in one place.
+    """
+    if mode == "panel":
+        declarations = [
+            d for d in declarations if d.get("name") not in panel_suppressed
+        ]
+        core = core - panel_suppressed
+
+    query_tokens = _tokenize(query) - _STOPWORDS
+
+    core_decls = [d for d in declarations if d.get("name") in core]
+    others = [d for d in declarations if d.get("name") not in core]
+
+    # Stable sort keeps original relative order for equal scores -> deterministic.
+    ranked = sorted(others, key=lambda d: _score(query_tokens, d), reverse=True)
+
+    return core_decls + ranked[: max(topk, 0)]
+
+
 def select_tool_subset(
     declarations: list,
     query: str,
@@ -63,18 +94,33 @@ def select_tool_subset(
     tools in ``panel_suppressed`` are removed from the candidate pool and not
     force-included. Any other ``mode`` value behaves as ``full``.
     """
-    if mode == "panel":
-        declarations = [
-            d for d in declarations if d.get("name") not in panel_suppressed
-        ]
-        core = core - panel_suppressed
+    return _select_flat(declarations, query, topk, mode, core, panel_suppressed)
 
-    query_tokens = _tokenize(query) - _STOPWORDS
 
-    core_decls = [d for d in declarations if d.get("name") in core]
-    others = [d for d in declarations if d.get("name") not in core]
+def select_openai_tool_subset(
+    tools: list,
+    query: str,
+    topk: int = 7,
+    mode: str = "full",
+    core: frozenset = CORE_TOOLS,
+    panel_suppressed: frozenset = PANEL_SUPPRESSED_TOOLS,
+) -> list:
+    """Subset OpenAI-format tool dicts by query relevance.
 
-    # Stable sort keeps original relative order for equal scores -> deterministic.
-    ranked = sorted(others, key=lambda d: _score(query_tokens, d), reverse=True)
-
-    return core_decls + ranked[: max(topk, 0)]
+    ``tools`` are OpenAI-shaped:
+    ``{"type": "function", "function": {"name", "description", "parameters"}}``.
+    The scorer needs flat ``name``/``description`` keys, so we build lightweight
+    proxies carrying an ``_orig`` back-reference, run the SAME selection as
+    :func:`select_tool_subset`, then map results back to the ORIGINAL dicts.
+    Object identity and full ``parameters`` are preserved.
+    """
+    proxies = [
+        {
+            "name": t["function"]["name"],
+            "description": t["function"].get("description", ""),
+            "_orig": t,
+        }
+        for t in tools
+    ]
+    selected = _select_flat(proxies, query, topk, mode, core, panel_suppressed)
+    return [p["_orig"] for p in selected]
