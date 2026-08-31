@@ -1,0 +1,26 @@
+# Example `mcp_servers` block for the Hermes coach config.
+#
+# At DEPLOY TIME (not now), merge this block into the live Hermes config at
+# ~/.hermes/config.yaml so the framework's discover_mcp_tools() connects to the
+# engine MCP server and registers its tools under the `mcp-engine` toolset.
+#
+# This example is NOT applied automatically — Phase 2 leaves the live config
+# untouched. The coach only reaches these tools when the Hermes-side flag
+# COACH_MCP_ENABLED=true is also set (default off).
+#
+# The server must be running first:
+#   cd /root/chess-app/engine-mcp && npm ci && npm run build && npm start
+# (or `pm2 start ecosystem.config.js`).
+
+mcp_servers:
+  engine:
+    # Streamable-HTTP transport — matches PORT/HOST in ecosystem.config.js.
+    url: "http://127.0.0.1:8765/mcp"
+    # Per-tool-call timeout (seconds). Stockfish analysis can take a few
+    # seconds at higher depths, so keep this comfortably above the engine's
+    # own per-call cap.
+    timeout: 30
+    connect_timeout: 15
+    # No LLM sampling needed from this server.
+    sampling:
+      enabled: false
