@@ -227,8 +227,20 @@ def _resolve_model(requested_model: Optional[str], user_message: str = "") -> st
     return requested_model
 
 
-def _create_agent(model: str, system_prompt: str, session_id: Optional[str] = None):
-    """Create a Hermes AIAgent configured for chess coaching."""
+def _create_agent(
+    model: str,
+    system_prompt: str,
+    session_id: Optional[str] = None,
+    user_query: Optional[str] = None,
+    mode: str = "full",
+):
+    """Create a Hermes AIAgent configured for chess coaching.
+
+    When ``COACH_TOOL_SUBSET`` is enabled and a ``user_query`` is provided, the
+    agent's tool schemas are reduced to a query-relevant subset (mirroring the
+    voice path). With the flag off or ``user_query`` None the agent is left
+    untouched, so behavior is byte-identical to today.
+    """
     from run_agent import AIAgent
 
     api_key = os.environ.get("OPENROUTER_API_KEY", "")
@@ -247,6 +259,18 @@ def _create_agent(model: str, system_prompt: str, session_id: Optional[str] = No
         persist_session=False,
         enabled_toolsets=["safe", "chess"],
     )
+
+    if config.COACH_TOOL_SUBSET and user_query and getattr(agent, "tools", None):
+        from src.tool_selector import select_openai_tool_subset
+
+        agent.tools = select_openai_tool_subset(
+            agent.tools,
+            user_query,
+            topk=config.COACH_TOOL_SUBSET_TOPK,
+            mode=mode,
+        )
+        # Keep the model-call validator consistent with the reduced tool set.
+        agent.valid_tool_names = {t["function"]["name"] for t in agent.tools}
 
     return agent
 
@@ -324,6 +348,10 @@ async def chat_completions(body: ChatCompletionRequest, request: Request):
     # Route model based on query complexity
     model = _resolve_model(body.model, user_message)
 
+    # Capture the raw current message before history is prepended — tool
+    # subsetting scores keyword relevance and prepended history would dilute it.
+    raw_user_query = user_message
+
     # If there's conversation history, prepend it as context
     if len(body.messages) > 1:
         history = "\n".join(
@@ -333,6 +361,7 @@ async def chat_completions(body: ChatCompletionRequest, request: Request):
 
     agent = _create_agent(
         model=model, system_prompt=system_prompt, session_id=session_id,
+        user_query=raw_user_query,
     )
 
     # Run the agent in a thread to avoid blocking the event loop
@@ -456,7 +485,10 @@ async def coach_chat(body: CoachChatRequest, request: Request):
     else:
         augmented_message = body.message
 
-    agent = _create_agent(model=model, system_prompt=system_prompt, session_id=session_id)
+    agent = _create_agent(
+        model=model, system_prompt=system_prompt, session_id=session_id,
+        user_query=body.message,
+    )
 
     # Capture tool results for board action extraction
     tool_results: list[str] = []
@@ -744,7 +776,8 @@ def _prepare_analysis_turn(session, fen: str, query: str):
         augmented = query
 
     agent = _create_agent(
-        model=model, system_prompt=system_prompt, session_id=session.id
+        model=model, system_prompt=system_prompt, session_id=session.id,
+        user_query=query,
     )
     return agent, augmented
 
