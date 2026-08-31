@@ -89,3 +89,10 @@ def _env_flag(name: str, default: bool = False) -> bool:
 # zero-width/control chars (mirrors Mastra's UnicodeNormalizer). Default OFF so
 # production behavior is byte-identical; enable with COACH_NORMALIZE_INPUT=true.
 COACH_NORMALIZE_INPUT = _env_flag("COACH_NORMALIZE_INPUT", False)
+
+# Semantic tool subsetting: select a query-relevant topK subset of chess tools
+# per turn instead of sending all ~20 schemas. Default OFF so the coach sends
+# the full toolset unchanged; enable with COACH_TOOL_SUBSET=true. The topK
+# (excluding the always-present core set) is configurable.
+COACH_TOOL_SUBSET = _env_flag("COACH_TOOL_SUBSET", False)
+COACH_TOOL_SUBSET_TOPK = int(os.environ.get("COACH_TOOL_SUBSET_TOPK", "7"))

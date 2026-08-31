@@ -21,8 +21,10 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
+from src import config
 from src.board_protocol import ActionType
 from src.sessions import session_store
+from src.tool_selector import select_tool_subset
 
 try:
     from tools.registry import registry
@@ -76,8 +78,18 @@ def to_function_declaration(schema: dict, name: Optional[str] = None) -> dict:
     }
 
 
-def build_tool_declarations() -> list[dict]:
-    """Return Gemini functionDeclarations for every registered chess tool."""
+def build_tool_declarations(
+    query: Optional[str] = None,
+    topk: Optional[int] = None,
+    mode: str = "full",
+) -> list[dict]:
+    """Return Gemini functionDeclarations for the chess tools.
+
+    Default (and whenever ``COACH_TOOL_SUBSET`` is off or no *query* is given)
+    is the full toolset, byte-identical to the historical behavior. When the
+    flag is on and a *query* is supplied, a query-relevant subset is selected
+    (core tools always kept) to cut per-turn token payload.
+    """
     if registry is None:
         return []
     declarations = []
@@ -88,7 +100,12 @@ def build_tool_declarations() -> list[dict]:
         if not schema:
             continue
         declarations.append(to_function_declaration(schema, name=name))
-    return declarations
+
+    if not config.COACH_TOOL_SUBSET or not query:
+        return declarations
+
+    k = topk if topk is not None else config.COACH_TOOL_SUBSET_TOPK
+    return select_tool_subset(declarations, query, topk=k, mode=mode)
 
 
 def _is_chess_tool(name: str) -> bool:
@@ -207,9 +224,18 @@ def _get_user_id(request: Request) -> str:
 
 
 @router.get("/api/coach/tools")
-async def coach_tools() -> dict:
-    """Return chess tool schemas as Gemini functionDeclarations."""
-    return {"tools": build_tool_declarations()}
+async def coach_tools(
+    q: Optional[str] = None,
+    topk: Optional[int] = None,
+    mode: str = "full",
+) -> dict:
+    """Return chess tool schemas as Gemini functionDeclarations.
+
+    With no query params (or COACH_TOOL_SUBSET off) this returns the full
+    toolset exactly as before. When the flag is on, an optional ``q`` selects a
+    relevant subset; ``topk`` and ``mode`` (``full``/``panel``) tune it.
+    """
+    return {"tools": build_tool_declarations(query=q, topk=topk, mode=mode)}
 
 
 @router.post("/api/coach/tool/{name}")
