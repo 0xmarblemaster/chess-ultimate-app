@@ -43,6 +43,7 @@ from src.middleware.circuit_breaker import stockfish_circuit, supabase_circuit
 from src.model_router import route_model
 from src.prompt_builder import build_system_prompt
 from src import config
+from src import coach_diagnostics as diag
 from src.processors.text_normalize import normalize_text
 from src.sessions import session_store
 from src.user_profile import load_user_profile, save_user_profile, UserProfile
@@ -91,9 +92,15 @@ def _maybe_discover_mcp_tools() -> list[str]:
             "Registered %d MCP tool(s) from configured servers", len(mcp_tools)
         )
         return mcp_tools
-    except Exception:
+    except Exception as exc:
         logger.exception(
             "MCP tool discovery failed — continuing with native tools only"
+        )
+        diag.record(
+            "mcp_discovery_failed",
+            level="warning",
+            message="MCP tool discovery failed; running with native tools only",
+            exc=exc,
         )
         return []
 
@@ -189,6 +196,17 @@ async def add_request_id(request: Request, call_next):
         elapsed,
         request_id,
     )
+    if response.status_code >= 400:
+        diag.record(
+            "http_error",
+            request_id=request_id,
+            level="warning" if response.status_code < 500 else "error",
+            message=f"{request.method} {request.url.path} -> {response.status_code}",
+            path=request.url.path,
+            method=request.method,
+            status=response.status_code,
+            duration_ms=elapsed,
+        )
     return response
 
 
@@ -369,9 +387,24 @@ async def chat_completions(body: ChatCompletionRequest, request: Request):
     try:
         response_text = await loop.run_in_executor(None, agent.chat, user_message)
     except Exception as exc:
+        diag.record(
+            "agent_error",
+            request_id=getattr(request.state, "request_id", None),
+            message="agent.chat raised on /v1/chat/completions",
+            exc=exc,
+            model=model,
+        )
         raise HTTPException(status_code=502, detail=f"Agent error: {exc}")
 
     if not response_text:
+        diag.record(
+            "empty_response",
+            request_id=getattr(request.state, "request_id", None),
+            level="warning",
+            message="agent returned empty text; served fallback",
+            model=model,
+            path="/v1/chat/completions",
+        )
         response_text = "I wasn't able to generate a response. Please try again."
 
     # Record assistant response in session
@@ -845,12 +878,26 @@ async def coach_analysis(request: Request):
         response_text = await loop.run_in_executor(None, agent.chat, augmented)
     except Exception as exc:
         logger.error("Analysis agent error: %s", exc, exc_info=True)
+        diag.record(
+            "agent_error",
+            request_id=getattr(request.state, "request_id", None),
+            message="analysis agent.chat raised",
+            exc=exc,
+            path="/api/coach/analysis",
+        )
         return JSONResponse(
             status_code=500,
             content={"success": False, "error": f"Agent error: {exc}"},
         )
 
     if not response_text:
+        diag.record(
+            "empty_response",
+            request_id=getattr(request.state, "request_id", None),
+            level="warning",
+            message="analysis agent returned empty text; served fallback",
+            path="/api/coach/analysis",
+        )
         response_text = "I wasn't able to generate a response. Please try again."
 
     session.add_message("assistant", response_text)
