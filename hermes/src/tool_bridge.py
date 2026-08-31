@@ -37,6 +37,11 @@ router = APIRouter()
 
 CHESS_TOOLSET = "chess"
 
+# External MCP-server tools are registered under toolsets named ``mcp-<name>``
+# by the framework's discover_mcp_tools(). They're only surfaced to the coach
+# when COACH_MCP_ENABLED is on (see build_tool_declarations).
+MCP_TOOLSET_PREFIX = "mcp-"
+
 # Keys that are valid JSON Schema but rejected by Gemini's function-calling
 # schema (an OpenAPI 3.0 subset). Stripped recursively from every tool schema.
 _UNSUPPORTED_SCHEMA_KEYS = frozenset(
@@ -78,22 +83,43 @@ def to_function_declaration(schema: dict, name: Optional[str] = None) -> dict:
     }
 
 
+def _declaration_tool_names() -> list[str]:
+    """Tool names to declare: the chess toolset, plus ``mcp-*`` when enabled.
+
+    With ``COACH_MCP_ENABLED`` off this is exactly the chess toolset, so the
+    declarations are byte-identical to the pre-Phase-2 behavior. When the flag
+    is on, tools from every toolset whose name starts with ``mcp-`` are appended
+    so the coach can call the off-process engine MCP tools. The flag is read via
+    the config module so it reflects the current environment.
+    """
+    names = list(registry.get_tool_names_for_toolset(CHESS_TOOLSET))
+    if config.COACH_MCP_ENABLED:
+        for toolset in registry.get_registered_toolset_names():
+            if toolset.startswith(MCP_TOOLSET_PREFIX):
+                names.extend(registry.get_tool_names_for_toolset(toolset))
+    return names
+
+
 def build_tool_declarations(
     query: Optional[str] = None,
     topk: Optional[int] = None,
     mode: str = "full",
 ) -> list[dict]:
-    """Return Gemini functionDeclarations for the chess tools.
+    """Return Gemini functionDeclarations for the coach's tools.
 
     Default (and whenever ``COACH_TOOL_SUBSET`` is off or no *query* is given)
     is the full toolset, byte-identical to the historical behavior. When the
     flag is on and a *query* is supplied, a query-relevant subset is selected
     (core tools always kept) to cut per-turn token payload.
+
+    When ``COACH_MCP_ENABLED`` is on, tools from ``mcp-*`` toolsets are included
+    alongside the chess tools; tool-subsetting (when enabled) then applies to
+    the combined set. With the MCP flag off, only chess tools are declared.
     """
     if registry is None:
         return []
     declarations = []
-    for name in registry.get_tool_names_for_toolset(CHESS_TOOLSET):
+    for name in _declaration_tool_names():
         if not name:
             continue
         schema = registry.get_schema(name)
