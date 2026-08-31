@@ -20,6 +20,7 @@ from src.tool_bridge import (
     _UNSUPPORTED_SCHEMA_KEYS,
     build_tool_declarations,
     clean_gemini_schema,
+    dispatch_tool_safely,
 )
 
 USER_HEADERS = {"X-User-Id": "test-user-123"}
@@ -217,3 +218,47 @@ class TestToolDispatch:
         )
         assert resp.status_code == 200
         assert session.board_state == original
+
+
+@pytest.mark.unit
+class TestDispatchErrorRecovery:
+    """A tool that RAISES must yield a structured error, not an unhandled 500."""
+
+    def test_raising_tool_returns_structured_error_string(self):
+        def _boom(name, args, **kwargs):
+            raise RuntimeError("stockfish exploded")
+
+        with patch.object(tool_bridge.registry, "dispatch", side_effect=_boom):
+            raw = dispatch_tool_safely("analyze_position", {"fen": "x"})
+
+        payload = json.loads(raw)
+        assert payload["error"]["tool"] == "analyze_position"
+        assert payload["error"]["type"] == "RuntimeError"
+        assert "stockfish exploded" in payload["error"]["message"]
+        assert payload["error"]["recoverable"] is True
+
+    def test_successful_dispatch_returned_verbatim(self):
+        def _ok(name, args, **kwargs):
+            return json.dumps({"ok": True})
+
+        with patch.object(tool_bridge.registry, "dispatch", side_effect=_ok):
+            raw = dispatch_tool_safely("get_user_progress", {})
+        assert json.loads(raw) == {"ok": True}
+
+    def test_endpoint_returns_200_error_when_tool_raises(self):
+        client = TestClient(app)
+
+        def _boom(name, args, **kwargs):
+            raise ValueError("bad args")
+
+        with patch.object(tool_bridge.registry, "dispatch", side_effect=_boom):
+            resp = client.post(
+                "/api/coach/tool/get_user_progress",
+                headers=USER_HEADERS,
+                json={"args": {}},
+            )
+        # Must NOT be a 500 — the model needs a readable tool response.
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["error"]["type"] == "ValueError"
+        assert body["error"]["recoverable"] is True

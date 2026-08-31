@@ -160,6 +160,39 @@ def _sync_session_board(session, board_actions: list[dict]) -> None:
             logger.debug("Skipping board sync for invalid FEN: %s", fen)
 
 
+def _tool_error_payload(name: str, exc: Exception) -> dict:
+    """Structured, model-readable error envelope for a failed tool dispatch.
+
+    Shaped so the LLM can recover (retry or pick another tool) instead of the
+    endpoint bubbling a fatal 500. Mirrors the ``{"error": ...}`` contract the
+    dispatch endpoint already returns for tool-reported errors.
+    """
+    return {
+        "error": {
+            "tool": name,
+            "type": type(exc).__name__,
+            "message": str(exc) or type(exc).__name__,
+            "recoverable": True,
+        }
+    }
+
+
+def dispatch_tool_safely(name: str, args: dict) -> str:
+    """Dispatch a tool, converting any raised exception into a structured error.
+
+    ``registry.dispatch`` already catches most handler exceptions and returns a
+    JSON error string, but a malformed call (or a bug outside the handler) can
+    still raise. This outer guard ensures such a failure yields a recoverable
+    error envelope the model can act on rather than an unhandled 500. Successful
+    dispatch is returned verbatim — behavior is unchanged on the happy path.
+    """
+    try:
+        return registry.dispatch(name, args)
+    except Exception as exc:  # noqa: BLE001 - deliberately broad, never re-raise
+        logger.warning("Tool dispatch raised for %s: %s", name, exc, exc_info=True)
+        return json.dumps(_tool_error_payload(name, exc))
+
+
 class ToolDispatchRequest(BaseModel):
     args: dict[str, Any] = {}
     session_id: Optional[str] = None
@@ -196,10 +229,10 @@ async def coach_tool_dispatch(name: str, body: ToolDispatchRequest, request: Req
 
     # registry.dispatch is synchronous and can block for seconds (e.g. a
     # Stockfish analysis at depth 18). Run it off the event loop so slow tools
-    # don't freeze concurrent requests such as /health. It catches handler
-    # exceptions and returns a JSON error string, so this never raises for
-    # tool-internal failures.
-    raw = await run_in_threadpool(registry.dispatch, name, args)
+    # don't freeze concurrent requests such as /health. dispatch_tool_safely
+    # additionally converts any raised exception into a structured error
+    # envelope so a malformed tool call never bubbles a fatal 500.
+    raw = await run_in_threadpool(dispatch_tool_safely, name, args)
 
     try:
         parsed = json.loads(raw) if isinstance(raw, str) else raw
