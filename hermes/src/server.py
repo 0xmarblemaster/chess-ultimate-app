@@ -42,6 +42,8 @@ from src.middleware.rate_limiter import (  # noqa: E402
 from src.middleware.circuit_breaker import stockfish_circuit, supabase_circuit
 from src.model_router import route_model
 from src.prompt_builder import build_system_prompt
+from src import config
+from src.processors.text_normalize import normalize_text
 from src.sessions import session_store
 from src.user_profile import load_user_profile, save_user_profile, UserProfile
 from src.cost_monitor import cost_monitor
@@ -167,6 +169,18 @@ def _verify_api_key(request: Request) -> None:
         raise HTTPException(status_code=401, detail="Invalid API key")
 
 
+def _clean_user_text(text: str) -> str:
+    """NFKC-normalize inbound free-text when COACH_NORMALIZE_INPUT is enabled.
+
+    Off by default (byte-identical passthrough). Applied only to free-text user
+    messages — never to FEN/PGN or tool args. Read via the config module so the
+    flag can be toggled at runtime.
+    """
+    if config.COACH_NORMALIZE_INPUT:
+        return normalize_text(text)
+    return text
+
+
 def _resolve_model(requested_model: Optional[str], user_message: str = "") -> str:
     """Resolve the model to use based on request and config tiers."""
     if not requested_model:
@@ -256,6 +270,9 @@ async def chat_completions(body: ChatCompletionRequest, request: Request):
     user_message = body.messages[-1].content if body.messages else ""
     if not user_message:
         raise HTTPException(status_code=400, detail="No message content provided")
+
+    # Hygiene: normalize inbound free-text (no-op unless COACH_NORMALIZE_INPUT)
+    user_message = _clean_user_text(user_message)
 
     # Record user message in session
     session.add_message("user", user_message)
@@ -373,6 +390,10 @@ async def coach_chat(body: CoachChatRequest, request: Request):
     session = session_store.get(session_id, user_id)
     if session is None:
         session = session_store.create(user_id=user_id, session_id=session_id)
+
+    # Hygiene: normalize inbound free-text (no-op unless COACH_NORMALIZE_INPUT).
+    # body.fen is handled separately below and is never normalized.
+    body.message = _clean_user_text(body.message)
 
     session.add_message("user", body.message)
 

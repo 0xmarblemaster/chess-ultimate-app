@@ -75,3 +75,17 @@ MASTRA_CCP_URL = os.environ.get(
 )
 # Short timeout (seconds) so a slow/unreachable Mastra never blocks a coach turn.
 MASTRA_CCP_TIMEOUT = float(os.environ.get("MASTRA_CCP_TIMEOUT", "2.0"))
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    """Parse a boolean environment flag (1/true/yes/on -> True)."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in ("1", "true", "yes", "on")
+
+
+# Coach input hygiene: NFKC-normalize inbound free-text user messages and strip
+# zero-width/control chars (mirrors Mastra's UnicodeNormalizer). Default OFF so
+# production behavior is byte-identical; enable with COACH_NORMALIZE_INPUT=true.
+COACH_NORMALIZE_INPUT = _env_flag("COACH_NORMALIZE_INPUT", False)
