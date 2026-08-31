@@ -96,3 +96,10 @@ COACH_NORMALIZE_INPUT = _env_flag("COACH_NORMALIZE_INPUT", False)
 # (excluding the always-present core set) is configurable.
 COACH_TOOL_SUBSET = _env_flag("COACH_TOOL_SUBSET", False)
 COACH_TOOL_SUBSET_TOPK = int(os.environ.get("COACH_TOOL_SUBSET_TOPK", "7"))
+
+# Self-hosted engine MCP: connect to external MCP servers configured in
+# ~/.hermes/config.yaml (mcp_servers) at startup and expose their tools to the
+# coach under `mcp-*` toolsets. Default OFF so the coach runs on native
+# in-process tools only and behavior is byte-identical; enable with
+# COACH_MCP_ENABLED=true (and configure mcp_servers). See engine-mcp/.
+COACH_MCP_ENABLED = _env_flag("COACH_MCP_ENABLED", False)

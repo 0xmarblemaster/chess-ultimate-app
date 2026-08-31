@@ -66,6 +66,40 @@ from src.tools import discover_and_register
 _loaded_tools = discover_and_register()
 logger.info("Registered %d chess tool modules", len(_loaded_tools))
 
+
+def _maybe_discover_mcp_tools() -> list[str]:
+    """Flag-gated: register external MCP-server tools into the shared registry.
+
+    When ``COACH_MCP_ENABLED`` is true, invoke the Hermes framework's
+    ``discover_mcp_tools()`` (it reads ``mcp_servers`` from
+    ``~/.hermes/config.yaml`` and registers each server's tools under an
+    ``mcp-<name>`` toolset in the same registry the native tools use).
+
+    Guarded so a failed MCP connect — bad config, unreachable server, missing
+    ``mcp`` package — can NEVER crash Hermes startup: on any error we log and
+    continue with native tools only. Returns the registered MCP tool names
+    (empty when the flag is off or discovery fails). The flag is read via the
+    config module so it reflects the current environment.
+    """
+    if not config.COACH_MCP_ENABLED:
+        return []
+    try:
+        from tools.mcp_tool import discover_mcp_tools
+
+        mcp_tools = discover_mcp_tools()
+        logger.info(
+            "Registered %d MCP tool(s) from configured servers", len(mcp_tools)
+        )
+        return mcp_tools
+    except Exception:
+        logger.exception(
+            "MCP tool discovery failed — continuing with native tools only"
+        )
+        return []
+
+
+_loaded_mcp_tools = _maybe_discover_mcp_tools()
+
 # Server start time for uptime tracking
 _start_time = time.time()
 
