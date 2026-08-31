@@ -1,0 +1,33 @@
+{
+  "name": "chesster-engine-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Chesster self-hosted chess engine MCP server (ChessDB, Lichess explorer, local Stockfish) over streamable-HTTP.",
+  "type": "module",
+  "license": "UNLICENSED",
+  "bin": {
+    "chesster-engine-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "express": "^5.1.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
