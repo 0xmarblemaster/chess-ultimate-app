@@ -23,6 +23,14 @@ class _FakeResponse:
         return self._payload
 
 
+@pytest.fixture(autouse=True)
+def _isolate_analysis_cache():
+    """Keep the module-global FEN analysis cache from leaking across tests."""
+    prompt_builder.clear_analysis_cache()
+    yield
+    prompt_builder.clear_analysis_cache()
+
+
 @pytest.mark.unit
 class TestPromptBuilder:
     def test_soul_only(self):
@@ -201,3 +209,67 @@ class TestCcpAnalysisInjection:
             httpx, "post", lambda *a, **k: _FakeResponse(200, {"valid": False, "board_analysis": ""})
         )
         assert prompt_builder._fetch_ccp_analysis(chess.STARTING_FEN) is None
+
+
+@pytest.mark.unit
+class TestAnalysisCache:
+    """FEN-keyed board-analysis cache skips a repeat fetch for the same FEN."""
+
+    FEN_A = chess.STARTING_FEN
+    FEN_B = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"
+
+    def _counting_fetch(self, monkeypatch, result):
+        calls = {"n": 0}
+
+        def fake_fetch(fen):
+            calls["n"] += 1
+            return result
+
+        monkeypatch.setattr(prompt_builder, "_fetch_ccp_analysis", fake_fetch)
+        return calls
+
+    def test_identical_fen_fetched_once(self, monkeypatch):
+        calls = self._counting_fetch(monkeypatch, CCP_BLOCK)
+        first = build_system_prompt(soul_content=MOCK_SOUL, board_fen=self.FEN_A)
+        second = build_system_prompt(soul_content=MOCK_SOUL, board_fen=self.FEN_A)
+        assert CCP_BLOCK in first
+        assert CCP_BLOCK in second
+        assert calls["n"] == 1
+
+    def test_different_fens_each_fetched(self, monkeypatch):
+        calls = self._counting_fetch(monkeypatch, CCP_BLOCK)
+        build_system_prompt(soul_content=MOCK_SOUL, board_fen=self.FEN_A)
+        build_system_prompt(soul_content=MOCK_SOUL, board_fen=self.FEN_B)
+        assert calls["n"] == 2
+
+    def test_failed_lookup_is_not_cached(self, monkeypatch):
+        # CCP returns None and local port also returns None -> nothing cached,
+        # so the next turn retries the fetch instead of serving a stale miss.
+        calls = self._counting_fetch(monkeypatch, None)
+        import src.tools.tactical_board as tactical_board
+        monkeypatch.setattr(tactical_board, "build_board_analysis", lambda fen: None)
+        build_system_prompt(soul_content=MOCK_SOUL, board_fen=self.FEN_A)
+        build_system_prompt(soul_content=MOCK_SOUL, board_fen=self.FEN_A)
+        assert calls["n"] == 2
+
+    def test_resolve_returns_cached_block_without_second_fetch(self, monkeypatch):
+        calls = self._counting_fetch(monkeypatch, CCP_BLOCK)
+        assert prompt_builder._resolve_board_analysis(self.FEN_A) == CCP_BLOCK
+        assert prompt_builder._resolve_board_analysis(self.FEN_A) == CCP_BLOCK
+        assert calls["n"] == 1
+
+    def test_invalid_fen_does_not_crash_and_is_not_cached(self, monkeypatch):
+        # Both paths raise -> resolve surfaces cleanly and caches nothing.
+        def boom_fetch(fen):
+            raise RuntimeError("ccp down")
+
+        monkeypatch.setattr(prompt_builder, "_fetch_ccp_analysis", boom_fetch)
+        import src.tools.tactical_board as tactical_board
+
+        def boom_local(fen):
+            raise ValueError("bad fen")
+
+        monkeypatch.setattr(tactical_board, "build_board_analysis", boom_local)
+        prompt = build_system_prompt(soul_content=MOCK_SOUL, board_fen="not-a-fen")
+        assert "Chess Coach" in prompt
+        assert len(prompt_builder._analysis_cache) == 0

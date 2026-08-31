@@ -10,12 +10,56 @@ Assembles the full system prompt for the AI agent from:
 
 import logging
 import threading
+from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Optional
 
 from src.user_profile import UserProfile
 
 logger = logging.getLogger(__name__)
+
+# Bounded LRU cache for FEN-keyed board analysis. The analysis block is a pure
+# function of the FEN, so an unchanged position can reuse the previous result
+# and skip the Mastra CCP HTTP call / local recompute. Only successful results
+# are cached — a None/failed lookup is never stored, so a transient failure is
+# retried on the next turn (preserving the existing defensive fallback).
+_ANALYSIS_CACHE_MAX = 512
+_analysis_cache: "OrderedDict[str, str]" = OrderedDict()
+_analysis_cache_lock = threading.Lock()
+
+
+def clear_analysis_cache() -> None:
+    """Empty the FEN-keyed board-analysis cache (used by tests)."""
+    with _analysis_cache_lock:
+        _analysis_cache.clear()
+
+
+def _resolve_board_analysis(fen: str) -> Optional[str]:
+    """Return the board-analysis block for a FEN, with a bounded LRU cache.
+
+    Prefers Mastra's CCP service and falls back to the local Python port on any
+    failure — identical to the original inline logic. Successful results are
+    cached keyed on the exact FEN string so a repeated position returns the same
+    block without a second fetch/recompute. Failed lookups are never cached.
+    """
+    with _analysis_cache_lock:
+        cached = _analysis_cache.get(fen)
+        if cached is not None:
+            _analysis_cache.move_to_end(fen)
+            return cached
+
+    analysis = _fetch_ccp_analysis(fen)
+    if not analysis:
+        from src.tools.tactical_board import build_board_analysis
+        analysis = build_board_analysis(fen)
+
+    if analysis:
+        with _analysis_cache_lock:
+            _analysis_cache[fen] = analysis
+            _analysis_cache.move_to_end(fen)
+            while len(_analysis_cache) > _ANALYSIS_CACHE_MAX:
+                _analysis_cache.popitem(last=False)
+    return analysis
 
 
 def _fetch_ccp_analysis(fen: str) -> Optional[str]:
@@ -126,10 +170,7 @@ def build_system_prompt(
         # PositionPrompter fusion); fall back to the local Python port on any
         # failure. Defensive: invalid FEN or both paths failing must not crash.
         try:
-            analysis = _fetch_ccp_analysis(board_fen)
-            if not analysis:
-                from src.tools.tactical_board import build_board_analysis
-                analysis = build_board_analysis(board_fen)
+            analysis = _resolve_board_analysis(board_fen)
             if analysis:
                 board_lines.append(analysis)
         except Exception:
