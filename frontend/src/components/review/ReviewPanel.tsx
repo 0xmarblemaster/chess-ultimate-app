@@ -4,8 +4,10 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import type { ReviewResult } from './types';
 import CoachBubble from './CoachBubble';
+import GameRecap from './GameRecap';
 import MoveList from './MoveList';
 import ReviewSounds from './ReviewSounds';
+import { useReviewCoach } from '@/hooks/useReviewCoach';
 
 const MUTE_KEY = 'review-sound-muted';
 
@@ -33,6 +35,13 @@ export default function ReviewPanel({
   const t = useTranslations('gameReview');
   const currentMove = currentPly >= 1 ? data.moves[currentPly - 1] : null;
   const prevMove = currentPly >= 2 ? data.moves[currentPly - 2] : null;
+
+  // Review Coach v1 (F1 Explain + F3 recap).
+  const coach = useReviewCoach();
+  const openingInfo = { name: data.opening?.name, lastBookPly: data.opening?.lastBookPly };
+  const currentCoach = currentMove
+    ? coach.explainByKey[coach.explainKeyFor(currentMove)]
+    : undefined;
 
   // Read the persisted mute preference lazily; the server has no localStorage
   // so it defaults to unmuted (the button below suppresses the hydration diff).
@@ -104,10 +113,18 @@ export default function ReviewPanel({
         </div>
       </div>
 
+      <GameRecap recap={coach.recap} onRecap={() => coach.recapGame(data)} />
+
       <CoachBubble
         move={currentMove}
         prev={prevMove}
-        opening={{ name: data.opening?.name, lastBookPly: data.opening?.lastBookPly }}
+        opening={openingInfo}
+        coach={currentCoach}
+        onExplain={
+          currentMove
+            ? () => coach.explainMove(currentMove, prevMove, openingInfo)
+            : undefined
+        }
       />
 
       <MoveList moves={data.moves} currentPly={currentPly} onSelect={onSetPly} />

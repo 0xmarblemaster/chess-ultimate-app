@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 import ClassificationIcon from './ClassificationIcon';
 import type { ReviewMove } from './types';
+import type { CoachEntry } from '@/hooks/useReviewCoach';
 
 /** Minimal shape of the `gameReview` translator used by {@link coachText}. */
 type CoachTranslate = (key: string, values?: Record<string, string | number>) => string;
@@ -98,10 +99,17 @@ export interface CoachBubbleProps {
   move: ReviewMove | null;
   prev: ReviewMove | null;
   opening?: { name?: string; lastBookPly?: number };
+  /**
+   * Review Coach v1 (F1). The LLM "Explain" state for the current move and a
+   * trigger to start it. Purely additive — omit both and the bubble renders
+   * exactly as before (deterministic template only).
+   */
+  coach?: CoachEntry;
+  onExplain?: () => void;
 }
 
 /** Review-mode coach bubble: classification icon + SAN + delta chip + text. */
-export default function CoachBubble({ move, prev, opening }: CoachBubbleProps) {
+export default function CoachBubble({ move, prev, opening, coach, onExplain }: CoachBubbleProps) {
   const t = useTranslations('gameReview');
   if (!move) {
     return (
@@ -167,7 +175,82 @@ export default function CoachBubble({ move, prev, opening }: CoachBubbleProps) {
             {opening.name}
           </div>
         )}
+        {onExplain && <ExplainSection t={t} coach={coach} onExplain={onExplain} />}
       </div>
+    </div>
+  );
+}
+
+/** F1 per-move LLM Explain: manual trigger, streamed tokens, loading + error. */
+function ExplainSection({
+  t,
+  coach,
+  onExplain,
+}: {
+  t: ReturnType<typeof useTranslations>;
+  coach?: CoachEntry;
+  onExplain: () => void;
+}) {
+  const status = coach?.status ?? 'idle';
+  const content = coach?.content ?? '';
+  const streaming = status === 'streaming';
+
+  // Idle with nothing yet → show the trigger button.
+  if (status === 'idle') {
+    return (
+      <button
+        type="button"
+        data-testid="coach-explain-btn"
+        onClick={onExplain}
+        className="review-ghost-btn"
+        style={{ marginTop: 10, padding: '6px 12px', fontSize: 12.5, fontWeight: 700 }}
+      >
+        ✨ {t('coach.explain.cta')}
+      </button>
+    );
+  }
+
+  if (status === 'error') {
+    return (
+      <div style={{ marginTop: 10 }}>
+        <p
+          data-testid="coach-explain-error"
+          style={{ fontSize: 12.5, margin: '0 0 6px', color: 'var(--color-classification-blunder)' }}
+        >
+          {t('coach.explain.error')}
+        </p>
+        <button
+          type="button"
+          data-testid="coach-explain-retry"
+          onClick={onExplain}
+          className="review-ghost-btn"
+          style={{ padding: '6px 12px', fontSize: 12.5, fontWeight: 700 }}
+        >
+          {t('coach.explain.retry')}
+        </button>
+      </div>
+    );
+  }
+
+  // streaming or done → render whatever text we have so far.
+  return (
+    <div
+      data-testid="coach-explain-content"
+      style={{
+        marginTop: 10,
+        paddingTop: 10,
+        borderTop: '1px solid var(--review-border, rgba(255,255,255,0.08))',
+        fontSize: 12.5,
+        lineHeight: 1.5,
+        whiteSpace: 'pre-wrap',
+      }}
+    >
+      {content}
+      {streaming && (
+        <span data-testid="coach-explain-loading" style={{ opacity: 0.6 }}>
+          {content ? ' ▍' : t('coach.explain.loading')}
+        </span>
+      )}
     </div>
   );
 }

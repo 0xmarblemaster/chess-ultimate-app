@@ -2297,6 +2297,20 @@
         "review": "A few turning points to learn from. Top accuracy was {best}% — start the review to see every key moment."
       },
       "bubblePlaceholder": "Step through the game to see move-by-move coaching.",
+      "explain": {
+        "cta": "Explain this move",
+        "loading": "Coach is thinking…",
+        "error": "Couldn’t reach the coach. Try again.",
+        "retry": "Try again"
+      },
+      "recap": {
+        "title": "Coach’s recap",
+        "subtitle": "An AI coach reviews your whole game.",
+        "cta": "Get coach’s recap",
+        "loading": "Coach is reviewing your game…",
+        "error": "Couldn’t reach the coach. Try again.",
+        "retry": "Try again"
+      },
       "moveComments": {
         "bookLast": "{san} is the last book move of the {opening}.",
         "bookLastNoName": "{san} is the last book move.",
