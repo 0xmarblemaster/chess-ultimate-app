@@ -2311,6 +2311,17 @@
         "error": "Couldn’t reach the coach. Try again.",
         "retry": "Try again"
       },
+      "drawer": {
+        "open": "Ask the coach",
+        "close": "Close coach",
+        "title": "Coach",
+        "subtitle": "Ask about the position on the board.",
+        "contextChip": "Re: {move} — {classification}",
+        "startersLabel": "Quick questions",
+        "starterBlunder": "Why is this a blunder?",
+        "starterBetter": "What should I have played?",
+        "starterPlan": "Explain the plan."
+      },
       "moveComments": {
         "bookLast": "{san} is the last book move of the {opening}.",
         "bookLastNoName": "{san} is the last book move.",

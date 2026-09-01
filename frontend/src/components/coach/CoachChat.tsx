@@ -1,6 +1,13 @@
 'use client';
 
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, {
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+  forwardRef,
+  useImperativeHandle,
+} from 'react';
 import { useTranslations } from 'next-intl';
 import ReactMarkdown from 'react-markdown';
 import ToolIndicator from './ToolIndicator';
@@ -13,15 +20,31 @@ interface CoachChatProps {
   onBoardActions: (actions: BoardAction[]) => void;
   onSessionCreated?: (id: string) => void;
   onOpenGame?: (game: GameResult) => void;
+  /**
+   * Optional grounding preamble prepended to the OUTGOING message sent to the
+   * coach — never shown in the user's chat bubble. The Review Coach Drawer uses
+   * this to scope every question to the move currently under review.
+   */
+  contextNote?: string;
 }
 
-export default function CoachChat({
-  currentFen,
-  sessionId,
-  onBoardActions,
-  onSessionCreated,
-  onOpenGame,
-}: CoachChatProps) {
+/** Imperative handle so a host (e.g. the Review Coach Drawer) can send a
+ * message programmatically — used by the drawer's one-tap starter chips. */
+export interface CoachChatHandle {
+  send: (text: string) => void;
+}
+
+const CoachChat = forwardRef<CoachChatHandle, CoachChatProps>(function CoachChat(
+  {
+    currentFen,
+    sessionId,
+    onBoardActions,
+    onSessionCreated,
+    onOpenGame,
+    contextNote,
+  },
+  ref,
+) {
   const t = useTranslations('coach');
   const [messages, setMessages] = useState<CoachMessage[]>([]);
   const [input, setInput] = useState('');
@@ -235,8 +258,9 @@ export default function CoachChat({
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
-  const sendMessage = useCallback(async () => {
-    const trimmed = input.trim();
+  const sendMessage = useCallback(async (overrideText?: string) => {
+    const source = typeof overrideText === 'string' ? overrideText : input;
+    const trimmed = source.trim();
     if (!trimmed || isStreaming) return;
 
     const userMessage: CoachMessage = {
@@ -248,7 +272,8 @@ export default function CoachChat({
     };
 
     setMessages((prev) => [...prev, userMessage]);
-    setInput('');
+    // Only clear the composer when the send came from it (not a starter chip).
+    if (typeof overrideText !== 'string') setInput('');
     setIsStreaming(true);
 
     const assistantId = crypto.randomUUID();
@@ -265,7 +290,9 @@ export default function CoachChat({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: trimmed,
+          // The visible bubble shows `trimmed`; the coach receives the grounding
+          // preamble (if any) prepended so the answer is scoped to the position.
+          message: contextNote ? `${contextNote}\n\n${trimmed}` : trimmed,
           fen: currentFen,
           session_id: sessionId,
         }),
@@ -374,7 +401,18 @@ export default function CoachChat({
       setToolActive(null);
       abortRef.current = null;
     }
-  }, [input, isStreaming, currentFen, sessionId, onBoardActions, onSessionCreated, t]);
+  }, [input, isStreaming, currentFen, sessionId, onBoardActions, onSessionCreated, t, contextNote]);
+
+  // Let a host drive a send (Review Coach Drawer starter chips).
+  useImperativeHandle(
+    ref,
+    () => ({
+      send: (text: string) => {
+        void sendMessage(text);
+      },
+    }),
+    [sendMessage],
+  );
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -548,7 +586,7 @@ export default function CoachChat({
             </button>
           ) : (
             <button
-              onClick={sendMessage}
+              onClick={() => sendMessage()}
               disabled={!input.trim()}
               className="px-4 py-2 bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
               title={t('sendTooltip')}
@@ -619,4 +657,6 @@ export default function CoachChat({
       </div>
     </div>
   );
-}
+});
+
+export default CoachChat;

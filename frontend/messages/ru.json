@@ -2311,6 +2311,17 @@
         "error": "Не удалось связаться с тренером. Попробуй ещё раз.",
         "retry": "Ещё раз"
       },
+      "drawer": {
+        "open": "Спросить тренера",
+        "close": "Закрыть тренера",
+        "title": "Тренер",
+        "subtitle": "Задай вопрос о позиции на доске.",
+        "contextChip": "Про: {move} — {classification}",
+        "startersLabel": "Быстрые вопросы",
+        "starterBlunder": "Почему это зевок?",
+        "starterBetter": "Как нужно было сыграть?",
+        "starterPlan": "Объясни план."
+      },
       "moveComments": {
         "bookLast": "{san} — последний теоретический ход в дебюте {opening}.",
         "bookLastNoName": "{san} — последний теоретический ход.",

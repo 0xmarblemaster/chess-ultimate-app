@@ -1,9 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import type { ReviewResult } from './types';
 import CoachBubble from './CoachBubble';
+import CoachDrawer from './CoachDrawer';
 import GameRecap from './GameRecap';
 import MoveList from './MoveList';
 import ReviewSounds from './ReviewSounds';
@@ -33,8 +35,14 @@ export default function ReviewPanel({
   onExitReview,
 }: ReviewPanelProps) {
   const t = useTranslations('gameReview');
+  const params = useParams<{ id: string }>();
+  const gameId = params?.id ?? '';
   const currentMove = currentPly >= 1 ? data.moves[currentPly - 1] : null;
   const prevMove = currentPly >= 2 ? data.moves[currentPly - 2] : null;
+
+  // F5 Coach Drawer (v1.1) — on-demand chat/voice coach. Zero space at rest;
+  // the default analysis below stays mounted and visible when it's open.
+  const [coachOpen, setCoachOpen] = useState(false);
 
   // Review Coach v1 (F1 Explain + F3 recap).
   const coach = useReviewCoach();
@@ -91,6 +99,24 @@ export default function ReviewPanel({
         <div style={{ display: 'flex', gap: 8 }}>
           <button
             type="button"
+            data-testid="coach-drawer-toggle"
+            aria-expanded={coachOpen}
+            onClick={() => setCoachOpen((o) => !o)}
+            style={{
+              padding: '6px 14px',
+              fontSize: 13,
+              fontWeight: 800,
+              borderRadius: 999,
+              color: '#ffffff',
+              background: '#14b8a6',
+              border: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            ♞ {t('coach.drawer.open')}
+          </button>
+          <button
+            type="button"
             data-testid="share-btn"
             onClick={onShare}
             className="review-ghost-btn"
@@ -130,6 +156,13 @@ export default function ReviewPanel({
       <MoveList moves={data.moves} currentPly={currentPly} onSelect={onSetPly} />
 
       <ReviewSounds currentPly={currentPly} move={currentMove} muted={muted} />
+
+      <CoachDrawer
+        open={coachOpen}
+        onClose={() => setCoachOpen(false)}
+        gameId={gameId}
+        move={currentMove}
+      />
     </aside>
   );
 }

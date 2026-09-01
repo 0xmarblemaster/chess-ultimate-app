@@ -2311,6 +2311,17 @@
         "error": "Жаттықтырушыға қосыла алмадық. Қайталап көр.",
         "retry": "Қайталау"
       },
+      "drawer": {
+        "open": "Жаттықтырушыдан сұрау",
+        "close": "Жабу",
+        "title": "Жаттықтырушы",
+        "subtitle": "Тақтадағы позиция туралы сұрақ қой.",
+        "contextChip": "Мәселе: {move} — {classification}",
+        "startersLabel": "Жылдам сұрақтар",
+        "starterBlunder": "Неге бұл өрескел қателік?",
+        "starterBetter": "Қалай ойнау керек еді?",
+        "starterPlan": "Жоспарды түсіндір."
+      },
       "moveComments": {
         "bookLast": "{san} — {opening} дебютіндегі соңғы теориялық жүріс.",
         "bookLastNoName": "{san} — соңғы теориялық жүріс.",
