@@ -30,6 +30,31 @@ else
   echo "[0/7] Branch in sync with origin — nothing to push."
 fi
 
+# 0b. Restart the Flask backend so any committed backend changes go live.
+# The backend runs on the VPS (systemd chess-backend.service, gunicorn :5001,
+# proxied by api.chesster.io) — it is NOT on Vercel. A commit that only touches
+# backend/ would otherwise ship dark: the source has the change but the running
+# gunicorn process never restarts. This exact miss left /api/courses/progress
+# 404ing in production for hours. Always restart + health-check here.
+echo "[0b/7] Restarting Flask backend (chess-backend.service)..."
+if systemctl list-unit-files 'chess-backend.service' | grep -q chess-backend; then
+  systemctl restart chess-backend.service
+  sleep 3
+  if ! systemctl is-active --quiet chess-backend.service; then
+    echo "ERROR: chess-backend.service is not active after restart — backend is DOWN."
+    exit 1
+  fi
+  # A live authed route must answer (401 = alive+auth-gated), not 000 (process down).
+  BE_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5001/api/courses/progress)
+  if [ "$BE_CODE" = "000" ]; then
+    echo "ERROR: backend not responding on :5001 after restart."
+    exit 1
+  fi
+  echo "Backend restarted and responding (HTTP $BE_CODE on /api/courses/progress)."
+else
+  echo "WARNING: chess-backend.service not found — skipping backend restart."
+fi
+
 # 1. Build
 echo "[1/7] Building Next.js standalone..."
 cd "$FRONTEND_DIR"
