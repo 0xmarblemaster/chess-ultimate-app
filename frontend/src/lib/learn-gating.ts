@@ -11,10 +11,11 @@ export interface GatingCourse {
  *   - Every later course is unlocked ONLY if the immediately-previous
  *     course (by order_index) has progress === 100.
  *
- * `ceLevelFloor` is reserved for Phase 2 (Chess Empire students) and is
- * currently unused by callers; when provided, a course is unlocked if
- * order_index <= ceLevelFloor OR the previous course is complete. Implement
- * this now so Phase 2 only has to pass the value.
+ * `ceLevelFloor` (Chess Empire students): when provided, a course is unlocked
+ * if its 1-based position in the order_index-sorted list is <= ceLevelFloor,
+ * OR the previous course is complete. Position (not raw order_index) is used
+ * because the DB order_index values are not 1-based (they run 3..10), whereas
+ * the CE current_level is 1..8. Level N ↔ the Nth course on the path.
  *
  * @param courses     courses to gate (any order; sorted internally by order_index asc)
  * @param progressMap map of courseId -> { progress } (0..100)
@@ -39,7 +40,7 @@ export function computeLockStates(
     const unlocked =
       i === 0 ||
       prevComplete ||
-      (ceLevelFloor !== undefined && course.order_index <= ceLevelFloor)
+      (ceLevelFloor !== undefined && i + 1 <= ceLevelFloor)
 
     lockStates[course.id] = !unlocked
   })

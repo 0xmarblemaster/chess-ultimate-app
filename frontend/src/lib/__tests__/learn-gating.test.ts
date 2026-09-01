@@ -83,6 +83,25 @@ describe('computeLockStates', () => {
     }
   })
 
+  it('ceLevelFloor gates by 1-based position, not raw order_index (prod order_index runs 3..10)', () => {
+    // Production courses are ordered but NOT 1-based: order_index 3,4,5,...,10.
+    // A CE student at level 3 must get the first 3 courses (positions 1-3),
+    // regardless of the raw order_index values.
+    const courses: GatingCourse[] = Array.from({ length: 8 }, (_, i) => ({
+      id: `c${i + 1}`,
+      order_index: i + 3, // 3,4,5,6,7,8,9,10
+    }))
+    const result = computeLockStates(courses, {}, 3)
+    // positions 1,2,3 unlocked
+    expect(result.c1).toBe(false)
+    expect(result.c2).toBe(false)
+    expect(result.c3).toBe(false)
+    // positions 4-8 locked
+    for (let i = 4; i <= 8; i++) {
+      expect(result[`c${i}`]).toBe(true)
+    }
+  })
+
   it('CE student at level 3 who also completed course 4 unlocks course 5 via prevComplete', () => {
     // Floor unlocks 1-3; completing course 4 in-app (progress 100) makes course
     // 5 unlocked via prevComplete even though the floor alone would not reach it.
