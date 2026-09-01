@@ -86,9 +86,15 @@ export default function MoveList({ moves, currentPly, onSelect }: MoveListProps)
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const node = listRef.current?.querySelector<HTMLElement>('[data-selected="true"]');
-    if (node && typeof node.scrollIntoView === 'function') {
-      node.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    const container = listRef.current;
+    const node = container?.querySelector<HTMLElement>('[data-selected="true"]');
+    if (!container || !node) return;
+    const c = container.getBoundingClientRect();
+    const n = node.getBoundingClientRect();
+    if (n.top < c.top) {
+      container.scrollTop -= c.top - n.top;
+    } else if (n.bottom > c.bottom) {
+      container.scrollTop += n.bottom - c.bottom;
     }
   }, [currentPly]);
 
