@@ -1,0 +1,85 @@
+import { describe, it, expect } from 'vitest'
+import { computeLockStates, type GatingCourse } from '../learn-gating'
+
+// Helper: build N courses with order_index 1..N and ids "c1".."cN".
+function makeCourses(n: number): GatingCourse[] {
+  return Array.from({ length: n }, (_, i) => ({ id: `c${i + 1}`, order_index: i + 1 }))
+}
+
+// Helper: progress map from a partial { id: progress } record.
+function makeProgress(entries: Record<string, number>): Record<string, { progress: number }> {
+  const map: Record<string, { progress: number }> = {}
+  for (const [id, progress] of Object.entries(entries)) {
+    map[id] = { progress }
+  }
+  return map
+}
+
+describe('computeLockStates', () => {
+  it('returns {} for empty courses', () => {
+    expect(computeLockStates([], {})).toEqual({})
+  })
+
+  it('single course is always unlocked', () => {
+    const result = computeLockStates(makeCourses(1), {})
+    expect(result).toEqual({ c1: false })
+  })
+
+  it('8 courses none complete: only first unlocked', () => {
+    const result = computeLockStates(makeCourses(8), {})
+    expect(result.c1).toBe(false)
+    for (let i = 2; i <= 8; i++) {
+      expect(result[`c${i}`]).toBe(true)
+    }
+  })
+
+  it('course 1 at 100: courses 1 & 2 unlocked, 3-8 locked (cascade)', () => {
+    const result = computeLockStates(makeCourses(8), makeProgress({ c1: 100 }))
+    expect(result.c1).toBe(false)
+    expect(result.c2).toBe(false)
+    for (let i = 3; i <= 8; i++) {
+      expect(result[`c${i}`]).toBe(true)
+    }
+  })
+
+  it('courses 1-3 at 100: courses 1-4 unlocked, 5-8 locked', () => {
+    const result = computeLockStates(
+      makeCourses(8),
+      makeProgress({ c1: 100, c2: 100, c3: 100 })
+    )
+    for (let i = 1; i <= 4; i++) {
+      expect(result[`c${i}`]).toBe(false)
+    }
+    for (let i = 5; i <= 8; i++) {
+      expect(result[`c${i}`]).toBe(true)
+    }
+  })
+
+  it('scrambled input order_index is still gated correctly and input is not mutated', () => {
+    const courses: GatingCourse[] = [
+      { id: 'c3', order_index: 3 },
+      { id: 'c1', order_index: 1 },
+      { id: 'c2', order_index: 2 },
+    ]
+    const snapshot = courses.map((c) => ({ ...c }))
+    const result = computeLockStates(courses, makeProgress({ c1: 100 }))
+    expect(result).toEqual({ c1: false, c2: false, c3: true })
+    // input array not mutated (same order, same contents)
+    expect(courses).toEqual(snapshot)
+  })
+
+  it('missing progress entry is treated as 0 (locked unless first)', () => {
+    const result = computeLockStates(makeCourses(3), {})
+    expect(result).toEqual({ c1: false, c2: true, c3: true })
+  })
+
+  it('ceLevelFloor=3 with no progress: order_index 1,2,3 unlocked, 4-8 locked', () => {
+    const result = computeLockStates(makeCourses(8), {}, 3)
+    for (let i = 1; i <= 3; i++) {
+      expect(result[`c${i}`]).toBe(false)
+    }
+    for (let i = 4; i <= 8; i++) {
+      expect(result[`c${i}`]).toBe(true)
+    }
+  })
+})

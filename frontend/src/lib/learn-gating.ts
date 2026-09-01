@@ -1,0 +1,48 @@
+export interface GatingCourse {
+  id: string
+  order_index: number
+}
+
+/**
+ * Compute lock state per course for the learn path.
+ *
+ * Regular Chesster users (ceLevelFloor undefined): progressive unlock.
+ *   - The first course (lowest order_index) is always unlocked.
+ *   - Every later course is unlocked ONLY if the immediately-previous
+ *     course (by order_index) has progress === 100.
+ *
+ * `ceLevelFloor` is reserved for Phase 2 (Chess Empire students) and is
+ * currently unused by callers; when provided, a course is unlocked if
+ * order_index <= ceLevelFloor OR the previous course is complete. Implement
+ * this now so Phase 2 only has to pass the value.
+ *
+ * @param courses     courses to gate (any order; sorted internally by order_index asc)
+ * @param progressMap map of courseId -> { progress } (0..100)
+ * @param ceLevelFloor optional CE current_level (1..8); undefined for regular users
+ * @returns map of courseId -> isLocked (boolean)
+ */
+export function computeLockStates(
+  courses: GatingCourse[],
+  progressMap: Record<string, { progress: number }>,
+  ceLevelFloor?: number
+): Record<string, boolean> {
+  const sorted = [...courses].sort((a, b) => a.order_index - b.order_index)
+
+  const lockStates: Record<string, boolean> = {}
+
+  sorted.forEach((course, i) => {
+    const prevComplete =
+      i === 0
+        ? true
+        : (progressMap[sorted[i - 1].id]?.progress ?? 0) === 100
+
+    const unlocked =
+      i === 0 ||
+      prevComplete ||
+      (ceLevelFloor !== undefined && course.order_index <= ceLevelFloor)
+
+    lockStates[course.id] = !unlocked
+  })
+
+  return lockStates
+}

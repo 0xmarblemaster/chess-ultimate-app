@@ -10,6 +10,7 @@ import { useToast } from '@/components/ToastProvider'
 import { LessonPath } from '@/components/gamification/LessonPath'
 import { SpeechBubble } from '@/components/mascot/SpeechBubble'
 import { useCourseProgress } from '@/hooks/useCourseProgress'
+import { computeLockStates } from '@/lib/learn-gating'
 
 interface Course {
   id: string
@@ -80,11 +81,15 @@ export default function LearnPage() {
 
   // Transform courses for LessonPath component
   const lessonPathCourses = useMemo(() => {
-    return courses
-      .sort((a, b) => a.order_index - b.order_index)
+    const sortedCourses = [...courses].sort((a, b) => a.order_index - b.order_index)
+    const lockStates = computeLockStates(
+      sortedCourses.map((c) => ({ id: c.id, order_index: c.order_index })),
+      courseProgress
+    )
+    return sortedCourses
       .map((course) => {
         const progress = courseProgress[course.id]
-        const isLocked = false
+        const isLocked = lockStates[course.id] ?? false
 
         return {
           id: course.id,
