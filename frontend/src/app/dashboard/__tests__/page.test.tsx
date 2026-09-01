@@ -90,12 +90,17 @@ vi.mock('@/components/empire/EmpireHomePage', () => ({
   ),
 }));
 
-// The no_link state wraps EmpireHomePage in a client poller; stub it to just
-// render its children so this delegation test stays focused (its own behavior
-// is covered in EmpireNoLinkClient.test).
+// The no_link state serves the Chesster dashboard wrapped in a background
+// poller (EmpireNoLinkClient) that auto-upgrades to the personalized CE
+// homepage once a branch link lands. Stub the wrapper with a marker so this
+// delegation test can prove the dashboard was served *through* the poller (the
+// tenant no_link path) rather than via the generic apex fallback. The poller's
+// own behavior is covered in EmpireNoLinkClient.test.
 vi.mock('@/components/empire/EmpireNoLinkClient', () => ({
   __esModule: true,
-  default: (props: { children: React.ReactNode }) => <>{props.children}</>,
+  default: (props: { children: React.ReactNode }) => (
+    <div data-testid="empire-nolink-poller">{props.children}</div>
+  ),
 }));
 
 vi.mock('../ChessterDashboard', () => ({
@@ -145,7 +150,7 @@ describe('/dashboard tenant delegation', () => {
     expect(queryByTestId('chesster-dashboard')).toBeNull();
   });
 
-  it('renders EmpireHomePage in no_link state when host is chess-empire but no CE link', async () => {
+  it('serves the Chesster dashboard via the no-link poller when host is chess-empire but no CE link', async () => {
     headersStore.current = {
       'x-org-id': 'org-ce',
       'x-org-slug': 'chess-empire',
@@ -157,8 +162,12 @@ describe('/dashboard tenant delegation', () => {
     const Page = (await import('../page')).default;
     const ui = await Page();
     const { getByTestId, queryByTestId } = render(ui);
-    expect(getByTestId('empire-home').getAttribute('data-state')).toBe('no_link');
-    expect(queryByTestId('chesster-dashboard')).toBeNull();
+    // no_link now renders the real Chesster dashboard wrapped in the poller
+    // (auto-upgrades once a branch link lands), not an EmpireHomePage screen.
+    const poller = getByTestId('empire-nolink-poller');
+    expect(poller).toBeTruthy();
+    expect(poller.querySelector('[data-testid="chesster-dashboard"]')).toBeTruthy();
+    expect(queryByTestId('empire-home')).toBeNull();
   });
 
   it('falls back to Chesster dashboard when host is not chess-empire', async () => {
