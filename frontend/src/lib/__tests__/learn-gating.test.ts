@@ -82,4 +82,17 @@ describe('computeLockStates', () => {
       expect(result[`c${i}`]).toBe(true)
     }
   })
+
+  it('CE student at level 3 who also completed course 4 unlocks course 5 via prevComplete', () => {
+    // Floor unlocks 1-3; completing course 4 in-app (progress 100) makes course
+    // 5 unlocked via prevComplete even though the floor alone would not reach it.
+    const result = computeLockStates(makeCourses(8), makeProgress({ c4: 100 }), 3)
+    expect(result.c1).toBe(false)
+    expect(result.c2).toBe(false)
+    expect(result.c3).toBe(false)
+    expect(result.c5).toBe(false) // unlocked because previous course (4) is complete
+    for (const i of [6, 7, 8]) {
+      expect(result[`c${i}`]).toBe(true)
+    }
+  })
 })

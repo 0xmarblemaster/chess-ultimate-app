@@ -14,6 +14,7 @@ import { XPDisplay } from '@/components/gamification/XPDisplay'
 import { LessonPath } from '@/components/gamification/LessonPath'
 import { SpeechBubble } from '@/components/mascot/SpeechBubble'
 import { useCourseProgress } from '@/hooks/useCourseProgress'
+import { computeLockStates } from '@/lib/learn-gating'
 import type { GamificationProfile } from '@/lib/gamification/profile'
 
 interface Course {
@@ -106,11 +107,17 @@ export default function ChessterDashboard() {
 
   // Transform courses for LessonPath component
   const lessonPathCourses = useMemo(() => {
-    return courses
-      .sort((a, b) => a.order_index - b.order_index)
-      .map((course, index) => {
+    const sortedCourses = [...courses].sort((a, b) => a.order_index - b.order_index)
+    // No ceLevelFloor here: ChessterDashboard is only shown to non-CE or
+    // unlinked users; verified CE students get EmpireHomePage (no LessonPath).
+    const lockStates = computeLockStates(
+      sortedCourses.map((c) => ({ id: c.id, order_index: c.order_index })),
+      courseProgress
+    )
+    return sortedCourses
+      .map((course) => {
         const progress = courseProgress[course.id]
-        const isLocked = index > 0 && (courseProgress[courses[index - 1]?.id]?.progress || 0) < 100
+        const isLocked = lockStates[course.id] ?? false
 
         return {
           id: course.id,
