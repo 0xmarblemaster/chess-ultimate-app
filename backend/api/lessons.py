@@ -188,6 +188,107 @@ def get_course_modules(course_id):
         return jsonify({"error": f"Failed to fetch modules: {str(e)}"}), 500
 
 
+@lessons_bp.route('/api/courses/progress', methods=['GET'])
+@verify_clerk_token
+def get_courses_progress():
+    """
+    Get real per-user progress for every course (requires authentication).
+
+    Aggregates the authenticated user's completed lessons (from user_progress)
+    into per-course totals. NOT cached — progress is per-user and must never be
+    shared across users.
+
+    Returns:
+        {
+            "<course_id>": {
+                "courseId": "<id>",
+                "completedLessons": N,
+                "totalLessons": M,
+                "progress": P   # 0..100, exactly 100 iff all lessons complete
+            },
+            ...
+        }
+    """
+    try:
+        user_id = get_current_user_id()
+
+        # Every course starts at zeros so courses with no lessons return zeros.
+        courses = get_cached_courses()
+        result = {}
+        for course in courses:
+            result[course['id']] = {
+                'courseId': course['id'],
+                'completedLessons': 0,
+                'totalLessons': 0,
+                'progress': 0,
+            }
+
+        course_ids = [c['id'] for c in courses]
+        if not course_ids:
+            return jsonify(result), 200
+
+        # Map module_id -> course_id
+        modules_result = retry_supabase_query(
+            lambda: supabase.table('modules')
+                .select('id, course_id')
+                .in_('course_id', course_ids)
+                .execute()
+        )
+        module_to_course = {m['id']: m['course_id'] for m in (modules_result.data or [])}
+        module_ids = list(module_to_course.keys())
+        if not module_ids:
+            return jsonify(result), 200
+
+        # Map lesson_id -> course_id (via module) and count lessons per course
+        lessons_result = retry_supabase_query(
+            lambda: supabase.table('lessons')
+                .select('id, module_id')
+                .in_('module_id', module_ids)
+                .execute()
+        )
+        lesson_to_course = {}
+        for lesson in (lessons_result.data or []):
+            course_id = module_to_course.get(lesson['module_id'])
+            if course_id is None:
+                continue
+            lesson_to_course[lesson['id']] = course_id
+            result[course_id]['totalLessons'] += 1
+
+        # ONE user_progress query for all lessons across all courses
+        all_lesson_ids = list(lesson_to_course.keys())
+        if all_lesson_ids:
+            progress_result = retry_supabase_query(
+                lambda: supabase.table('user_progress')
+                    .select('lesson_id, status')
+                    .eq('user_id', user_id)
+                    .in_('lesson_id', all_lesson_ids)
+                    .execute()
+            )
+            for prog in (progress_result.data or []):
+                if prog.get('status') != 'completed':
+                    continue
+                course_id = lesson_to_course.get(prog['lesson_id'])
+                if course_id is None:
+                    continue
+                result[course_id]['completedLessons'] += 1
+
+        # Compute percentage: exactly 100 iff every lesson complete; never 100 otherwise.
+        for agg in result.values():
+            total = agg['totalLessons']
+            completed = agg['completedLessons']
+            if total <= 0:
+                agg['progress'] = 0
+            elif completed >= total:
+                agg['progress'] = 100
+            else:
+                agg['progress'] = min(round(completed / total * 100), 99)
+
+        return jsonify(result), 200
+
+    except Exception as e:
+        return jsonify({"error": f"Failed to fetch course progress: {str(e)}"}), 500
+
+
 # ============================================
 # SLUG-BASED ENDPOINTS (SEO-friendly URLs)
 # ============================================

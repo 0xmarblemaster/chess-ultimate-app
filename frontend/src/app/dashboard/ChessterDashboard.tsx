@@ -13,6 +13,7 @@ import { StreakBanner, StreakMini } from '@/components/gamification/StreakBanner
 import { XPDisplay } from '@/components/gamification/XPDisplay'
 import { LessonPath } from '@/components/gamification/LessonPath'
 import { SpeechBubble } from '@/components/mascot/SpeechBubble'
+import { useCourseProgress } from '@/hooks/useCourseProgress'
 import type { GamificationProfile } from '@/lib/gamification/profile'
 
 interface Course {
@@ -22,13 +23,6 @@ interface Course {
   level: 'beginner' | 'intermediate' | 'advanced' | 'master' | 'expert'
   order_index: number
   slug?: string
-}
-
-interface CourseProgress {
-  courseId: string
-  completedLessons: number
-  totalLessons: number
-  progress: number
 }
 
 // Generate slug from title if not available
@@ -54,7 +48,9 @@ export default function ChessterDashboard() {
 
   // Real gamification profile (XP + tournament-week streak), fed like EmpireHomePage.
   const [profile, setProfile] = useState<GamificationProfile | null>(null)
-  const [courseProgress, setCourseProgress] = useState<Record<string, CourseProgress>>({})
+
+  // Real per-user course progress (derived from user_progress on the backend).
+  const { courseProgress } = useCourseProgress()
 
   useEffect(() => {
     async function fetchCourses() {
@@ -66,18 +62,6 @@ export default function ChessterDashboard() {
           }
         })
         setCourses(data)
-
-        // Mock progress data - will be replaced with real API
-        const mockProgress: Record<string, CourseProgress> = {}
-        data.forEach((course: Course, index: number) => {
-          mockProgress[course.id] = {
-            courseId: course.id,
-            completedLessons: index === 0 ? 3 : 0,
-            totalLessons: 10,
-            progress: index === 0 ? 30 : 0
-          }
-        })
-        setCourseProgress(mockProgress)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error')
         if (err instanceof ApiError) {

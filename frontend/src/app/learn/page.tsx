@@ -9,6 +9,7 @@ import { apiFetch, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ToastProvider'
 import { LessonPath } from '@/components/gamification/LessonPath'
 import { SpeechBubble } from '@/components/mascot/SpeechBubble'
+import { useCourseProgress } from '@/hooks/useCourseProgress'
 
 interface Course {
   id: string
@@ -17,13 +18,6 @@ interface Course {
   level: 'beginner' | 'intermediate' | 'advanced' | 'master' | 'expert' | 'legendary' | 'grandmaster'
   order_index: number
   slug?: string
-}
-
-interface CourseProgress {
-  courseId: string
-  completedLessons: number
-  totalLessons: number
-  progress: number
 }
 
 // Generate slug from title if not available
@@ -45,8 +39,8 @@ export default function LearnPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Gamification state (mock data for now)
-  const [courseProgress, setCourseProgress] = useState<Record<string, CourseProgress>>({})
+  // Real per-user course progress (derived from user_progress on the backend).
+  const { courseProgress } = useCourseProgress()
 
   useEffect(() => {
     async function fetchCourses() {
@@ -65,18 +59,6 @@ export default function LearnPage() {
           }
         })
         setCourses(data)
-
-        // Mock progress data - will be replaced with real API
-        const mockProgress: Record<string, CourseProgress> = {}
-        data.forEach((course: Course, index: number) => {
-          mockProgress[course.id] = {
-            courseId: course.id,
-            completedLessons: index === 0 ? 3 : 0,
-            totalLessons: 10,
-            progress: index === 0 ? 30 : 0
-          }
-        })
-        setCourseProgress(mockProgress)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Unknown error')
         if (err instanceof ApiError) {
