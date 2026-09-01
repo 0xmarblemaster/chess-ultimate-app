@@ -17,6 +17,10 @@ export interface GatingCourse {
  * because the DB order_index values are not 1-based (they run 3..10), whereas
  * the CE current_level is 1..8. Level N ↔ the Nth course on the path.
  *
+ * A course whose OWN progress is 100 is always unlocked — you can never lock a
+ * course the user has already fully completed, regardless of earlier courses'
+ * state (a user may finish a later course before an earlier one is at 100%).
+ *
  * @param courses     courses to gate (any order; sorted internally by order_index asc)
  * @param progressMap map of courseId -> { progress } (0..100)
  * @param ceLevelFloor optional CE current_level (1..8); undefined for regular users
@@ -37,9 +41,12 @@ export function computeLockStates(
         ? true
         : (progressMap[sorted[i - 1].id]?.progress ?? 0) === 100
 
+    const ownComplete = (progressMap[course.id]?.progress ?? 0) === 100
+
     const unlocked =
       i === 0 ||
       prevComplete ||
+      ownComplete ||
       (ceLevelFloor !== undefined && i + 1 <= ceLevelFloor)
 
     lockStates[course.id] = !unlocked

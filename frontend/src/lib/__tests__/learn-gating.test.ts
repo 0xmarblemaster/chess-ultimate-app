@@ -102,6 +102,32 @@ describe('computeLockStates', () => {
     }
   })
 
+  it('a course whose own progress is 100 is never locked, even if an earlier course is incomplete', () => {
+    // Omar's real case: course 5 is 100% complete but course 4 sits at 93%.
+    // Without the ownComplete clause, course 5 renders locked (prevComplete=false)
+    // while course 6 (97%, unfinished) renders open — a completed level padlocked.
+    const result = computeLockStates(
+      makeCourses(8),
+      makeProgress({ c1: 100, c2: 100, c3: 100, c4: 93, c5: 100, c6: 97 })
+    )
+    expect(result.c5).toBe(false) // fully completed -> never locked
+    // c4 (93) gates via prevComplete: c1-3 done -> c4 unlocked; c4 not 100 -> c5 would
+    // be locked without ownComplete; c6 unlocked because c5 is 100.
+    expect(result.c6).toBe(false)
+    expect(result.c7).toBe(true) // c6 not 100 -> c7 stays locked
+    expect(result.c8).toBe(true)
+  })
+
+  it('completed course is unlocked regardless of ceLevelFloor and earlier gaps', () => {
+    // CE student at floor 2 who completed course 6 in-app: 1-2 via floor, 6 via ownComplete.
+    const result = computeLockStates(makeCourses(8), makeProgress({ c6: 100 }), 2)
+    expect(result.c1).toBe(false)
+    expect(result.c2).toBe(false)
+    expect(result.c3).toBe(true) // above floor, prev not complete
+    expect(result.c6).toBe(false) // own progress 100 -> unlocked
+    expect(result.c7).toBe(false) // prev (c6) complete
+  })
+
   it('CE student at level 3 who also completed course 4 unlocks course 5 via prevComplete', () => {
     // Floor unlocks 1-3; completing course 4 in-app (progress 100) makes course
     // 5 unlocked via prevComplete even though the floor alone would not reach it.
