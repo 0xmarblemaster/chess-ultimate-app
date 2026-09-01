@@ -37,7 +37,12 @@ fi
 # gunicorn process never restarts. This exact miss left /api/courses/progress
 # 404ing in production for hours. Always restart + health-check here.
 echo "[0b/7] Restarting Flask backend (chess-backend.service)..."
-if systemctl list-unit-files 'chess-backend.service' | grep -q chess-backend; then
+# NOTE: check the unit file on disk — do NOT pipe `systemctl list-unit-files`
+# into `grep -q`. Under `set -o pipefail`, grep -q exits on first match and
+# SIGPIPEs systemctl (exit 141), so the pipeline returns non-zero even when the
+# service exists — silently skipping the restart (the exact bug that let this
+# guard no-op on 2026-09-01).
+if [ -f /etc/systemd/system/chess-backend.service ] || [ -f /lib/systemd/system/chess-backend.service ]; then
   systemctl restart chess-backend.service
   sleep 3
   if ! systemctl is-active --quiet chess-backend.service; then
