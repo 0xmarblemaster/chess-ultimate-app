@@ -289,6 +289,42 @@ describe('/register server page', () => {
     }
   });
 
+  it('renders the sign-in footer link in both populated and empty states', async () => {
+    // Populated state.
+    tokenScript.current = {
+      data: [
+        {
+          token: 't-branch-1',
+          external_branch_id: 'b1',
+          branch_name: 'Debut',
+          kind: 'branch',
+          expires_at: null,
+          revoked_at: null,
+          created_at: iso('2026-01-01'),
+        },
+      ],
+      error: null,
+    };
+
+    let ui = await RegisterPage();
+    let view = render(ui);
+    expect(view.container.textContent).toContain('auth.haveAccount');
+    let signInLink = Array.from(view.container.querySelectorAll('a')).find(
+      (a) => a.getAttribute('href') === '/sign-in',
+    );
+    expect(signInLink?.textContent).toBe('common.signIn');
+    cleanup();
+
+    // Empty state keeps the footer too.
+    tokenScript.current = { data: [], error: null };
+    ui = await RegisterPage();
+    view = render(ui);
+    signInLink = Array.from(view.container.querySelectorAll('a')).find(
+      (a) => a.getAttribute('href') === '/sign-in',
+    );
+    expect(signInLink?.textContent).toBe('common.signIn');
+  });
+
   it('renders the empty state on the apex host (no x-org-id)', async () => {
     headerStore.current = {};
     tokenScript.current = {

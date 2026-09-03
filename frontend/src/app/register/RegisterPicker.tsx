@@ -34,6 +34,7 @@ interface RegisterPickerProps {
 
 export default function RegisterPicker({ branches, online }: RegisterPickerProps) {
   const t = useTranslations('register');
+  const tGlobal = useTranslations();
   const branding = useBranding();
   const isEmpty = branches.length === 0 && !online;
 
@@ -143,6 +144,14 @@ export default function RegisterPicker({ branches, online }: RegisterPickerProps
             )}
           </div>
         )}
+
+        {/* Custom footer with sign-in link (mirrors the sign-in page footer) */}
+        <div className="text-center mt-4">
+          <span className="text-gray-400 text-sm">{tGlobal('auth.haveAccount')} </span>
+          <a href="/sign-in" className="text-purple-600 font-bold text-sm hover:underline">
+            {tGlobal('common.signIn')}
+          </a>
+        </div>
       </div>
     </div>
   );
