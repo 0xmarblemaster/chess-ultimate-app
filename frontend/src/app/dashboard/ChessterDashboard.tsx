@@ -13,6 +13,7 @@ import { StreakBanner, StreakMini } from '@/components/gamification/StreakBanner
 import { XPDisplay } from '@/components/gamification/XPDisplay'
 import { LessonPath } from '@/components/gamification/LessonPath'
 import { SpeechBubble } from '@/components/mascot/SpeechBubble'
+import TournamentCtaBanner from '@/components/empire/TournamentCtaBanner'
 import { useCourseProgress } from '@/hooks/useCourseProgress'
 import { computeLockStates } from '@/lib/learn-gating'
 import type { GamificationProfile } from '@/lib/gamification/profile'
@@ -36,7 +37,16 @@ function generateSlug(title: string): string {
     .replace(/^-|-$/g, '')
 }
 
-export default function ChessterDashboard() {
+export default function ChessterDashboard({
+  showTournamentCta = false,
+}: {
+  /**
+   * Render the Empire tournament CTA banner above the dashboard. Set only on
+   * the chess-empire tenant host (frozen / revoked / no-membership students),
+   * where the generic dashboard is the surface they land on.
+   */
+  showTournamentCta?: boolean
+} = {}) {
   const { getToken, isSignedIn, isLoaded } = useAuth()
   const { user } = useUser()
   const router = useRouter()
@@ -220,6 +230,12 @@ export default function ChessterDashboard() {
           </p>
         </div>
       </div>
+
+      {showTournamentCta && (
+        <div className="container mx-auto px-4 pt-6">
+          <TournamentCtaBanner />
+        </div>
+      )}
 
       <div className="container mx-auto px-4 py-6 md:grid md:grid-cols-2 lg:grid-cols-3 md:gap-6 md:items-start">
         {backendHealthy === false && (

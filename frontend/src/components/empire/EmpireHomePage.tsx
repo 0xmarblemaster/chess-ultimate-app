@@ -155,6 +155,7 @@ export default async function EmpireHomePage(props: EmpireHomePageProps) {
           <h2 className="text-lg md:text-xl font-semibold text-slate-800">
             {t('noLinkTitle')}
           </h2>
+          <TournamentCtaBanner className="text-left" />
         </div>
       </main>
     );
@@ -178,6 +179,7 @@ export default async function EmpireHomePage(props: EmpireHomePageProps) {
             <h2 className="text-lg md:text-xl font-semibold text-slate-800">
               {t('noLinkTitle')}
             </h2>
+            <TournamentCtaBanner className="text-left" />
           </div>
         </main>
       );
@@ -191,6 +193,7 @@ export default async function EmpireHomePage(props: EmpireHomePageProps) {
       >
         <div className="max-w-2xl mx-auto flex flex-col gap-6">
           <PendingConfirmBanner displayName={props.studentDisplayName} />
+          <TournamentCtaBanner />
         </div>
       </main>
     );

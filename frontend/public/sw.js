@@ -1,4 +1,4 @@
-const CACHE_VERSION = '14';
+const CACHE_VERSION = '15';
 const CACHE_NAME = 'chesster-v' + CACHE_VERSION;
 const STALE_CACHE = 'chesster-stale-v' + CACHE_VERSION;
 
@@ -151,6 +151,14 @@ function isFlaskApi(url) {
   return url.pathname.startsWith('/api/');
 }
 
+// Next.js RSC payload fetches for client-side navigations. These are plain
+// GET fetches (mode !== 'navigate') that carry an `RSC` header or a `_rsc`
+// search param. Serving them Cache-First permanently pins returning users to
+// a pre-update page, so they must always go Network-First.
+function isRscRequest(request, url) {
+  return request.headers.get('RSC') === '1' || url.searchParams.has('_rsc');
+}
+
 // --- Main fetch handler ---
 
 self.addEventListener('fetch', (event) => {
@@ -209,12 +217,21 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 7. Static assets (.js, .css, images, pieces SVG) → Cache-First (immutable)
+  // 6b. RSC payload fetches (client-side navigations) → Network-First. Cache-First
+  //     here served returning students a permanently stale homepage.
+  if (isRscRequest(event.request, url)) {
+    networkFirst(event);
+    return;
+  }
+
+  // 7. Static assets (.js, .css, images, pieces SVG) → Cache-First (immutable,
+  //    content-hashed). This is the ONLY Cache-First path for page content.
   if (isStaticAsset(url)) {
     cacheFirst(event);
     return;
   }
 
-  // 8. Everything else → Cache-First
-  cacheFirst(event);
+  // 8. Everything else → Network-First (fall back to cache when offline). Was
+  //    Cache-First, which pinned returning users to stale HTML/RSC payloads.
+  networkFirst(event);
 });

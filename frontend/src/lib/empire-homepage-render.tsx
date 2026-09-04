@@ -97,7 +97,7 @@ export async function renderEmpireHomepage(
       status: 'no_link',
       node: (
         <EmpireNoLinkClient>
-          <ChessterDashboard />
+          <ChessterDashboard showTournamentCta />
         </EmpireNoLinkClient>
       ),
     };
@@ -113,7 +113,7 @@ export async function renderEmpireHomepage(
   // against, so serve them the standard Chesster app rather than the CE
   // player-card homepage (which would 404 on the synthetic student id).
   if (membership.source === 'online') {
-    return { status: 'ok', node: <ChessterDashboard /> };
+    return { status: 'ok', node: <ChessterDashboard showTournamentCta /> };
   }
 
   const studentId = membership.studentId;

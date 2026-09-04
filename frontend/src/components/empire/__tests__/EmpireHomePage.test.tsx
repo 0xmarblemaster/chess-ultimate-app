@@ -433,6 +433,57 @@ describe('EmpireHomePage — no_link state', () => {
   });
 });
 
+describe('EmpireHomePage — tournament CTA is always present', () => {
+  // The tournament CTA must never depend on tournament data and must be shown
+  // for every state a chess-empire student can land in on the home page.
+  it('renders the CTA in the verified state', async () => {
+    const ui = await EmpireHomePage({
+      state: 'verified',
+      studentDisplayName: 'Ali',
+      profile: aliProfile,
+      ratings: [],
+      rank: emptyRank,
+    });
+    const { getByTestId } = render(ui);
+    expect(getByTestId('empire-tournament-cta').getAttribute('href')).toBe(
+      '/tournaments',
+    );
+  });
+
+  it('renders the CTA in the pending_confirm state', async () => {
+    const ui = await EmpireHomePage({
+      state: 'pending_confirm',
+      studentDisplayName: 'Ali',
+    });
+    const { getByTestId } = render(ui);
+    expect(getByTestId('empire-tournament-cta').getAttribute('href')).toBe(
+      '/tournaments',
+    );
+  });
+
+  it('renders the CTA on the name-less pending_confirm screen', async () => {
+    const ui = await EmpireHomePage({
+      state: 'pending_confirm',
+      studentDisplayName: null,
+    });
+    const { getByTestId } = render(ui);
+    expect(getByTestId('empire-tournament-cta').getAttribute('href')).toBe(
+      '/tournaments',
+    );
+  });
+
+  it('renders the CTA in the no_link state', async () => {
+    const ui = await EmpireHomePage({
+      state: 'no_link',
+      studentDisplayName: null,
+    });
+    const { getByTestId } = render(ui);
+    expect(getByTestId('empire-tournament-cta').getAttribute('href')).toBe(
+      '/tournaments',
+    );
+  });
+});
+
 describe('EmpireHomePage — legion standing widget (§9.2)', () => {
   const baseStanding = {
     legion: { id: 'leg-1', name: 'Snow Leopards', totem: '🐆', crest_url: null },

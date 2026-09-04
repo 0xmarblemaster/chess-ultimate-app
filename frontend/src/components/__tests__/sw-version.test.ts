@@ -5,8 +5,24 @@ import { resolve } from 'path';
 describe('Service Worker', () => {
   const swContent = readFileSync(resolve(__dirname, '../../../public/sw.js'), 'utf-8');
 
-  it('should have cache version 14', () => {
-    expect(swContent).toContain("const CACHE_VERSION = '14'");
+  it('should have cache version 15', () => {
+    expect(swContent).toContain("const CACHE_VERSION = '15'");
+  });
+
+  it('should serve RSC payload fetches network-first (not stale cache)', () => {
+    expect(swContent).toContain('function isRscRequest');
+    expect(swContent).toContain("request.headers.get('RSC')");
+    expect(swContent).toContain("url.searchParams.has('_rsc')");
+    expect(swContent).toMatch(
+      /isRscRequest\(event\.request, url\)\)\s*\{\s*networkFirst\(event\)/,
+    );
+  });
+
+  it('should use network-first (not cache-first) for the catch-all handler', () => {
+    // The final fallthrough must be Network-First so returning users are never
+    // pinned to a stale HTML/RSC page.
+    expect(swContent).toMatch(/Everything else[\s\S]*networkFirst\(event\);\s*\}\);/);
+    expect(swContent).not.toMatch(/Everything else[\s\S]*cacheFirst\(event\);\s*\}\);/);
   });
 
   it('should use stale-while-revalidate for Lichess Explorer (5min TTL)', () => {

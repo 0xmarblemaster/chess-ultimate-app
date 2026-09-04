@@ -213,6 +213,23 @@ describe('getMembershipState', () => {
     expect(result.studentId).toBeNull();
   });
 
+  it('returns state=no_link when link_status is revoked (access removed)', async () => {
+    nextResponse = {
+      data: {
+        id: 'mem-r',
+        external_student_id: 'stu-r',
+        link_status: 'revoked',
+      },
+      error: null,
+    };
+    const result = await getMembershipState({
+      orgId: 'org-1',
+      clerkUserId: 'user-r',
+    });
+    expect(result.state).toBe('no_link');
+    expect(result.studentId).toBeNull();
+  });
+
   it('returns state=no_link when external_student_id is null (placeholder row)', async () => {
     nextResponse = {
       data: {

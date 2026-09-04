@@ -20,10 +20,16 @@ vi.mock('@clerk/nextjs/server', () => ({
   },
 }));
 
-const memberStore: { state: string; role: string; studentId: string | null } = {
+const memberStore: {
+  state: string;
+  role: string;
+  studentId: string | null;
+  source: string;
+} = {
   state: 'verified',
   role: 'coach',
   studentId: 'coach-uuid',
+  source: 'chess_empire',
 };
 vi.mock('@/lib/gamification/store', () => ({
   loadGamificationProfile: vi.fn(async () => null),
@@ -38,6 +44,7 @@ vi.mock('@/lib/chess-empire-member', () => ({
     role: memberStore.role,
     studentId: memberStore.studentId,
     memberId: memberStore.studentId ? 'mem-1' : null,
+    source: memberStore.source,
   })),
 }));
 
@@ -106,7 +113,11 @@ vi.mock('@/components/empire/EmpireNoLinkClient', () => ({
 }));
 vi.mock('@/app/dashboard/ChessterDashboard', () => ({
   __esModule: true,
-  default: () => <div data-testid="chesster-dashboard" />,
+  default: ({ showTournamentCta = false }: { showTournamentCta?: boolean }) => (
+    <div data-testid="chesster-dashboard">
+      {showTournamentCta && <div data-testid="empire-tournament-cta" />}
+    </div>
+  ),
 }));
 
 import { renderEmpireHomepage } from '../empire-homepage-render';
@@ -117,6 +128,7 @@ beforeEach(() => {
   memberStore.state = 'verified';
   memberStore.role = 'coach';
   memberStore.studentId = 'coach-uuid';
+  memberStore.source = 'chess_empire';
   getStudentProfile.mockClear();
   getCoachProfile.mockClear();
 });
@@ -176,6 +188,30 @@ describe('renderEmpireHomepage — coach path', () => {
     expect(getByTestId('nolink-poller')).toBeTruthy();
     // Standard Chesster dashboard, not the CE waiting screen.
     expect(getByTestId('chesster-dashboard')).toBeTruthy();
+    expect(queryByTestId('empire-home')).toBeNull();
+  });
+
+  // frozen / revoked / no-membership all resolve to state=no_link (see
+  // chess-empire-member), so the tournament CTA on the generic dashboard is
+  // their single coverage point on the tenant host.
+  it('shows the tournament CTA on the generic dashboard for no_link (frozen/revoked/no-membership)', async () => {
+    memberStore.state = 'no_link';
+    memberStore.studentId = null;
+    const result = await renderEmpireHomepage('org-1');
+    const { getByTestId } = render(nodeOf(result));
+    expect(getByTestId('empire-tournament-cta')).toBeTruthy();
+  });
+
+  it('shows the tournament CTA on the generic dashboard for online-track members', async () => {
+    memberStore.state = 'verified';
+    memberStore.role = 'student';
+    memberStore.studentId = 'stu-online';
+    memberStore.source = 'online';
+    const result = await renderEmpireHomepage('org-1');
+    const { getByTestId, queryByTestId } = render(nodeOf(result));
+    expect(getByTestId('chesster-dashboard')).toBeTruthy();
+    expect(getByTestId('empire-tournament-cta')).toBeTruthy();
+    // Online members have no CE roster profile — never the personalized home.
     expect(queryByTestId('empire-home')).toBeNull();
   });
 });
