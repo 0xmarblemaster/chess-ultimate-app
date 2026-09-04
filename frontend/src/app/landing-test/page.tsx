@@ -22,7 +22,7 @@ const FEN_ROWS = [
 ];
 
 const GLYPH: Record<string, string> = {
-  k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟",
+  k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "\u265F\uFE0E",
 };
 
 const MOVES: [string, string, string][] = [

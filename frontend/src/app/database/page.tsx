@@ -1646,7 +1646,7 @@ export default function DebutPage() {
           {openedGames.map(g => (
             <Chip
               key={g.id}
-              label={`♟ ${g.white.split(',')[0]} vs ${g.black.split(',')[0]}`}
+              label={`♟\uFE0E ${g.white.split(',')[0]} vs ${g.black.split(',')[0]}`}
               onClick={() => setActiveTab(g.id)}
               onDelete={() => handleCloseGame(g.id)}
               deleteIcon={<Close sx={{ fontSize: 14 }} />}

@@ -181,12 +181,14 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ isVisible }) => {
       <div className="loading-screen-overlay" style={{position:'fixed',top:0,left:0,width:'100%',height:'100%',display:'flex',justifyContent:'center',alignItems:'center',zIndex:9999}}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <div id="loadingWave">
-          <div className="chess-piece king">♚</div>
-          <div className="chess-piece queen">♛</div>
-          <div className="chess-piece rook">♜</div>
-          <div className="chess-piece bishop">♝</div>
-          <div className="chess-piece knight">♞</div>
-          <div className="chess-piece pawn">♟</div>
+          {/* \uFE0E (VS15) forces text presentation — U+265F pawn is in the emoji
+              set and otherwise renders as an uncolorable bitmap emoji on iOS */}
+          <div className="chess-piece king">{'♚\uFE0E'}</div>
+          <div className="chess-piece queen">{'♛\uFE0E'}</div>
+          <div className="chess-piece rook">{'♜\uFE0E'}</div>
+          <div className="chess-piece bishop">{'♝\uFE0E'}</div>
+          <div className="chess-piece knight">{'♞\uFE0E'}</div>
+          <div className="chess-piece pawn">{'♟\uFE0E'}</div>
           <div className="loading-text">{t('loading')}</div>
         </div>
         </div>

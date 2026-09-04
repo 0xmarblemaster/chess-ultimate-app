@@ -52,7 +52,7 @@ export function Avatar({ equipped, photoUrl, size = 160, className = '' }: Avata
               hasBackground ? 'text-white/90' : 'text-slate-400'
             }`}
           >
-            ♟
+            {'\u265F\uFE0E'}
           </div>
         )}
       </div>

@@ -87,7 +87,7 @@ const levelColors: Record<string, { bg: string; border: string; text: string; li
 };
 
 const levelIcons: Record<string, string> = {
-  beginner: '♟',
+  beginner: '\u265F\uFE0E',
   intermediate: '♞',
   advanced: '♝',
   master: '♜',
@@ -200,7 +200,7 @@ function CourseNode({ course, isExpanded, courseIndex, isCurrentActive }: Course
   const t = useTranslations('learn');
   const colors = levelColors[course.level] || levelColors.beginner;
   const isCompleted = course.progress === 100;
-  const icon = levelIcons[course.level] || '♟';
+  const icon = levelIcons[course.level] || '\u265F\uFE0E';
 
   return (
     <div className="flex flex-col items-center">
@@ -313,7 +313,7 @@ function LessonNode({ lesson, courseSlug, colors }: LessonNodeProps) {
       ) : lesson.isCompleted ? (
         <span className="text-xl">✓</span>
       ) : (
-        <span className={`text-xl ${colors.text}`}>♟</span>
+        <span className={`text-xl ${colors.text}`}>{'\u265F\uFE0E'}</span>
       )}
     </div>
   );
