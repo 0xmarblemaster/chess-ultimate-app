@@ -11,8 +11,6 @@ import MoveList from './MoveList';
 import ReviewSounds from './ReviewSounds';
 import { useReviewCoach } from '@/hooks/useReviewCoach';
 
-const MUTE_KEY = 'review-sound-muted';
-
 export interface ReviewPanelProps {
   data: ReviewResult;
   /** 1-based current ply (0 = start position). */
@@ -23,7 +21,7 @@ export interface ReviewPanelProps {
 }
 
 /**
- * Review-mode sidebar: Highlights/Share/Mute row → coach bubble → annotated
+ * Review-mode sidebar: Highlights/Coach row → coach bubble → annotated
  * move list, plus the sound player. The playback replay bar now lives under
  * the board (page.tsx), not here. One layout, both themes via the review CSS
  * vars.
@@ -50,35 +48,6 @@ export default function ReviewPanel({
   const currentCoach = currentMove
     ? coach.explainByKey[coach.explainKeyFor(currentMove)]
     : undefined;
-
-  // Read the persisted mute preference lazily; the server has no localStorage
-  // so it defaults to unmuted (the button below suppresses the hydration diff).
-  const [muted, setMuted] = useState(
-    () => typeof window !== 'undefined' && localStorage.getItem(MUTE_KEY) === '1',
-  );
-  const [shared, setShared] = useState(false);
-
-  const toggleMute = () => {
-    setMuted((m) => {
-      const next = !m;
-      try {
-        localStorage.setItem(MUTE_KEY, next ? '1' : '0');
-      } catch {
-        /* private mode — ignore */
-      }
-      return next;
-    });
-  };
-
-  const onShare = async () => {
-    try {
-      await navigator.clipboard?.writeText(window.location.href);
-      setShared(true);
-      setTimeout(() => setShared(false), 1500);
-    } catch {
-      /* clipboard blocked — Share image is Phase 5 anyway */
-    }
-  };
 
   return (
     <aside
@@ -115,27 +84,6 @@ export default function ReviewPanel({
           >
             ♞ {t('coach.drawer.open')}
           </button>
-          <button
-            type="button"
-            data-testid="share-btn"
-            onClick={onShare}
-            className="review-ghost-btn"
-            style={{ padding: '6px 12px', fontSize: 13 }}
-          >
-            {shared ? t('panel.copied') : t('panel.share')}
-          </button>
-          <button
-            type="button"
-            data-testid="mute-toggle"
-            aria-pressed={muted}
-            aria-label={muted ? t('panel.unmuteSounds') : t('panel.muteSounds')}
-            onClick={toggleMute}
-            className="review-ghost-btn"
-            style={{ padding: '6px 12px', fontSize: 13 }}
-            suppressHydrationWarning
-          >
-            {muted ? '🔇' : '🔊'}
-          </button>
         </div>
       </div>
 
@@ -155,7 +103,7 @@ export default function ReviewPanel({
 
       <MoveList moves={data.moves} currentPly={currentPly} onSelect={onSetPly} />
 
-      <ReviewSounds currentPly={currentPly} move={currentMove} muted={muted} />
+      <ReviewSounds currentPly={currentPly} move={currentMove} muted={false} />
 
       <CoachDrawer
         open={coachOpen}
