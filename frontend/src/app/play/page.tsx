@@ -631,6 +631,9 @@ export default function PlayPage() {
               justifyContent: { md: 'center' },
               gridTemplateColumns: { md: 'auto 320px' },
               gridTemplateAreas: { md: '"board header" "board dock"' },
+              // Desktop: dock row stretches to the board's bottom edge so the
+              // action bar sits at the player's side of the board.
+              gridTemplateRows: { md: 'auto 1fr' },
             }}
           >
             {/* Bot header — avatar visually sits on the board's top edge */}
@@ -675,7 +678,7 @@ export default function PlayPage() {
             </Box>
 
             {/* Bottom action bar — pinned to the bottom on mobile */}
-            <Box sx={{ gridArea: 'dock', mt: { xs: 'auto', md: 0 } }}>
+            <Box sx={{ gridArea: 'dock', mt: { xs: 'auto', md: 0 }, alignSelf: { md: 'end' } }}>
               <GameDock
                 bot={selectedBot}
                 playerColor={actualPlayerColor}
