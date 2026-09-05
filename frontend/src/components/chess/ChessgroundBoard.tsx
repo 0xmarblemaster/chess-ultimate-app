@@ -376,7 +376,7 @@ export default function ChessgroundBoard({
   // user-drawn shapes. setAutoShapes leaves user shapes untouched.
   useEffect(() => {
     if (!cgRef.current) return;
-    cgRef.current.setAutoShapes(
+    cgRef.current.setAutoShapes?.(
       hintMove ? [{ orig: hintMove[0], dest: hintMove[1], brush: 'green' }] : [],
     );
   }, [hintMove]);
