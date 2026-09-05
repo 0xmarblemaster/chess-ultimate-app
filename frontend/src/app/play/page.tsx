@@ -90,6 +90,10 @@ export default function PlayPage() {
   const [thinking, setThinking] = useState(false)
   const [lastMove, setLastMove] = useState<[Key, Key] | undefined>(undefined)
   const [playerCanMove, setPlayerCanMove] = useState(true)
+  // Board orientation (flippable from the Menu); initialized from the player's
+  // color at game start. A green hint arrow, cleared as soon as the player moves.
+  const [orientation, setOrientation] = useState<'white' | 'black'>('white')
+  const [hintMove, setHintMove] = useState<[Key, Key] | undefined>(undefined)
   const prefersReducedMotion = useReducedMotion()
 
   // Bot-move cancellation: the pending "thinking" setTimeout and a generation
@@ -204,6 +208,8 @@ export default function PlayPage() {
     // Fresh game: drop any pending bot work from a previous one.
     cancelBotWork()
     setActualPlayerColor(actualColor)
+    setOrientation(actualColor === 'w' ? 'white' : 'black')
+    setHintMove(undefined)
     chess.reset()
     setFen(chess.fen())
     setGameResult(null)
@@ -333,6 +339,7 @@ export default function PlayPage() {
       setFen(chess.fen())
       setLastMove([from, to])
       setPlayerCanMove(false)
+      setHintMove(undefined)
 
       if (chess.isGameOver()) {
         checkGameOver()
@@ -407,6 +414,46 @@ export default function PlayPage() {
     enterEndedPhase()
   }
 
+  // Hint: ask the strong engine for the player's best move and draw it as a
+  // green arrow. Guarded against stale async via the move generation counter so
+  // a hint requested before a Back-nav can't paint an arrow after we've left.
+  const handleHint = async () => {
+    if (thinking || !playerCanMove || gameResult || chess.isGameOver()) return
+    const generation = moveGeneration.current
+    const move = await stockfishPlay.getMove(chess.fen(), 2600)
+    if (!move) return
+    if (generation !== moveGeneration.current) return
+    const from = move.substring(0, 2) as Key
+    const to = move.substring(2, 4) as Key
+    setHintMove([from, to])
+  }
+
+  // Take back: undo the player's last move and the bot's reply. If the bot
+  // hasn't answered yet (player just moved), cancel its pending move and undo
+  // once. Restores the board so it's the player's turn again.
+  const handleTakeback = () => {
+    if (!selectedBot || gamePhase !== 'playing') return
+    const historyLen = chess.history().length
+    if (historyLen === 0) return
+    cancelBotWork()
+    if (chess.turn() === actualPlayerColor && historyLen >= 2) {
+      chess.undo() // bot's reply
+      chess.undo() // player's move
+    } else {
+      chess.undo() // player's move (bot hasn't replied yet)
+    }
+    setFen(chess.fen())
+    const verbose = chess.history({ verbose: true })
+    const last = verbose[verbose.length - 1]
+    setLastMove(last ? [last.from as Key, last.to as Key] : undefined)
+    setPlayerCanMove(true)
+    setHintMove(undefined)
+  }
+
+  // Flip board: toggle orientation from the Menu.
+  const handleFlip = () =>
+    setOrientation((o) => (o === 'white' ? 'black' : 'white'))
+
   // Play again / Rematch: fresh game vs the same bot.
   const handlePlayAgain = () => startGame(selectedBot)
 
@@ -457,6 +504,15 @@ export default function PlayPage() {
       </Box>
     </Box>
   )
+
+  // Hint/Take-back availability. `playerMovesMade` counts the player's own
+  // half-moves so Take back is disabled until they've actually moved (matters
+  // when the player is black and the bot opens).
+  const historyLen = chess.history().length
+  const playerMovesMade =
+    actualPlayerColor === 'w' ? Math.ceil(historyLen / 2) : Math.floor(historyLen / 2)
+  const canHint = playerCanMove && !thinking && !gameResult
+  const canTakeback = playerMovesMade > 0 && !gameResult
 
   return (
     <Box sx={{ maxWidth: 1200, mx: 'auto', p: { xs: 1, sm: 3 } }}>
@@ -611,8 +667,9 @@ export default function PlayPage() {
               <ChessgroundBoard
                 fen={fen}
                 onMove={handleMove}
-                orientation={actualPlayerColor === 'w' ? 'white' : 'black'}
+                orientation={orientation}
                 lastMove={lastMove}
+                hintMove={hintMove}
                 movable={playerCanMove && !thinking}
               />
             </Box>
@@ -625,6 +682,11 @@ export default function PlayPage() {
                 gameResult={gameResult}
                 onNewGame={resetGame}
                 onResign={handleResign}
+                onHint={handleHint}
+                onTakeback={handleTakeback}
+                onFlip={handleFlip}
+                canHint={canHint}
+                canTakeback={canTakeback}
               />
             </Box>
           </Box>

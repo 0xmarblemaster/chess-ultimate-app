@@ -27,6 +27,11 @@ interface ChessgroundBoardProps {
   arrows?: Array<{ from: Key; to: Key; brush: string }>;
   highlightSquares?: Key[];
   lastMove?: [Key, Key] | null;
+  /**
+   * Optional hint arrow drawn from→to via chessground's auto-shapes (green).
+   * Purely presentational — user drawing stays disabled.
+   */
+  hintMove?: [Key, Key] | null;
   check?: boolean; // Auto-highlight king in check based on FEN
   boardSize?: number;
   animationDuration?: number;
@@ -60,6 +65,7 @@ export default function ChessgroundBoard({
   arrows = [],
   highlightSquares = [],
   lastMove = null,
+  hintMove = null,
   check = true, // Enable check highlighting by default
   boardSize,
   animationDuration = DEFAULT_BOARD_ANIMATION_DURATION,
@@ -271,6 +277,9 @@ export default function ChessgroundBoard({
           dest: arrow.to,
           brush: arrow.brush,
         })),
+        autoShapes: hintMove
+          ? [{ orig: hintMove[0], dest: hintMove[1], brush: 'green' }]
+          : [],
       },
 
       highlight: {
@@ -362,6 +371,15 @@ export default function ChessgroundBoard({
       brush: arrow.brush,
     })));
   }, [arrows]);
+
+  // Update the hint auto-shape (green from→to arrow) independently of any
+  // user-drawn shapes. setAutoShapes leaves user shapes untouched.
+  useEffect(() => {
+    if (!cgRef.current) return;
+    cgRef.current.setAutoShapes(
+      hintMove ? [{ orig: hintMove[0], dest: hintMove[1], brush: 'green' }] : [],
+    );
+  }, [hintMove]);
 
   // Update square highlights
   useEffect(() => {
