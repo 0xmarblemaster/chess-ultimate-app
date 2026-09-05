@@ -1,5 +1,7 @@
 'use client';
 
+import Image from 'next/image';
+
 export interface CoachIntroProps {
   /** Opening name to greet the player with. */
   openingName?: string;
@@ -20,11 +22,15 @@ export default function CoachIntro({ openingName, headline, message }: CoachIntr
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontSize: 34,
           background: 'var(--review-cta-gradient)',
         }}
       >
-        🐼
+        <Image
+          src="/static/images/chesster-logo-v3.png"
+          alt=""
+          width={48}
+          height={48}
+        />
       </div>
       <div
         className="review-card"

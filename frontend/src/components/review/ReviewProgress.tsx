@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 
 export interface ReviewProgressProps {
@@ -25,7 +26,14 @@ export default function ReviewProgress({ progress, status }: ReviewProgressProps
         padding: 24,
       }}
     >
-      <div style={{ fontSize: 40 }}>🐼</div>
+      <Image
+        src="/static/images/chesster-logo-v3.png"
+        alt=""
+        width={56}
+        height={56}
+        className="animate-mascotBounce"
+        priority
+      />
       <div className="review-heading" style={{ fontSize: 20, fontWeight: 800 }}>
         {status === 'queued' ? t('progress.queued') : t('progress.running')}
       </div>
