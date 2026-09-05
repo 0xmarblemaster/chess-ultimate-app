@@ -18,6 +18,7 @@ import { useMaia } from '@/hooks/useMaia'
 import { useStockfishPlay } from '@/hooks/useStockfishPlay'
 import { usePhaseHistory } from '@/hooks/usePhaseHistory'
 import { track, ANALYTICS_EVENTS } from '@/lib/analytics/events'
+import { useChromeVisibility } from '@/components/ChromeVisibilityContext'
 import { playText } from '@/lib/botI18n'
 import { fredoka } from '@/lib/fonts'
 import type { Bot } from '@/data/bots'
@@ -65,6 +66,7 @@ export default function PlayPage() {
   const { status, error, evaluatePosition, downloadModel, usingServerFallback } =
     useMaia()
   const stockfishPlay = useStockfishPlay()
+  const { setChromeHidden } = useChromeVisibility()
 
   // Regression guard: track (once per game) when a bot move is needed before the
   // local engine is ready, so a spike is visible in analytics.
@@ -113,6 +115,15 @@ export default function PlayPage() {
       makeBotMove()
     }, 500)
   }
+
+  // Hide the mobile app chrome (top navbar + bottom nav) for the duration of a
+  // game so the board fills the screen, and restore it on unmount or when the
+  // game ends and we return to selecting/setup.
+  const inGame = gamePhase === 'playing' || gamePhase === 'ended'
+  useEffect(() => {
+    setChromeHidden(inGame)
+    return () => setChromeHidden(false)
+  }, [inGame, setChromeHidden])
 
   // Auto-download model when not cached
   const downloadTriggered = useRef(false)

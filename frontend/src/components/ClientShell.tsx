@@ -1,7 +1,7 @@
 "use client"
 
 import { usePathname } from "next/navigation"
-import { Suspense, useEffect, type ReactNode, lazy } from "react"
+import { Suspense, useEffect, useState, type ReactNode, lazy } from "react"
 import { warmStockfish } from "@/lib/engine/stockfishSingleton"
 import { prewarmMaiaDownload } from "@/lib/engine/maiaSingleton"
 import PageTransition from "@/components/PageTransition"
@@ -18,6 +18,7 @@ import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts"
 import KeyboardShortcutsHelp from "@/components/KeyboardShortcutsHelp"
 import SyncBoundary from "@/components/SyncBoundary"
 import SyncIndicator from "@/components/SyncIndicator"
+import { ChromeVisibilityProvider } from "@/components/ChromeVisibilityContext"
 
 // Lazy load MUI provider only when needed
 const MuiProvider = lazy(() => import("@/components/providers/MuiProvider"))
@@ -32,6 +33,12 @@ export default function ClientShell({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const hideNav = HIDE_NAV_PATHS.some(path => pathname === path || (path !== '/' && pathname?.startsWith(path)))
   const isLanding = pathname === '/'
+
+  // A full-screen page (the in-game /play screen) can hide the mobile chrome —
+  // top NavBar + BottomNavigation — while a game is active. The desktop sidebar
+  // is intentionally left untouched. Reset by the page on unmount/phase change.
+  const [chromeHidden, setChromeHidden] = useState(false)
+  const mobileNavHidden = hideNav || chromeHidden
 
   // Apply dark mode class to <html> on every page load
   const { isDark } = useDarkMode()
@@ -62,6 +69,7 @@ export default function ClientShell({ children }: { children: ReactNode }) {
   }, [])
 
   const content = (
+    <ChromeVisibilityProvider value={{ setChromeHidden }}>
     <ToastProvider>
       <SubscriptionProvider>
         <UnhandledErrorCatcher />
@@ -74,15 +82,16 @@ export default function ClientShell({ children }: { children: ReactNode }) {
               </div>
             )}
 
-            {/* Mobile top navbar — hidden on desktop, hidden on auth pages */}
-            {!hideNav && (
+            {/* Mobile top navbar — hidden on desktop, hidden on auth pages,
+                hidden while an in-game page requests full-screen chrome. */}
+            {!mobileNavHidden && (
               <div className="md:hidden">
                 <NavBar />
               </div>
             )}
 
             {/* Main content area */}
-            <main className={`flex-1 min-w-0 ${hideNav ? '' : 'pb-16 md:pb-0'}`}>
+            <main className={`flex-1 min-w-0 ${mobileNavHidden ? '' : 'pb-16 md:pb-0'}`}>
               <Suspense fallback={<PageSkeleton />}>
                 {/* Static marketing test page — no user data, skip the sync gate */}
                 {pathname?.startsWith('/landing-test') ? children : (
@@ -93,8 +102,9 @@ export default function ClientShell({ children }: { children: ReactNode }) {
               </Suspense>
             </main>
 
-            {/* Mobile bottom nav — hidden on desktop, hidden on auth pages */}
-            {!hideNav && (
+            {/* Mobile bottom nav — hidden on desktop, hidden on auth pages,
+                hidden while an in-game page requests full-screen chrome. */}
+            {!mobileNavHidden && (
               <div className="md:hidden">
                 <BottomNavigation />
               </div>
@@ -105,6 +115,7 @@ export default function ClientShell({ children }: { children: ReactNode }) {
         </OfflineBanner>
       </SubscriptionProvider>
     </ToastProvider>
+    </ChromeVisibilityProvider>
   )
 
   // Conditionally wrap with MUI provider only on routes that need it
