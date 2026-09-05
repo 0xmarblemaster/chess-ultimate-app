@@ -523,6 +523,11 @@ export default function PlayPage() {
             overflow: 'hidden',
             borderRadius: '24px',
             p: { xs: 1, sm: 3 },
+            // Fill the viewport on mobile (chrome is hidden) so the action bar
+            // can pin to the bottom; a normal card on desktop.
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: { xs: 'calc(100dvh - 16px)', md: 'auto' },
             // The whole in-game screen is dipped in the tier's world gradient.
             background: gameTheme(selectedBot).screenGradient,
           }}
@@ -558,17 +563,18 @@ export default function PlayPage() {
             sx={{
               position: 'relative',
               zIndex: 1,
-              display: 'grid',
+              // Mobile: a flex column that fills the screen so the action bar
+              // pins to the bottom (dock mt:auto). Desktop: a fixed two-column
+              // grid — content changes must never resize the column and
+              // re-center the board.
+              flex: { xs: 1 },
+              display: { xs: 'flex', md: 'grid' },
+              flexDirection: { xs: 'column' },
               gap: 2,
-              alignItems: 'start',
+              alignItems: { md: 'start' },
               justifyContent: { md: 'center' },
-              // Fixed side column: content changes (thinking bubble, syncing
-              // pill) must never resize the column and re-center the board.
-              gridTemplateColumns: { xs: '1fr', md: 'auto 320px' },
-              gridTemplateAreas: {
-                xs: '"header" "board" "dock"',
-                md: '"board header" "board dock"',
-              },
+              gridTemplateColumns: { md: 'auto 320px' },
+              gridTemplateAreas: { md: '"board header" "board dock"' },
             }}
           >
             {/* Bot header — avatar visually sits on the board's top edge */}
@@ -577,6 +583,8 @@ export default function PlayPage() {
                 gridArea: 'header',
                 position: 'relative',
                 zIndex: 2,
+                // Clear the floating back button on mobile; hug the board edge.
+                mt: { xs: 7, md: 0 },
                 mb: { xs: '-18px', md: 0 },
               }}
             >
@@ -609,8 +617,8 @@ export default function PlayPage() {
               />
             </Box>
 
-            {/* Bottom dock */}
-            <Box sx={{ gridArea: 'dock' }}>
+            {/* Bottom action bar — pinned to the bottom on mobile */}
+            <Box sx={{ gridArea: 'dock', mt: { xs: 'auto', md: 0 } }}>
               <GameDock
                 bot={selectedBot}
                 playerColor={actualPlayerColor}

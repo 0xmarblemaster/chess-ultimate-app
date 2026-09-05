@@ -1,9 +1,10 @@
 /**
  * @vitest-environment jsdom
  *
- * GameDock is the V3 "Immersive World" bottom dock: the player line plus two
- * pill actions (Resign — gated behind a confirm dialog — and New game). There
- * is intentionally no Hint button.
+ * GameDock is the chess.com-style bottom action bar: Menu · Resign · Hint ·
+ * Take back. The Menu opens a bottom sheet (Flip board, New game, color line);
+ * Resign is gated behind a confirm dialog. Once the game ends, Hint/Take back/
+ * Resign are disabled and a prominent New game button is shown.
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import React from 'react';
@@ -47,32 +48,78 @@ const baseProps = {
 afterEach(cleanup);
 
 describe('GameDock rendering', () => {
-  it('renders the resign and new-game buttons while the game is in progress', () => {
+  it('renders the four action buttons while the game is in progress', () => {
     const { getByTestId } = render(<GameDock {...baseProps} />);
+    expect(getByTestId('game-menu-button')).not.toBeNull();
     expect(getByTestId('resign-button')).not.toBeNull();
-    expect(getByTestId('new-game-button')).not.toBeNull();
+    expect(getByTestId('hint-button')).not.toBeNull();
+    expect(getByTestId('takeback-button')).not.toBeNull();
   });
 
-  it('has no hint button', () => {
-    const { container, queryByTestId } = render(<GameDock {...baseProps} />);
-    expect(queryByTestId('hint-button')).toBeNull();
-    expect((container.textContent ?? '').toLowerCase()).not.toContain('hint');
+  it('disables Hint and Take back unless explicitly enabled', () => {
+    const { getByTestId } = render(<GameDock {...baseProps} />);
+    expect((getByTestId('hint-button') as HTMLButtonElement).disabled).toBe(true);
+    expect((getByTestId('takeback-button') as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it('hides the resign button and shows the result once the game has ended', () => {
-    const { queryByTestId, container } = render(
-      <GameDock {...baseProps} gameResult="White wins by checkmate!" />,
+  it('enables Hint and Take back when the flags are set', () => {
+    const { getByTestId } = render(
+      <GameDock {...baseProps} canHint canTakeback onHint={() => {}} onTakeback={() => {}} />,
     );
-    expect(queryByTestId('resign-button')).toBeNull();
-    expect(queryByTestId('new-game-button')).not.toBeNull();
+    expect((getByTestId('hint-button') as HTMLButtonElement).disabled).toBe(false);
+    expect((getByTestId('takeback-button') as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('shows the result and a prominent New game once the game has ended', () => {
+    const { getByTestId, container } = render(
+      <GameDock {...baseProps} gameResult="White wins by checkmate!" canHint canTakeback />,
+    );
+    expect(getByTestId('new-game-button')).not.toBeNull();
     expect(container.textContent).toContain('White wins by checkmate!');
+    // Hint / Take back / Resign are disabled at game end.
+    expect((getByTestId('hint-button') as HTMLButtonElement).disabled).toBe(true);
+    expect((getByTestId('takeback-button') as HTMLButtonElement).disabled).toBe(true);
+    expect((getByTestId('resign-button') as HTMLButtonElement).disabled).toBe(true);
   });
 });
 
-describe('GameDock interactions', () => {
-  it('fires onNewGame when New game is clicked', () => {
+describe('GameDock hint / take back', () => {
+  it('fires onHint and onTakeback when enabled', () => {
+    const onHint = vi.fn();
+    const onTakeback = vi.fn();
+    const { getByTestId } = render(
+      <GameDock {...baseProps} canHint canTakeback onHint={onHint} onTakeback={onTakeback} />,
+    );
+    fireEvent.click(getByTestId('hint-button'));
+    fireEvent.click(getByTestId('takeback-button'));
+    expect(onHint).toHaveBeenCalledTimes(1);
+    expect(onTakeback).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('GameDock menu sheet', () => {
+  it('opens the menu and exposes Flip board + New game', async () => {
+    const onFlip = vi.fn();
+    const onNewGame = vi.fn();
+    const { getByTestId, queryByTestId } = render(
+      <GameDock {...baseProps} onFlip={onFlip} onNewGame={onNewGame} />,
+    );
+
+    // Menu closed → items not present.
+    expect(queryByTestId('flip-board-button')).toBeNull();
+
+    fireEvent.click(getByTestId('game-menu-button'));
+    await waitFor(() => expect(getByTestId('flip-board-button')).not.toBeNull());
+
+    fireEvent.click(getByTestId('flip-board-button'));
+    expect(onFlip).toHaveBeenCalledTimes(1);
+  });
+
+  it('New game in the menu triggers onNewGame', async () => {
     const onNewGame = vi.fn();
     const { getByTestId } = render(<GameDock {...baseProps} onNewGame={onNewGame} />);
+    fireEvent.click(getByTestId('game-menu-button'));
+    await waitFor(() => expect(getByTestId('new-game-button')).not.toBeNull());
     fireEvent.click(getByTestId('new-game-button'));
     expect(onNewGame).toHaveBeenCalledTimes(1);
   });
@@ -83,12 +130,10 @@ describe('GameDock resign confirm flow', () => {
     const onResign = vi.fn();
     const { getByTestId, queryByTestId } = render(<GameDock {...baseProps} onResign={onResign} />);
 
-    // No dialog until the resign button is pressed.
     expect(queryByTestId('resign-confirm')).toBeNull();
 
     fireEvent.click(getByTestId('resign-button'));
     await waitFor(() => expect(getByTestId('resign-confirm')).not.toBeNull());
-    // Opening the dialog must NOT end the game.
     expect(onResign).not.toHaveBeenCalled();
   });
 
@@ -102,7 +147,6 @@ describe('GameDock resign confirm flow', () => {
 
     expect(onResign).not.toHaveBeenCalled();
     await waitFor(() => expect(queryByTestId('resign-confirm')).toBeNull());
-    // Resign button is still available — game continues.
     expect(getByTestId('resign-button')).not.toBeNull();
   });
 
