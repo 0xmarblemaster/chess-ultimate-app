@@ -1,9 +1,11 @@
 /**
  * @vitest-environment jsdom
  *
- * GameHeader is the V3 "Immersive World" bot header: rounded-square avatar,
- * white bot name, gold rating pill + translucent world pill, and a themed
- * "thinking…" speech bubble (always mounted; visible only while thinking).
+ * GameHeader is the chess.com-style in-game bot header: a big rounded-square
+ * avatar with a gold ⭐rating badge, and a white speech bubble holding the bot
+ * name plus a status line — "thinking…" while the bot computes, otherwise
+ * "Your move!" or the world name. The bubble is always mounted with the same
+ * structure so the header keeps a constant height as `thinking` toggles.
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import React from 'react';
@@ -54,24 +56,28 @@ describe('GameHeader', () => {
     expect(text).toContain(world.emoji);
   });
 
-  it('keeps the thinking bubble mounted in both states so the header never changes height', () => {
+  it('keeps the status line mounted in both states so the header never changes height', () => {
     // Regression: a conditionally-mounted bubble grew/shrank the header on
     // every bot move, pushing the board down and back up ("board wobble").
     const idle = render(<GameHeader bot={makeBot('beginner', '/bots/test.webp')} thinking={false} />);
     const idleBubble = idle.container.querySelector<HTMLElement>('[data-testid="thinking-bubble"]');
     expect(idleBubble).not.toBeNull();
     expect(idleBubble?.getAttribute('data-thinking')).toBe('false');
-    // Hidden via visibility (space stays reserved), never unmounted or display:none.
-    expect(getComputedStyle(idleBubble!).visibility).toBe('hidden');
-    expect(getComputedStyle(idleBubble!).display).not.toBe('none');
+    expect(idleBubble?.textContent).not.toContain('is thinking');
     cleanup();
 
     const busy = render(<GameHeader bot={makeBot('beginner', '/bots/test.webp')} thinking />);
     const bubble = busy.container.querySelector<HTMLElement>('[data-testid="thinking-bubble"]');
     expect(bubble).not.toBeNull();
     expect(bubble?.getAttribute('data-thinking')).toBe('true');
-    expect(getComputedStyle(bubble!).visibility).toBe('visible');
     expect(bubble?.textContent).toContain('is thinking');
+  });
+
+  it('shows "Your move!" in the status line when it is the player\'s turn', () => {
+    const { getByTestId } = render(
+      <GameHeader bot={makeBot('beginner', '/bots/test.webp')} thinking={false} yourMove />,
+    );
+    expect(getByTestId('thinking-bubble').textContent).toContain('Your move!');
   });
 
   it('shows the syncing pill only when syncing', () => {

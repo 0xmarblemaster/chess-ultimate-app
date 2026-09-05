@@ -571,11 +571,19 @@ export default function PlayPage() {
               },
             }}
           >
-            {/* Bot header */}
-            <Box sx={{ gridArea: 'header' }}>
+            {/* Bot header — avatar visually sits on the board's top edge */}
+            <Box
+              sx={{
+                gridArea: 'header',
+                position: 'relative',
+                zIndex: 2,
+                mb: { xs: '-18px', md: 0 },
+              }}
+            >
               <GameHeader
                 bot={selectedBot}
                 thinking={thinking}
+                yourMove={playerCanMove && !thinking && !gameResult}
                 syncing={usingServerFallback && status !== 'ready'}
               />
             </Box>

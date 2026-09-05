@@ -9,16 +9,19 @@ import BotAvatar from './BotAvatar'
 
 interface GameHeaderProps {
   bot: Bot
-  /** Show the animated "thinking…" speech bubble (always mounted, toggled via visibility). */
+  /** Show the animated "thinking…" status inside the speech bubble. */
   thinking: boolean
+  /** It is the player's turn to move (drives the "Your move!" status line). */
+  yourMove?: boolean
   /** Engine still syncing to the local model (shows a subtle pill). */
   syncing?: boolean
 }
 
 const GOLD = '#FFC53D'
 const GOLD_TEXT = '#6B4A00'
+const INK = '#28324E'
 
-/** Animated "· · ·" dots for the thinking speech bubble. */
+/** Animated "· · ·" dots for the thinking status. */
 function ThinkingDots({ color }: { color: string }) {
   return (
     <Box
@@ -52,127 +55,156 @@ function ThinkingDots({ color }: { color: string }) {
 }
 
 /**
- * V3 "Immersive World" bot header: a rounded-square avatar, the bot name in
- * white Fredoka with a soft shadow, a gold rating pill and a translucent world
- * "ghost" pill, and — while the bot is thinking — a white speech bubble.
+ * Chess.com-style in-game bot header: a big rounded-square avatar that visually
+ * sits on the board's top edge, a gold ⭐rating badge overlapping its bottom,
+ * and a white speech bubble (tail pointing at the avatar) holding the bot name
+ * plus a status line — "thinking…" dots while the bot computes, otherwise
+ * "Your move!" or the world name.
+ *
+ * The bubble is always rendered with the same two-line structure so the header
+ * keeps a constant height while `thinking` toggles — the board must never shift.
  */
-export default function GameHeader({ bot, thinking, syncing = false }: GameHeaderProps) {
+export default function GameHeader({
+  bot,
+  thinking,
+  yourMove = false,
+  syncing = false,
+}: GameHeaderProps) {
   const t = useTranslations('bots')
   const theme = gameTheme(bot)
   const { deep, tint } = theme
 
+  const statusText = thinking
+    ? playText(t, 'thinking', `${bot.name} is thinking`, { name: bot.name })
+    : yourMove
+      ? playText(t, 'yourMove', 'Your move!')
+      : `${theme.worldEmoji} ${worldName(t, bot.tier)}`
+
   return (
-    <Box data-testid="game-header" data-tier={bot.tier}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.75 }}>
+    <Box
+      data-testid="game-header"
+      data-tier={bot.tier}
+      sx={{ display: 'flex', alignItems: 'flex-end', gap: 1.5 }}
+    >
+      {/* Avatar + gold rating badge */}
+      <Box sx={{ position: 'relative', flexShrink: 0 }}>
         <BotAvatar
           bot={bot}
-          size={88}
-          ringColor="rgba(255,255,255,.9)"
+          size={104}
+          ringColor="rgba(255,255,255,.95)"
           ringWidth={4}
           tint={tint}
           deep={deep}
           thinking={thinking}
           sx={{
-            borderRadius: '28px',
-            transform: 'rotate(-3deg)',
-            boxShadow: `0 10px 26px ${deep}59`,
+            borderRadius: '26px',
+            boxShadow: `0 12px 28px ${deep}5C`,
           }}
         />
-        <Box sx={{ minWidth: 0 }}>
-          <Typography
-            component="h2"
-            sx={{
-              fontFamily: fredoka.style.fontFamily,
-              fontWeight: 700,
-              fontSize: '28px',
-              color: '#fff',
-              lineHeight: 1,
-              textShadow: `0 2px 8px ${deep}59`,
-            }}
-          >
-            {bot.name}
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 1, mt: 0.9, flexWrap: 'wrap' }}>
-            <Box
-              component="span"
-              sx={{
-                bgcolor: GOLD,
-                color: GOLD_TEXT,
-                fontFamily: nunito.style.fontFamily,
-                fontWeight: 900,
-                fontSize: '13px',
-                borderRadius: '999px',
-                px: '11px',
-                py: '4px',
-              }}
-            >
-              ⭐ {bot.rating}
-            </Box>
-            <Box
-              component="span"
-              sx={{
-                bgcolor: 'rgba(255,255,255,.25)',
-                color: '#fff',
-                backdropFilter: 'blur(4px)',
-                fontFamily: nunito.style.fontFamily,
-                fontWeight: 900,
-                fontSize: '13px',
-                borderRadius: '999px',
-                px: '11px',
-                py: '4px',
-              }}
-            >
-              {theme.worldEmoji} {worldName(t, bot.tier)}
-            </Box>
-            {syncing && (
-              <Box
-                component="span"
-                data-testid="syncing-pill"
-                sx={{
-                  bgcolor: 'rgba(255,255,255,.25)',
-                  color: '#fff',
-                  backdropFilter: 'blur(4px)',
-                  fontFamily: nunito.style.fontFamily,
-                  fontWeight: 900,
-                  fontSize: '13px',
-                  borderRadius: '999px',
-                  px: '11px',
-                  py: '4px',
-                }}
-              >
-                {playText(t, 'syncingEngine', 'Syncing engine…')}
-              </Box>
-            )}
-          </Box>
+        <Box
+          component="span"
+          sx={{
+            position: 'absolute',
+            bottom: -10,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            bgcolor: GOLD,
+            color: GOLD_TEXT,
+            fontFamily: nunito.style.fontFamily,
+            fontWeight: 900,
+            fontSize: '14px',
+            lineHeight: 1,
+            borderRadius: '999px',
+            px: '11px',
+            py: '5px',
+            whiteSpace: 'nowrap',
+            border: '2px solid #fff',
+            boxShadow: `0 4px 10px ${deep}40`,
+          }}
+        >
+          ⭐ {bot.rating}
         </Box>
       </Box>
 
-      {/* Always mounted so the header keeps a constant height — a conditional
-          mount here shifts the board below on every bot move. */}
+      {/* Speech bubble: bot name + status line, tail pointing at the avatar. */}
       <Box
-        data-testid="thinking-bubble"
-        data-thinking={thinking}
-        aria-hidden={!thinking}
         sx={{
-          mt: 1.75,
+          position: 'relative',
+          flex: 1,
+          minWidth: 0,
+          mb: 1.5,
           bgcolor: '#fff',
-          borderRadius: '16px 16px 16px 4px',
-          px: '14px',
-          py: '10px',
-          fontFamily: nunito.style.fontFamily,
-          fontWeight: 800,
-          fontSize: '14px',
-          color: deep,
-          boxShadow: `0 6px 18px ${deep}33`,
-          display: 'inline-flex',
-          alignItems: 'center',
-          visibility: thinking ? 'visible' : 'hidden',
-          opacity: thinking ? 1 : 0,
-          transition: 'opacity 150ms ease',
+          borderRadius: '18px',
+          px: '16px',
+          py: '12px',
+          boxShadow: `0 8px 22px ${deep}30`,
         }}
       >
-        {playText(t, 'thinking', `${bot.name} is thinking`, { name: bot.name })}
-        <ThinkingDots color={deep} />
+        {/* Tail */}
+        <Box
+          aria-hidden="true"
+          sx={{
+            position: 'absolute',
+            left: -6,
+            top: '50%',
+            transform: 'translateY(-50%) rotate(45deg)',
+            width: 14,
+            height: 14,
+            bgcolor: '#fff',
+            borderRadius: '3px',
+          }}
+        />
+        <Typography
+          component="h2"
+          sx={{
+            fontFamily: fredoka.style.fontFamily,
+            fontWeight: 700,
+            fontSize: { xs: '22px', sm: '24px' },
+            color: deep,
+            lineHeight: 1.1,
+          }}
+        >
+          {bot.name}
+        </Typography>
+        <Box
+          data-testid="thinking-bubble"
+          data-thinking={thinking}
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 0.75,
+            mt: 0.5,
+            fontFamily: nunito.style.fontFamily,
+            fontWeight: 800,
+            fontSize: '15px',
+            color: INK,
+            minHeight: 20,
+          }}
+        >
+          <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center' }}>
+            {statusText}
+            {thinking && <ThinkingDots color={deep} />}
+          </Box>
+          {syncing && (
+            <Box
+              component="span"
+              data-testid="syncing-pill"
+              sx={{
+                bgcolor: tint,
+                color: deep,
+                fontFamily: nunito.style.fontFamily,
+                fontWeight: 900,
+                fontSize: '11px',
+                borderRadius: '999px',
+                px: '8px',
+                py: '2px',
+              }}
+            >
+              {playText(t, 'syncingEngine', 'Syncing engine…')}
+            </Box>
+          )}
+        </Box>
       </Box>
     </Box>
   )
