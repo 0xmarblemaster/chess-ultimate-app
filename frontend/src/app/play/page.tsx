@@ -642,9 +642,9 @@ export default function PlayPage() {
                 gridArea: 'header',
                 position: 'relative',
                 zIndex: 2,
-                // Clear the floating back button on mobile; hug the board edge.
+                // Clear the floating back button on mobile. No negative pull below:
+                // the rating badge hangs under the avatar and must clear the board.
                 mt: { xs: 7, md: 0 },
-                mb: { xs: '-18px', md: 0 },
               }}
             >
               <GameHeader
