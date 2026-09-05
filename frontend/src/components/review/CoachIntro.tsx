@@ -19,18 +19,28 @@ export default function CoachIntro({ openingName, headline, message }: CoachIntr
           height: 64,
           borderRadius: '50%',
           flex: 'none',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          padding: 3,
           background: 'var(--review-cta-gradient)',
         }}
       >
-        <Image
-          src="/static/images/chesster-logo-v3.png"
-          alt=""
-          width={48}
-          height={48}
-        />
+        <div
+          style={{
+            width: '100%',
+            height: '100%',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: '#fff',
+          }}
+        >
+          <Image
+            src="/static/images/chesster-logo-v3.png"
+            alt=""
+            width={44}
+            height={44}
+          />
+        </div>
       </div>
       <div
         className="review-card"
