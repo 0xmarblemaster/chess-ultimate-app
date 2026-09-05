@@ -2068,7 +2068,12 @@
       "createShort": "Create",
       "creating": "Creating…",
       "errCreate": "Could not create the game. Try again.",
-      "errNetwork": "Network error. Try again."
+      "errNetwork": "Network error. Try again.",
+      "yourMove": "Your move!",
+      "hint": "Hint",
+      "takeBack": "Take back",
+      "menu": "Menu",
+      "flipBoard": "Flip board"
     }
   },
   "adminNav": {
