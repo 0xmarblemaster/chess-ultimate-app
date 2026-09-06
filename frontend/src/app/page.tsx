@@ -404,9 +404,21 @@ function ApexHomePage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-8 mb-8">
             {/* Brand */}
             <div>
-              <div className="flex items-center gap-2 mb-4">
-                <div className="bg-white rounded-full p-1"><Image src="/static/images/chesster-logo-v3.png" alt="Chesster" width={32} height={32} className="w-6 h-6 inline" /></div>
-                <span className="text-xl font-bold text-white">{t('common.chesster')}</span>
+              <div className="flex items-center justify-between gap-2 mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="bg-white rounded-full p-1"><Image src="/static/images/chesster-logo-v3.png" alt="Chesster" width={32} height={32} className="w-6 h-6 inline" /></div>
+                  <span className="text-xl font-bold text-white">{t('common.chesster')}</span>
+                </div>
+                {/* Direct APK download until the Play Store listing is live. */}
+                <a href="https://engine.chesster.io/downloads/chesster.apk" download>
+                  <Image
+                    src={`/static/images/badges/google-play-${locale === 'kz' ? 'kk' : locale === 'ru' ? 'ru' : 'en'}.png`}
+                    alt={t('landing.footer.googlePlay')}
+                    width={646}
+                    height={250}
+                    className="h-10 w-auto"
+                  />
+                </a>
               </div>
               <p className="text-sm">{t('landing.footer.tagline')}</p>
             </div>

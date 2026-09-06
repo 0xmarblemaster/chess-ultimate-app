@@ -111,7 +111,8 @@
       "copyright": "© 2026 {appName}. All rights reserved.",
       "privacy": "Privacy",
       "terms": "Terms",
-      "cookies": "Cookies"
+      "cookies": "Cookies",
+      "googlePlay": "Get it on Google Play"
     }
   },
   "auth": {

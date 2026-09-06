@@ -111,7 +111,8 @@
       "copyright": "© 2026 {appName}. Все права защищены.",
       "privacy": "Конфиденциальность",
       "terms": "Условия",
-      "cookies": "Cookies"
+      "cookies": "Cookies",
+      "googlePlay": "Скачать в Google Play"
     }
   },
   "auth": {
