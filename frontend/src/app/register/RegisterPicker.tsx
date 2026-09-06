@@ -131,14 +131,9 @@ export default function RegisterPicker({ branches, online }: RegisterPickerProps
                     : ''
                 }`}
               >
-                <div className="flex items-center justify-between">
-                  <span className="font-bold uppercase tracking-wide">
-                    {t('online.title')}
-                  </span>
-                  <span className="text-xs font-bold uppercase bg-white/20 rounded-full px-2 py-0.5">
-                    {t('online.badge')}
-                  </span>
-                </div>
+                <span className="block font-bold uppercase tracking-wide">
+                  {t('online.title')}
+                </span>
                 <p className="text-sm text-white/90 mt-1">{t('online.subtitle')}</p>
               </a>
             )}

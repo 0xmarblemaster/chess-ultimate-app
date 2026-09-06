@@ -1682,8 +1682,7 @@
     "branchesHeading": "Choose your branch",
     "online": {
       "title": "Online student",
-      "subtitle": "3 days of free access to all app features.",
-      "badge": "Free"
+      "subtitle": "Access to all app features."
     },
     "emptyTitle": "Registration isn't open yet",
     "emptyBody": "Please contact your branch administrator for an invite link.",
